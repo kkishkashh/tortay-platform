@@ -1,0 +1,291 @@
+// ============================================================
+// Tortay Engineering — платформа мониторинга инженерных проектов
+// Схема базы данных (Prisma)
+// ============================================================
+// Комментарии на русском объясняют "зачем", не "что" — сама
+// структура (названия моделей/полей) на английском, как
+// принято в индустрии, чтобы код был совместим со стандартными
+// библиотеками, примерами и документацией Prisma/Next.js.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// БЛОК 1: Пользователи, роли, проекты, разделы, задачи
+// ============================================================
+
+// Системная роль — влияет на то, что человек видит в целом
+// (руководитель видит дашборд по всем проектам сразу).
+enum SystemRole {
+  РУКОВОДИТЕЛЬ
+  СОТРУДНИК
+}
+
+// Просто информационная метка — НЕ влияет на права доступа.
+enum UserType {
+  ШТАТНЫЙ
+  АУТСОРСЕР
+}
+
+model User {
+  id           String     @id @default(uuid())
+  fullName     String
+  email        String     @unique
+  passwordHash String
+  systemRole   SystemRole @default(СОТРУДНИК)
+  userType     UserType
+  phone        String?
+  position     String?
+  birthDate    DateTime?  @db.Date
+  createdAt    DateTime   @default(now())
+
+  // Во всех проектах, где этот человек участвует (в разных ролях)
+  projectMemberships ProjectMember[]
+  documentsUploaded  Document[]
+  comments           Comment[]
+
+  @@map("users")
+}
+
+// Роль конкретно ВНУТРИ конкретного проекта.
+// Один и тот же человек может быть ГИП в одном проекте
+// и инженером в другом — поэтому роль хранится здесь,
+// а не в самой таблице users.
+enum ProjectRole {
+  ГИП
+  МЕНЕДЖЕР
+  ИНЖЕНЕР
+  ПОМОЩНИК_ГИП
+  ВЕДУЩИЙ_СПЕЦИАЛИСТ
+}
+
+model ProjectMember {
+  id         String      @id @default(uuid())
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id])
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  projectRole ProjectRole
+  assignedAt DateTime    @default(now())
+
+  tasksAssigned      Task[]
+  contractsCreated   Contract[]
+  digitalSignatures  DigitalSignature[]
+
+  // Один человек не может быть добавлен в один проект дважды
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+enum ProjectStatus {
+  В_РАБОТЕ
+  ЗАВЕРШЁН_ПО_РАЗДЕЛАМ
+  ЗАВЕРШЁН_ПОЛНОСТЬЮ
+}
+
+model Project {
+  id        String        @id @default(uuid())
+  name      String
+  status    ProjectStatus @default(В_РАБОТЕ)
+  createdAt DateTime      @default(now())
+
+  members   ProjectMember[]
+  sections  Section[]
+  contracts Contract[]
+  comments  Comment[]
+
+  @@map("projects")
+}
+
+enum SectionStatus {
+  В_РАБОТЕ
+  ВЫПОЛНЕНО
+}
+
+model Section {
+  id                 String        @id @default(uuid())
+  projectId          String
+  project            Project       @relation(fields: [projectId], references: [id])
+  name               String
+  status             SectionStatus @default(В_РАБОТЕ)
+  completionPercent  Int           @default(0)
+  startDate          DateTime?     // для диаграммы Ганта
+  deadline           DateTime?
+  orderIndex         Int           @default(0) // для сортировки разделов внутри проекта
+
+  tasks     Task[]
+  documents Document[]
+  comments  Comment[]
+  paymentsTriggered Payment[]
+
+  @@map("sections")
+}
+
+enum TaskStatus {
+  НОВАЯ
+  В_РАБОТЕ
+  НА_ПРОВЕРКЕ
+  ВЫПОЛНЕНО
+}
+
+model Task {
+  id               String        @id @default(uuid())
+  sectionId        String
+  section          Section       @relation(fields: [sectionId], references: [id])
+  title            String
+  description      String?
+  assigneeMemberId String?
+  assigneeMember   ProjectMember? @relation(fields: [assigneeMemberId], references: [id])
+  status           TaskStatus    @default(НОВАЯ)
+  startDate        DateTime?     // для диаграммы Ганта
+  deadline         DateTime?
+  createdAt        DateTime      @default(now())
+
+  comments Comment[]
+
+  @@map("tasks")
+}
+
+// ============================================================
+// БЛОК 2: Документы, комментарии
+// ============================================================
+
+model Document {
+  id         String   @id @default(uuid())
+  sectionId  String
+  section    Section  @relation(fields: [sectionId], references: [id])
+  uploadedBy String
+  uploader   User     @relation(fields: [uploadedBy], references: [id])
+  fileName   String
+  fileUrl    String   // ссылка на файл во внешнем хранилище (не сам файл!)
+  fileSize   Int?
+  uploadedAt DateTime @default(now())
+
+  @@map("documents")
+}
+
+// Комментарий может относиться к проекту, разделу ИЛИ задаче —
+// ровно одно из трёх полей должно быть заполнено.
+// Это правило проверяется в коде backend (см. бриф для Claude Code),
+// база данных сама по себе это не гарантирует.
+model Comment {
+  id        String   @id @default(uuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  sectionId String?
+  section   Section? @relation(fields: [sectionId], references: [id])
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id])
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+
+  @@map("comments")
+}
+
+// ============================================================
+// БЛОК 3: Финансовый блок — договоры, реквизиты, платежи, ЭЦП
+// ============================================================
+
+enum ContractStatus {
+  ЧЕРНОВИК
+  НА_ПРОВЕРКЕ_ГИП
+  СОГЛАСОВАН
+  ПОДПИСАН
+  ЗАКРЫТ
+}
+
+model Contract {
+  id                String         @id @default(uuid())
+  projectId         String
+  project           Project        @relation(fields: [projectId], references: [id])
+  createdByMemberId String         // менеджер, сформировавший договор
+  createdByMember   ProjectMember  @relation(fields: [createdByMemberId], references: [id])
+  totalAmount       Decimal        @db.Decimal(14, 2)
+  status            ContractStatus @default(ЧЕРНОВИК)
+  createdAt         DateTime       @default(now())
+
+  requisites         Requisites?
+  payments           Payment[]
+  digitalSignatures  DigitalSignature[]
+  closingDocuments   ClosingDocument[]
+
+  @@map("contracts")
+}
+
+// Банковские реквизиты — понадобятся для интеграции с 1С/банк-клиентом
+model Requisites {
+  id            String   @id @default(uuid())
+  contractId    String   @unique
+  contract      Contract @relation(fields: [contractId], references: [id])
+  bankName      String?
+  accountNumber String?  // ИИК / расчётный счёт
+  bik           String?  // БИК банка
+  binIin        String?  // БИН/ИИН контрагента
+
+  @@map("requisites")
+}
+
+enum PaymentType {
+  АВАНС
+  ТРАНШ_2
+  ТРАНШ_3
+}
+
+enum PaymentStatus {
+  ОЖИДАЕТСЯ
+  ОПЛАЧЕНО
+}
+
+model Payment {
+  id                   String        @id @default(uuid())
+  contractId           String
+  contract             Contract      @relation(fields: [contractId], references: [id])
+  paymentType          PaymentType
+  amount               Decimal       @db.Decimal(14, 2)
+  status               PaymentStatus @default(ОЖИДАЕТСЯ)
+  paidAt               DateTime?     // менеджер фиксирует фактическую дату оплаты вручную
+  triggeredBySectionId String?       // какой раздел/этап открывает доступность транша
+  triggeredBySection   Section?      @relation(fields: [triggeredBySectionId], references: [id])
+
+  @@map("payments")
+}
+
+// ЭЦП — здесь хранится РЕЗУЛЬТАТ подписи от внешнего провайдера
+// (напр. НУЦ РК), а не реализация самой криптографии.
+model DigitalSignature {
+  id             String   @id @default(uuid())
+  contractId     String
+  contract       Contract @relation(fields: [contractId], references: [id])
+  signedByMemberId String
+  signedByMember ProjectMember @relation(fields: [signedByMemberId], references: [id])
+  signatureData  String   // данные подписи/сертификата от внешнего провайдера ЭЦП
+  signedAt       DateTime @default(now())
+
+  closingDocuments ClosingDocument[]
+
+  @@map("digital_signatures")
+}
+
+enum ClosingDocumentType {
+  АВР
+}
+
+model ClosingDocument {
+  id                 String              @id @default(uuid())
+  contractId         String
+  contract           Contract            @relation(fields: [contractId], references: [id])
+  documentType       ClosingDocumentType
+  digitalSignatureId String?
+  digitalSignature   DigitalSignature?   @relation(fields: [digitalSignatureId], references: [id])
+  createdAt          DateTime            @default(now())
+
+  @@map("closing_documents")
+}
