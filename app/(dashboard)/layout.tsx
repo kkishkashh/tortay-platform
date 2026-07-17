@@ -1,3 +1,4 @@
+import { SystemRole } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -22,6 +23,7 @@ export default async function DashboardLayout({
       <Sidebar
         fullName={session.user.name ?? session.user.email ?? ""}
         systemRoleLabel={session.user.systemRole}
+        isHead={session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ}
         onSignOut={signOutAction}
       />
       <main className="flex-1 overflow-y-auto">{children}</main>

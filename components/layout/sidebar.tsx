@@ -17,6 +17,10 @@ type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
+  // Аутсорсеры и договоры — операционка, видна только руководителю
+  // (см. lib/projects/permissions.ts), сотруднику пункт вообще не
+  // показываем, а не просто блокируем действия внутри.
+  headOnly?: boolean;
 };
 
 type NavGroup = {
@@ -34,25 +38,31 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/employees", label: "Сотрудники", icon: Users },
-      { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake },
+      { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, headOnly: true },
     ],
   },
   {
     label: "Финансы",
-    items: [{ href: "/contracts", label: "Договоры", icon: FileText }],
+    items: [{ href: "/contracts", label: "Договоры", icon: FileText, headOnly: true }],
   },
 ];
 
 type SidebarProps = {
   fullName: string;
   systemRoleLabel: string;
+  isHead: boolean;
   onSignOut: () => Promise<void>;
 };
 
-export function Sidebar({ fullName, systemRoleLabel, onSignOut }: SidebarProps) {
+export function Sidebar({ fullName, systemRoleLabel, isHead, onSignOut }: SidebarProps) {
   const pathname = usePathname();
 
   const initials = getInitials(fullName);
+
+  const navGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !item.headOnly || isHead),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <aside className="flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground">
@@ -85,7 +95,7 @@ export function Sidebar({ fullName, systemRoleLabel, onSignOut }: SidebarProps) 
       </div>
 
       <nav className="flex flex-1 flex-col gap-6 px-3 py-2">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.label} className="flex flex-col gap-1">
             <span className="px-3 text-xs font-medium uppercase tracking-wide text-sidebar-foreground/40">
               {group.label}

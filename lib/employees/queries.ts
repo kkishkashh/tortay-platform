@@ -69,8 +69,38 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
   });
 }
 
-export async function getEmployeeById(id: string) {
-  return prisma.user.findUnique({
+export type EmployeeProfile = {
+  id: string;
+  fullName: string;
+  email: string;
+  systemRole: SystemRole;
+  phone: string | null;
+  position: string | null;
+  birthDate: Date | null;
+  salary: number | null;
+  createdAt: Date;
+  projectsByStatus: { status: ProjectStatus; projects: { id: string; name: string }[] }[];
+  activeProjectsCount: number;
+  completedProjectsCount: number;
+  totalProjectsCount: number;
+  completionRate: number;
+  workload: WorkloadLevel;
+};
+
+// Порядок реальных статусов проекта — "запланировано" отдельным статусом
+// в базе не существует, поэтому личный кабинет группирует по тому, что
+// реально есть: В работе / Завершён по разделам / Завершён полностью.
+const PROFILE_STATUS_ORDER = [
+  ProjectStatus.В_РАБОТЕ,
+  ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ,
+  ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ,
+];
+
+// "Эффективность" — задач (Task) в системе нет, поэтому считаем честно
+// по тому, что есть: % завершённых проектов среди всех + текущая
+// загрузка (та же логика, что и в getEmployees/дашборде).
+export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | null> {
+  const user = await prisma.user.findUnique({
     where: { id, userType: UserType.ШТАТНЫЙ },
     select: {
       id: true,
@@ -80,6 +110,51 @@ export async function getEmployeeById(id: string) {
       phone: true,
       position: true,
       birthDate: true,
+      salary: true,
+      createdAt: true,
+      projectMemberships: {
+        select: { project: { select: { id: true, name: true, status: true } } },
+      },
     },
   });
+  if (!user) return null;
+
+  const projects = user.projectMemberships.map((m) => m.project);
+  const projectsByStatus = PROFILE_STATUS_ORDER.map((status) => ({
+    status,
+    projects: projects
+      .filter((project) => project.status === status)
+      .map((project) => ({ id: project.id, name: project.name })),
+  }));
+
+  const activeProjectsCount = projects.filter(
+    (project) => project.status === ProjectStatus.В_РАБОТЕ,
+  ).length;
+  const completedProjectsCount = projects.filter(
+    (project) =>
+      project.status === ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ ||
+      project.status === ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ,
+  ).length;
+  const totalProjectsCount = projects.length;
+
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    systemRole: user.systemRole,
+    phone: user.phone,
+    position: user.position,
+    birthDate: user.birthDate,
+    salary: user.salary !== null ? Number(user.salary) : null,
+    createdAt: user.createdAt,
+    projectsByStatus,
+    activeProjectsCount,
+    completedProjectsCount,
+    totalProjectsCount,
+    completionRate:
+      totalProjectsCount === 0
+        ? 0
+        : Math.round((completedProjectsCount / totalProjectsCount) * 100),
+    workload: workloadLevel(activeProjectsCount),
+  };
 }

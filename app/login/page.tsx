@@ -33,7 +33,7 @@ export default async function LoginPage({
         action={loginAction}
         className="w-full max-w-sm space-y-4 rounded-lg bg-white p-8 shadow"
       >
-        <h1 className="text-center text-xl font-semibold">Вход в систему</h1>
+        <h1 className="text-center text-xl font-semibold">Вход в личный кабинет</h1>
 
         {error && (
           <p className="text-center text-sm text-red-600">

@@ -1,15 +1,16 @@
 import { SystemRole } from "@prisma/client";
-import { Banknote, CheckCircle2, FolderKanban, Users } from "lucide-react";
+import Link from "next/link";
+import { Banknote, CheckCircle2, FolderKanban, User, Users } from "lucide-react";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
+import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { WorkloadBoard } from "@/components/dashboard/workload-board";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UpcomingPayments } from "@/components/dashboard/upcoming-payments";
 import { ProjectGantt } from "@/components/dashboard/project-gantt";
 import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
-import { getEmployeesForSelect } from "@/lib/employees/queries";
 import {
   getDashboardStats,
   getEmployeeWorkload,
@@ -19,14 +20,11 @@ import {
 } from "@/lib/dashboard/queries";
 import { formatTenge, formatTodayLabel } from "@/lib/utils";
 
-import { NewProjectDialog } from "./projects/new-project-dialog";
-
 export default async function DashboardPage() {
-  const [session, stats, employees, workload, activity, upcomingPayments, timelines] =
+  const [session, stats, workload, activity, upcomingPayments, timelines] =
     await Promise.all([
       auth(),
       getDashboardStats(),
-      getEmployeesForSelect(),
       getEmployeeWorkload(),
       getRecentActivity(),
       getUpcomingPayments(),
@@ -41,9 +39,18 @@ export default async function DashboardPage() {
       <PageHeader
         title="Дашборд"
         subtitle={formatTodayLabel(today)}
-        action={isHead ? <NewProjectDialog employees={employees} /> : undefined}
+        action={
+          session?.user ? (
+            <Button render={<Link href={`/employees/${session.user.id}`} />}>
+              <User className="size-4" />
+              Личный кабинет
+            </Button>
+          ) : undefined
+        }
       />
-      <div className="grid grid-cols-1 gap-4 p-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div
+        className={`grid grid-cols-1 gap-4 p-8 sm:grid-cols-2 ${isHead ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
+      >
         <StatCard
           label="Активные проекты"
           value={String(stats.activeProjectsCount)}
@@ -54,15 +61,17 @@ export default async function DashboardPage() {
           value={String(stats.employeesCount)}
           icon={Users}
         />
-        <StatCard
-          label="К получению"
-          value={
-            stats.pendingPaymentsTotal === null
-              ? "—"
-              : formatTenge(stats.pendingPaymentsTotal)
-          }
-          icon={Banknote}
-        />
+        {isHead ? (
+          <StatCard
+            label="К получению"
+            value={
+              stats.pendingPaymentsTotal === null
+                ? "—"
+                : formatTenge(stats.pendingPaymentsTotal)
+            }
+            icon={Banknote}
+          />
+        ) : null}
         <StatCard
           label={`Завершено в ${currentYear} году`}
           value={String(stats.completedThisYearCount)}

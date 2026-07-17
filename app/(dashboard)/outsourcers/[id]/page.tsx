@@ -1,8 +1,10 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
+import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { getOutsourcerById } from "@/lib/outsourcers/queries";
+import { canManageOperations } from "@/lib/projects/permissions";
 import { formatTenge, getAvatarColor, getInitials } from "@/lib/utils";
 
 export default async function OutsourcerProfilePage({
@@ -10,6 +12,11 @@ export default async function OutsourcerProfilePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await auth();
+  if (!session?.user || !canManageOperations(session.user)) {
+    redirect("/");
+  }
+
   const { id } = await params;
   const outsourcer = await getOutsourcerById(id);
   if (!outsourcer) {

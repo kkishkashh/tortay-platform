@@ -18,12 +18,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: {},
       },
       async authorize(credentials) {
-        const email = credentials.email as string | undefined;
+        const emailRaw = credentials.email as string | undefined;
         const password = credentials.password as string | undefined;
 
-        if (!email || !password) {
+        if (!emailRaw || !password) {
           return null;
         }
+
+        // Email хранится в нижнем регистре (см. createEmployeeAction/seed.ts) —
+        // здесь та же нормализация, иначе вход не найдёт совпадение при
+        // разнице в регистре (например, автозаполнение браузера).
+        const email = emailRaw.trim().toLowerCase();
 
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) {
