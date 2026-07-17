@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { CheckCircle2, UserPlus } from "lucide-react";
+import { CheckCircle2, Plus } from "lucide-react";
 
-import { createEmployeeAction } from "@/lib/employees/actions";
-import { COMMON_POSITIONS } from "@/lib/employees/positions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,17 +20,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { createOutsourcerAction } from "@/lib/outsourcers/actions";
+import { COMMON_SPECIALIZATIONS } from "@/lib/outsourcers/specializations";
 
-export function NewEmployeeDialog() {
+export function NewOutsourcerDialog() {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
 
   function handleSubmit(formData: FormData) {
+    setError(null);
     startTransition(async () => {
-      await createEmployeeAction(formData);
-      setOpen(false);
-      setShowToast(true);
+      try {
+        await createOutsourcerAction(formData);
+        setOpen(false);
+        setShowToast(true);
+      } catch (submitError) {
+        setError(
+          submitError instanceof Error ? submitError.message : "Не удалось создать подрядчика",
+        );
+      }
     });
   }
 
@@ -46,39 +54,42 @@ export function NewEmployeeDialog() {
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger render={<Button />}>
-          <UserPlus className="size-4" />
-          Новый сотрудник
+          <Plus className="size-4" />
+          Новый аутсорсер
         </DialogTrigger>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
-            <DialogTitle>Новый сотрудник</DialogTitle>
+            <DialogTitle>Новый аутсорсер</DialogTitle>
           </DialogHeader>
           <form action={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="fullName">ФИО</Label>
+              <Label htmlFor="organization">Организация</Label>
               <Input
-                id="fullName"
-                name="fullName"
-                placeholder="Иванов Иван Иванович"
+                id="organization"
+                name="organization"
+                placeholder='ТОО "ГеоПроект"'
                 required
                 autoFocus
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="position">Должность</Label>
+              <Label htmlFor="specialization">Специализация</Label>
               <Select
-                name="position"
+                name="specialization"
                 required
-                items={COMMON_POSITIONS.map((position) => ({ value: position, label: position }))}
+                items={COMMON_SPECIALIZATIONS.map((specialization) => ({
+                  value: specialization,
+                  label: specialization,
+                }))}
               >
-                <SelectTrigger id="position" className="w-full">
-                  <SelectValue placeholder="Выберите должность" />
+                <SelectTrigger id="specialization" className="w-full">
+                  <SelectValue placeholder="Геодезия" />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMON_POSITIONS.map((position) => (
-                    <SelectItem key={position} value={position}>
-                      {position}
+                  {COMMON_SPECIALIZATIONS.map((specialization) => (
+                    <SelectItem key={specialization} value={specialization}>
+                      {specialization}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -86,31 +97,24 @@ export function NewEmployeeDialog() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="birthDate">Дата рождения</Label>
-              <Input id="birthDate" name="birthDate" type="date" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="salary">Оклад, ₸</Label>
+              <Label htmlFor="rate">Ставка (за проект), ₸</Label>
               <Input
-                id="salary"
-                name="salary"
+                id="rate"
+                name="rate"
                 type="number"
                 min="0"
                 step="1000"
-                placeholder="250000"
+                placeholder="500000"
                 required
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="contractNumber">Номер договора (необязательно)</Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="name@company.kz"
-                required
+                id="contractNumber"
+                name="contractNumber"
+                placeholder="ДОГ-АУТ-2026-005"
               />
             </div>
 
@@ -125,30 +129,20 @@ export function NewEmployeeDialog() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Пароль</Label>
-              <Input id="password" name="password" type="password" required minLength={6} />
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                placeholder="company@company.kz"
+                required
+              />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="systemRole">Системная роль</Label>
-              <Select
-                name="systemRole"
-                defaultValue="СОТРУДНИК"
-                items={[
-                  { value: "СОТРУДНИК", label: "Сотрудник" },
-                  { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
-                ]}
-              >
-                <SelectTrigger id="systemRole" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
-                  <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {error ? (
+              <p className="text-sm text-destructive sm:col-span-2">{error}</p>
+            ) : null}
 
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button
@@ -170,7 +164,7 @@ export function NewEmployeeDialog() {
       {showToast ? (
         <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-lg bg-foreground px-4 py-3 text-sm font-medium text-background shadow-lg">
           <CheckCircle2 className="size-4" />
-          Сотрудник добавлен
+          Аутсорсер добавлен
         </div>
       ) : null}
     </>

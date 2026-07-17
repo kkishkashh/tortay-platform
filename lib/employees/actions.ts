@@ -24,6 +24,15 @@ export async function createEmployeeAction(formData: FormData) {
   const birthDateRaw = formData.get("birthDate") as string | null;
   const birthDate = birthDateRaw ? new Date(birthDateRaw) : null;
 
+  const salaryRaw = (formData.get("salary") as string | null)?.trim();
+  let salary: number | null = null;
+  if (salaryRaw) {
+    salary = Number(salaryRaw);
+    if (Number.isNaN(salary) || salary <= 0) {
+      throw new Error("Оклад должен быть положительным числом");
+    }
+  }
+
   if (!fullName || !email || !password) {
     throw new Error("Заполните все обязательные поля");
   }
@@ -45,6 +54,7 @@ export async function createEmployeeAction(formData: FormData) {
       phone,
       position,
       birthDate,
+      salary,
     },
   });
 

@@ -43,12 +43,14 @@ model User {
   phone        String?
   position     String?
   birthDate    DateTime?  @db.Date
+  salary       Decimal?   @db.Decimal(12, 2) // оклад — финансовые данные, нигде пока не отображается
   createdAt    DateTime   @default(now())
 
   // Во всех проектах, где этот человек участвует (в разных ролях)
   projectMemberships ProjectMember[]
   documentsUploaded  Document[]
   comments           Comment[]
+  activityLogEntries ActivityLog[]
 
   @@map("users")
 }
@@ -90,15 +92,20 @@ enum ProjectStatus {
 }
 
 model Project {
-  id        String        @id @default(uuid())
-  name      String
-  status    ProjectStatus @default(В_РАБОТЕ)
-  createdAt DateTime      @default(now())
+  id          String        @id @default(uuid())
+  name        String
+  status      ProjectStatus @default(В_РАБОТЕ)
+  createdAt   DateTime      @default(now())
+  // Фиксируется в момент перехода status → ЗАВЕРШЁН_ПОЛНОСТЬЮ.
+  // Нужна отдельно от createdAt для статистики "завершено в этом году" —
+  // проект может быть начат в одном году, а закрыт в другом.
+  completedAt DateTime?
 
-  members   ProjectMember[]
-  sections  Section[]
-  contracts Contract[]
-  comments  Comment[]
+  members     ProjectMember[]
+  sections    Section[]
+  contracts   Contract[]
+  comments    Comment[]
+  activityLog ActivityLog[]
 
   @@map("projects")
 }
@@ -190,16 +197,67 @@ model Comment {
   @@map("comments")
 }
 
+// Лента "Последние события" на дашборде. Для MVP храним готовое
+// человекочитаемое сообщение (не структурированный тип события +
+// entity_id) — проще и достаточно, пока нет других потребителей этих
+// данных кроме самой ленты. Если появится, например, фильтр по типу
+// события — тогда стоит пересмотреть.
+model ActivityLog {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id])
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
+  @@map("activity_log")
+}
+
+// Организация-подрядчик (аутсорсер) — юрлицо, не участник User: не
+// логинится, не входит в ProjectMember. Это отдельно от
+// User.userType = АУТСОРСЕР (конкретные люди-участники проекта из
+// сторонних организаций) — см. обсуждение при добавлении этой модели:
+// в брифе "аутсорсер" изначально означал человека, здесь — компанию.
+// Статус договора не отдельный enum, а вычисляется из наличия
+// contractNumber (пусто → "Нет договора"), как и "Задержан" у проектов.
+model Outsourcer {
+  id             String   @id @default(uuid())
+  organization   String
+  specialization String
+  phone          String
+  email          String
+  rate           Decimal  @db.Decimal(12, 2)
+  contractNumber String?  @unique
+  createdAt      DateTime @default(now())
+
+  @@map("outsourcers")
+}
+
 // ============================================================
 // БЛОК 3: Финансовый блок — договоры, реквизиты, платежи, ЭЦП
 // ============================================================
 
+// ОТМЕНЁН добавлен для страницы "Договоры" (там нет отдельного шага
+// проверки ГИП, но нужен явный статус отмены) — остальные 5 значений
+// из исходного брифа не трогаем, ЗАКРЫТ уже покрывает "завершён".
 enum ContractStatus {
   ЧЕРНОВИК
   НА_ПРОВЕРКЕ_ГИП
   СОГЛАСОВАН
   ПОДПИСАН
   ЗАКРЫТ
+  ОТМЕНЁН
+}
+
+// Статус АВР — отдельный трекер стадии, не связан с ClosingDocument
+// (там хранятся реально сгенерированные документы с ЭЦП — другая задача).
+enum AvrStage {
+  НЕТ
+  СТАДИЯ_1
+  СТАДИЯ_2
+  ФИНАЛЬНАЯ
 }
 
 model Contract {
@@ -208,8 +266,11 @@ model Contract {
   project           Project        @relation(fields: [projectId], references: [id])
   createdByMemberId String         // менеджер, сформировавший договор
   createdByMember   ProjectMember  @relation(fields: [createdByMemberId], references: [id])
+  number            String         @unique // человекочитаемый номер, напр. "ДОГ-2025-018"
+  clientName        String         // заказчик
   totalAmount       Decimal        @db.Decimal(14, 2)
   status            ContractStatus @default(ЧЕРНОВИК)
+  avrStage          AvrStage       @default(НЕТ)
   createdAt         DateTime       @default(now())
 
   requisites         Requisites?
@@ -251,6 +312,7 @@ model Payment {
   paymentType          PaymentType
   amount               Decimal       @db.Decimal(14, 2)
   status               PaymentStatus @default(ОЖИДАЕТСЯ)
+  dueDate              DateTime?     // плановый срок платежа — задаётся вручную менеджером
   paidAt               DateTime?     // менеджер фиксирует фактическую дату оплаты вручную
   triggeredBySectionId String?       // какой раздел/этап открывает доступность транша
   triggeredBySection   Section?      @relation(fields: [triggeredBySectionId], references: [id])

@@ -11,7 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn, getInitials } from "@/lib/utils";
 
 type NavItem = {
   href: string;
@@ -52,12 +52,7 @@ type SidebarProps = {
 export function Sidebar({ fullName, systemRoleLabel, onSignOut }: SidebarProps) {
   const pathname = usePathname();
 
-  const initials = fullName
-    .split(" ")
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const initials = getInitials(fullName);
 
   return (
     <aside className="flex w-64 shrink-0 flex-col bg-sidebar text-sidebar-foreground">

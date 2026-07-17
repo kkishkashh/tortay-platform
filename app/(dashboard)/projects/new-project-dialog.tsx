@@ -62,7 +62,14 @@ export function NewProjectDialog({ employees }: NewProjectDialogProps) {
 
           <div className="space-y-2">
             <Label htmlFor="gipUserId">ГИП</Label>
-            <Select name="gipUserId" required>
+            <Select
+              name="gipUserId"
+              required
+              items={employees.map((employee) => ({
+                value: employee.id,
+                label: employee.fullName,
+              }))}
+            >
               <SelectTrigger id="gipUserId" className="w-full">
                 <SelectValue placeholder="Выберите сотрудника" />
               </SelectTrigger>
