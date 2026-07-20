@@ -6,7 +6,7 @@ import { PaymentType, ProjectRole, ProjectStatus, SectionStatus } from "@prisma/
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
-import { sendGipAssignedEmail } from "@/lib/email/resend";
+import { sendGipAssignedEmail } from "@/lib/email/send";
 import { prisma } from "@/lib/prisma";
 import { canManageOperations } from "@/lib/projects/permissions";
 import { SECTION_TEMPLATES, sectionTemplateName } from "@/lib/projects/section-templates";
