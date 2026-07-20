@@ -99,6 +99,39 @@ export async function togglePaymentPaidAction(paymentId: string) {
   revalidatePath("/");
 }
 
+// Каскад вручную — как и в deleteProjectAction (lib/projects/actions.ts):
+// в схеме нет onDelete: Cascade, а у договора есть свои зависимые записи
+// (реквизиты, платежи, ЭЦП, закрывающие документы), которые Postgres не
+// даст осиротить.
+export async function deleteContractAction(contractId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  if (!canManageOperations(session.user)) {
+    throw new Error("Недостаточно прав для удаления договора");
+  }
+
+  const contract = await prisma.contract.findUnique({
+    where: { id: contractId },
+    select: { id: true },
+  });
+  if (!contract) {
+    throw new Error("Договор не найден");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.closingDocument.deleteMany({ where: { contractId } });
+    await tx.digitalSignature.deleteMany({ where: { contractId } });
+    await tx.requisites.deleteMany({ where: { contractId } });
+    await tx.payment.deleteMany({ where: { contractId } });
+    await tx.contract.delete({ where: { id: contractId } });
+  });
+
+  revalidatePath("/contracts");
+  revalidatePath("/");
+}
+
 export async function updateContractStatusAction(contractId: string, status: ContractStatus) {
   const session = await auth();
   if (!session?.user) {

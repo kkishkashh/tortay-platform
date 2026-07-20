@@ -1,15 +1,19 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { AvrStage, ContractStatus, PaymentType } from "@prisma/client";
+import { Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +29,7 @@ import {
   PAYMENT_TYPE_LABELS,
 } from "@/lib/contracts/labels";
 import {
+  deleteContractAction,
   togglePaymentPaidAction,
   updateAvrStageAction,
   updateContractStatusAction,
@@ -127,6 +132,49 @@ function PaymentCard({
         </Button>
       ) : null}
     </div>
+  );
+}
+
+function DeleteContractDialog({
+  contractId,
+  number,
+  onDeleted,
+}: {
+  contractId: string;
+  number: string;
+  onDeleted: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+
+  function handleDelete() {
+    startTransition(async () => {
+      await deleteContractAction(contractId);
+      onDeleted();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button type="button" variant="destructive" />}>
+        <Trash2 className="size-4" />
+        Удалить
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Удалить договор {number}?</DialogTitle>
+          <DialogDescription>
+            Вместе с договором удалятся реквизиты, платежи и подписанные документы.
+            Это действие нельзя отменить.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter showCloseButton>
+          <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+            {isPending ? "Удаляем…" : "Удалить безвозвратно"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -252,7 +300,16 @@ export function ContractDetailModal({
           </span>
         </div>
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          {canManage ? (
+            <DeleteContractDialog
+              contractId={contract.id}
+              number={contract.number}
+              onDeleted={onClose}
+            />
+          ) : (
+            <span />
+          )}
           <Button type="button" variant="secondary" onClick={onClose}>
             Закрыть
           </Button>

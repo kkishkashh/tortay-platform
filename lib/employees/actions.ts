@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { SystemRole, UserType } from "@prisma/client";
@@ -60,6 +61,80 @@ export async function createEmployeeAction(formData: FormData) {
 
   revalidatePath("/employees");
   revalidatePath("/projects");
+}
+
+// Жёсткое удаление User заблокировано, если на него ссылаются записи с
+// обязательным (NOT NULL) внешним ключом — Contract.createdByMemberId,
+// DigitalSignature.signedByMemberId (через ProjectMember), а также
+// Document.uploadedBy и Comment.authorId (напрямую на User). Это не
+// "принадлежащие" сотруднику данные, как разделы у проекта, а общая
+// история компании — каскадом их удалять нельзя, поэтому вместо этого
+// понятная ошибка с просьбой сначала разобраться с этими записями.
+// Task.assigneeMemberId — необязательное поле, поэтому не блокирует,
+// просто снимаем назначение.
+export async function deleteEmployeeAction(userId: string) {
+  const session = await auth();
+  if (!session?.user || session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+    throw new Error("Недостаточно прав");
+  }
+  if (session.user.id === userId) {
+    throw new Error("Нельзя удалить свой собственный аккаунт");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      fullName: true,
+      _count: { select: { documentsUploaded: true, comments: true } },
+      projectMemberships: {
+        select: {
+          _count: { select: { contractsCreated: true, digitalSignatures: true } },
+        },
+      },
+    },
+  });
+  if (!user) {
+    throw new Error("Сотрудник не найден");
+  }
+
+  const contractsCreated = user.projectMemberships.reduce(
+    (sum, member) => sum + member._count.contractsCreated,
+    0,
+  );
+  const signaturesSigned = user.projectMemberships.reduce(
+    (sum, member) => sum + member._count.digitalSignatures,
+    0,
+  );
+
+  const blockers: string[] = [];
+  if (contractsCreated > 0) blockers.push(`создал(а) ${contractsCreated} договор(ов)`);
+  if (signaturesSigned > 0) blockers.push(`подписал(а) ${signaturesSigned} документ(ов) ЭЦП`);
+  if (user._count.documentsUploaded > 0) {
+    blockers.push(`загрузил(а) ${user._count.documentsUploaded} файл(ов)`);
+  }
+  if (user._count.comments > 0) {
+    blockers.push(`оставил(а) ${user._count.comments} комментари(ев)`);
+  }
+
+  if (blockers.length > 0) {
+    throw new Error(
+      `Нельзя удалить: сотрудник ${blockers.join(", ")} — эти записи нужно сначала удалить или переназначить.`,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.task.updateMany({
+      where: { assigneeMember: { userId } },
+      data: { assigneeMemberId: null },
+    });
+    await tx.projectMember.deleteMany({ where: { userId } });
+    await tx.user.delete({ where: { id: userId } });
+  });
+
+  revalidatePath("/employees");
+  revalidatePath("/projects");
+  revalidatePath("/");
+  redirect("/employees");
 }
 
 function isSelfOrHead(sessionUser: { id: string; systemRole: SystemRole }, targetUserId: string) {

@@ -7,6 +7,8 @@ import { getOutsourcerById } from "@/lib/outsourcers/queries";
 import { canManageOperations } from "@/lib/projects/permissions";
 import { formatTenge, getAvatarColor, getInitials } from "@/lib/utils";
 
+import { DeleteOutsourcerDialog } from "./delete-outsourcer-dialog";
+
 export default async function OutsourcerProfilePage({
   params,
 }: {
@@ -25,7 +27,15 @@ export default async function OutsourcerProfilePage({
 
   return (
     <>
-      <PageHeader title={outsourcer.organization} />
+      <PageHeader
+        title={outsourcer.organization}
+        action={
+          <DeleteOutsourcerDialog
+            outsourcerId={outsourcer.id}
+            organization={outsourcer.organization}
+          />
+        }
+      />
       <div className="p-8">
         <div className="flex items-center gap-4">
           <span

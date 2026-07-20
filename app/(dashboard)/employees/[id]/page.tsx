@@ -13,6 +13,7 @@ import { WORKLOAD_META } from "@/lib/workload";
 import { FolderKanban, ListChecks, Percent, Gauge } from "lucide-react";
 
 import { ContactForm } from "./contact-form";
+import { DeleteEmployeeDialog } from "./delete-employee-dialog";
 import { DetailsForm } from "./details-form";
 import { PasswordForm } from "./password-form";
 
@@ -46,7 +47,14 @@ export default async function EmployeeProfilePage({
 
   return (
     <>
-      <PageHeader title={employee.fullName} />
+      <PageHeader
+        title={employee.fullName}
+        action={
+          isHead && !isSelf ? (
+            <DeleteEmployeeDialog userId={employee.id} fullName={employee.fullName} />
+          ) : undefined
+        }
+      />
       <div className="space-y-6 p-8">
         <div className="flex items-center gap-4">
           <span

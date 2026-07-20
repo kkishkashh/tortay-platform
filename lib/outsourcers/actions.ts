@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { Prisma, SystemRole } from "@prisma/client";
 
@@ -59,4 +60,18 @@ export async function createOutsourcerAction(formData: FormData) {
   }
 
   revalidatePath("/outsourcers");
+}
+
+// Outsourcer — самостоятельная запись без внешних ключей на другие
+// таблицы (см. schema.prisma), поэтому удаление простое, без каскада.
+export async function deleteOutsourcerAction(id: string) {
+  const session = await auth();
+  if (session?.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+    throw new Error("Недостаточно прав");
+  }
+
+  await prisma.outsourcer.delete({ where: { id } });
+
+  revalidatePath("/outsourcers");
+  redirect("/outsourcers");
 }
