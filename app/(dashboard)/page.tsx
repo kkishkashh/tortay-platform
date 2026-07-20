@@ -41,7 +41,10 @@ export default async function DashboardPage() {
         subtitle={formatTodayLabel(today)}
         action={
           session?.user ? (
-            <Button render={<Link href={`/employees/${session.user.id}`} />}>
+            <Button
+              nativeButton={false}
+              render={<Link href={`/employees/${session.user.id}`} />}
+            >
               <User className="size-4" />
               Личный кабинет
             </Button>
