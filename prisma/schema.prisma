@@ -228,7 +228,7 @@ model Outsourcer {
   specialization String
   phone          String
   email          String
-  rate           Decimal  @db.Decimal(12, 2)
+  directorName   String
   contractNumber String?  @unique
   createdAt      DateTime @default(now())
 

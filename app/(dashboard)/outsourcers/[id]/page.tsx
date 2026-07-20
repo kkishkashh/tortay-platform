@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { getOutsourcerById } from "@/lib/outsourcers/queries";
 import { canManageOperations } from "@/lib/projects/permissions";
-import { formatTenge, getAvatarColor, getInitials } from "@/lib/utils";
+import { getAvatarColor, getInitials } from "@/lib/utils";
 
 import { DeleteOutsourcerDialog } from "./delete-outsourcer-dialog";
 
@@ -60,8 +60,8 @@ export default async function OutsourcerProfilePage({
             <dd className="text-sm">{outsourcer.email}</dd>
           </div>
           <div>
-            <dt className="text-xs text-muted-foreground">Ставка</dt>
-            <dd className="text-sm">{formatTenge(Number(outsourcer.rate))}</dd>
+            <dt className="text-xs text-muted-foreground">ФИО директора</dt>
+            <dd className="text-sm">{outsourcer.directorName}</dd>
           </div>
           <div>
             <dt className="text-xs text-muted-foreground">Договор</dt>

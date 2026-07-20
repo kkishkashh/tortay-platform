@@ -6,7 +6,7 @@ export type OutsourcerListItem = {
   specialization: string;
   phone: string;
   email: string;
-  rate: number;
+  directorName: string;
   contractNumber: string | null;
 };
 
@@ -23,7 +23,7 @@ export async function getOutsourcers(): Promise<OutsourcerListItem[]> {
     specialization: outsourcer.specialization,
     phone: outsourcer.phone,
     email: outsourcer.email,
-    rate: Number(outsourcer.rate),
+    directorName: outsourcer.directorName,
     contractNumber: outsourcer.contractNumber,
   }));
 }

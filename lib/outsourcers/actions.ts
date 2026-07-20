@@ -28,10 +28,10 @@ export async function createOutsourcerAction(formData: FormData) {
   const specialization = (formData.get("specialization") as string | null)?.trim();
   const phone = (formData.get("phone") as string | null)?.trim();
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
-  const rateRaw = (formData.get("rate") as string | null)?.trim();
+  const directorName = (formData.get("directorName") as string | null)?.trim();
   const contractNumber = (formData.get("contractNumber") as string | null)?.trim() || null;
 
-  if (!organization || !specialization || !phone || !email || !rateRaw) {
+  if (!organization || !specialization || !phone || !email || !directorName) {
     throw new Error("Заполните все обязательные поля");
   }
 
@@ -43,14 +43,9 @@ export async function createOutsourcerAction(formData: FormData) {
     throw new Error("Некорректный номер телефона (формат Казахстана: +7 ...)");
   }
 
-  const rate = Number(rateRaw);
-  if (Number.isNaN(rate) || rate <= 0) {
-    throw new Error("Ставка должна быть положительным числом");
-  }
-
   try {
     await prisma.outsourcer.create({
-      data: { organization, specialization, phone, email, rate, contractNumber },
+      data: { organization, specialization, phone, email, directorName, contractNumber },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {

@@ -97,14 +97,11 @@ export function NewOutsourcerDialog() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="rate">Ставка (за проект), ₸</Label>
+              <Label htmlFor="directorName">ФИО директора</Label>
               <Input
-                id="rate"
-                name="rate"
-                type="number"
-                min="0"
-                step="1000"
-                placeholder="500000"
+                id="directorName"
+                name="directorName"
+                placeholder="Ахметов Данияр Серикович"
                 required
               />
             </div>

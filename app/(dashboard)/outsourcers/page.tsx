@@ -47,7 +47,7 @@ export default async function OutsourcersPage() {
                   <TableHead>Организация</TableHead>
                   <TableHead>Специализация</TableHead>
                   <TableHead>Контакт</TableHead>
-                  <TableHead>Ставка</TableHead>
+                  <TableHead>ФИО директора</TableHead>
                   <TableHead>Договор</TableHead>
                   <TableHead className="text-right">Действие</TableHead>
                 </TableRow>

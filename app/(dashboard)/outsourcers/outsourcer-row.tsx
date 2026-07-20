@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { OutsourcerListItem } from "@/lib/outsourcers/queries";
-import { formatTenge, getAvatarColor, getInitials } from "@/lib/utils";
+import { getAvatarColor, getInitials } from "@/lib/utils";
 
 export function OutsourcerRow({ outsourcer }: { outsourcer: OutsourcerListItem }) {
   const router = useRouter();
@@ -35,7 +35,7 @@ export function OutsourcerRow({ outsourcer }: { outsourcer: OutsourcerListItem }
         <div className="text-sm">{outsourcer.phone}</div>
         <div className="text-xs text-muted-foreground">{outsourcer.email}</div>
       </TableCell>
-      <TableCell className="tabular-nums">{formatTenge(outsourcer.rate)}</TableCell>
+      <TableCell className="text-sm">{outsourcer.directorName}</TableCell>
       <TableCell>
         {hasContract ? (
           <Badge variant="secondary" className="gap-1.5">
