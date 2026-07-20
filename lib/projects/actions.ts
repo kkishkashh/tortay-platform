@@ -6,6 +6,7 @@ import { PaymentType, ProjectRole, ProjectStatus, SectionStatus } from "@prisma/
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
+import { sendGipAssignedEmail } from "@/lib/email/resend";
 import { prisma } from "@/lib/prisma";
 import { canManageOperations } from "@/lib/projects/permissions";
 import { SECTION_TEMPLATES, sectionTemplateName } from "@/lib/projects/section-templates";
@@ -50,6 +51,16 @@ export async function createProjectAction(formData: FormData) {
   const gipUserId = formData.get("gipUserId") as string | null;
   if (!gipUserId) {
     throw new Error("Нужно выбрать ГИП");
+  }
+
+  // Нужны email/имя для уведомления о назначении — заодно валидируем,
+  // что выбранный ГИП реально существует (иначе ниже упадёт по FK).
+  const gipUser = await prisma.user.findUnique({
+    where: { id: gipUserId },
+    select: { email: true, fullName: true },
+  });
+  if (!gipUser) {
+    throw new Error("Выбранный ГИП не найден");
   }
 
   const selectedCodes = formData.getAll("sectionTemplates") as string[];
@@ -144,6 +155,18 @@ export async function createProjectAction(formData: FormData) {
         ],
       });
     }
+  });
+
+  // Письмо — уже после того, как проект реально создан и закоммичен;
+  // если Resend недоступен или упадёт, это не должно откатывать проект,
+  // поэтому не в транзакции и без throw наружу.
+  sendGipAssignedEmail({
+    to: gipUser.email,
+    employeeName: gipUser.fullName,
+    projectName: name,
+    assignedByName: session.user.name ?? "Руководитель",
+  }).catch((error) => {
+    console.error("Не удалось отправить уведомление о назначении ГИП", error);
   });
 
   revalidatePath("/projects");
