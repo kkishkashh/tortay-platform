@@ -99,18 +99,32 @@ export function NewProjectDialog({ employees }: NewProjectDialogProps) {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="totalAmount">
-              Стоимость договора (необязательно)
-            </Label>
-            <Input
-              id="totalAmount"
-              name="totalAmount"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Например, 5000000"
-            />
+          <div className="space-y-2 rounded-lg border p-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Договор (необязательно)
+            </p>
+
+            <div className="space-y-2">
+              <Label htmlFor="clientName">Заказчик</Label>
+              <Input id="clientName" name="clientName" placeholder='ТОО "Заказчик"' />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="binIin">БИН заказчика</Label>
+              <Input id="binIin" name="binIin" placeholder="123456789012" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="totalAmount">Стоимость договора</Label>
+              <Input
+                id="totalAmount"
+                name="totalAmount"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Например, 5000000"
+              />
+            </div>
           </div>
 
           <Button type="submit" className="w-full" disabled={isPending}>

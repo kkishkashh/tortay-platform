@@ -10,6 +10,8 @@ import {
   SECTION_STATUS_LABELS,
 } from "@/lib/projects/status-labels";
 
+import { DeleteProjectDialog } from "./delete-project-dialog";
+import { EditProjectDialog } from "./edit-project-dialog";
 import { ProjectStatusSelect } from "./project-status-select";
 import { SectionDatesFields } from "./section-dates-fields";
 import { SectionStatusSelect } from "./section-status-select";
@@ -44,7 +46,17 @@ export default async function ProjectDetailPage({
 
   return (
     <>
-      <PageHeader title={project.name} />
+      <PageHeader
+        title={project.name}
+        action={
+          canChangeStatus ? (
+            <div className="flex items-center gap-2">
+              <EditProjectDialog projectId={project.id} name={project.name} />
+              <DeleteProjectDialog projectId={project.id} name={project.name} />
+            </div>
+          ) : undefined
+        }
+      />
       <div className="p-8">
         {canChangeStatus ? (
           <ProjectStatusSelect projectId={project.id} status={project.status} />

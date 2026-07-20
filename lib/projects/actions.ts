@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { PaymentType, ProjectRole, ProjectStatus, SectionStatus } from "@prisma/client";
 
@@ -58,6 +59,9 @@ export async function createProjectAction(formData: FormData) {
     selectedCodes.includes(template.code),
   );
 
+  const clientName = (formData.get("clientName") as string | null)?.trim() || null;
+  const binIin = (formData.get("binIin") as string | null)?.trim() || null;
+
   const totalAmountRaw = (formData.get("totalAmount") as string | null)?.trim();
   let totalAmount: number | null = null;
   if (totalAmountRaw) {
@@ -65,6 +69,13 @@ export async function createProjectAction(formData: FormData) {
     if (Number.isNaN(totalAmount) || totalAmount <= 0) {
       throw new Error("Некорректная стоимость договора");
     }
+  }
+
+  // Заказчик и БИН относятся к договору — без стоимости договора его не
+  // из чего создать (Contract.totalAmount обязателен в схеме), поэтому
+  // без totalAmount эти поля были бы молча потеряны.
+  if ((clientName || binIin) && totalAmount === null) {
+    throw new Error("Чтобы указать заказчика или БИН, укажите и стоимость договора");
   }
 
   const creatorIsGip = gipUserId === session.user.id;
@@ -101,9 +112,9 @@ export async function createProjectAction(formData: FormData) {
     }
 
     if (totalAmount !== null) {
-      // Номер и клиент здесь не собираются в этой форме (быстрый мастер
-      // проекта) — заполняем разумной заглушкой; оба поля можно
-      // отредактировать позже через договор на /contracts.
+      // Номер здесь не собирается в этой форме (быстрый мастер проекта) —
+      // присваивается автоматически; клиент/БИН можно позже поправить
+      // через договор на /contracts.
       const year = new Date().getFullYear();
       const countThisYear = await tx.contract.count({
         where: { createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
@@ -113,10 +124,16 @@ export async function createProjectAction(formData: FormData) {
           projectId: project.id,
           createdByMemberId: creatorMember.id,
           number: `ДОГ-${year}-${String(countThisYear + 1).padStart(3, "0")}`,
-          clientName: "Не указан",
+          clientName: clientName ?? "Не указан",
           totalAmount,
         },
       });
+
+      if (binIin) {
+        await tx.requisites.create({
+          data: { contractId: contract.id, binIin },
+        });
+      }
 
       const [avans, tranche2, tranche3] = splitIntoTranches(totalAmount);
       await tx.payment.createMany({
@@ -131,6 +148,84 @@ export async function createProjectAction(formData: FormData) {
 
   revalidatePath("/projects");
   revalidatePath("/");
+}
+
+export async function updateProjectNameAction(projectId: string, name: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  if (!canManageOperations(session.user)) {
+    throw new Error("Редактировать проект может только руководитель");
+  }
+
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new Error("Название проекта обязательно");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const project = await tx.project.update({
+      where: { id: projectId },
+      data: { name: trimmedName },
+    });
+
+    await logActivity(tx, {
+      projectId,
+      actorId: session.user.id,
+      message: `${session.user.name} переименовал проект в «${project.name}»`,
+    });
+  });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// Каскадное удаление вручную: в схеме нет onDelete: Cascade (см.
+// prisma/schema.prisma), поэтому Postgres запретит удалить проект, пока
+// не удалены все зависимые записи. Порядок — от самых "листовых" таблиц
+// к корню, чтобы ни один внешний ключ не сослался на уже несуществующую
+// строку. Всё в одной транзакции — либо удаляется весь проект целиком,
+// либо ничего.
+export async function deleteProjectAction(projectId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  if (!canManageOperations(session.user)) {
+    throw new Error("Удалять проект может только руководитель");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.closingDocument.deleteMany({ where: { contract: { projectId } } });
+    await tx.digitalSignature.deleteMany({ where: { contract: { projectId } } });
+    await tx.requisites.deleteMany({ where: { contract: { projectId } } });
+    await tx.payment.deleteMany({ where: { contract: { projectId } } });
+    await tx.contract.deleteMany({ where: { projectId } });
+
+    await tx.comment.deleteMany({
+      where: {
+        OR: [
+          { projectId },
+          { section: { projectId } },
+          { task: { section: { projectId } } },
+        ],
+      },
+    });
+    await tx.document.deleteMany({ where: { section: { projectId } } });
+    await tx.task.deleteMany({ where: { section: { projectId } } });
+    await tx.section.deleteMany({ where: { projectId } });
+
+    await tx.activityLog.deleteMany({ where: { projectId } });
+    await tx.projectMember.deleteMany({ where: { projectId } });
+
+    await tx.project.delete({ where: { id: projectId } });
+  });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  redirect("/projects");
 }
 
 // completedAt фиксирует момент закрытия проекта — нужен для статистики
