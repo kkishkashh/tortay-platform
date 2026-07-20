@@ -8,9 +8,9 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
   return (
-    <div className="flex items-center justify-between border-b px-8 py-5">
-      <div>
-        <h1 className="text-xl font-semibold">{title}</h1>
+    <div className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-border/70 bg-background/85 px-8 py-5 backdrop-blur-md">
+      <div className="min-w-0">
+        <h1 className="truncate text-xl font-semibold tracking-tight">{title}</h1>
         {subtitle ? (
           <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
         ) : null}

@@ -177,6 +177,92 @@ export async function getUpcomingPayments(limit = 6): Promise<UpcomingPayment[]>
     .slice(0, limit);
 }
 
+export type ProjectStatusBreakdownItem = {
+  status: ProjectStatus;
+  count: number;
+};
+
+// Для донат-чарта "Проекты по статусу" на дашборде — та же зона
+// видимости, что и у остального дашборда.
+export async function getProjectStatusBreakdown(): Promise<ProjectStatusBreakdownItem[]> {
+  const session = await auth();
+  if (!session?.user) {
+    return [];
+  }
+
+  const isHead = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const projectScope = isHead
+    ? undefined
+    : { members: { some: { userId: session.user.id } } };
+
+  const grouped = await prisma.project.groupBy({
+    by: ["status"],
+    where: projectScope,
+    _count: { _all: true },
+  });
+
+  const countByStatus = new Map(grouped.map((g) => [g.status, g._count._all]));
+
+  return [
+    ProjectStatus.В_РАБОТЕ,
+    ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ,
+    ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ,
+  ]
+    .map((status) => ({ status, count: countByStatus.get(status) ?? 0 }))
+    .filter((item) => item.count > 0);
+}
+
+export type UpcomingDeadline = {
+  sectionId: string;
+  sectionName: string;
+  projectId: string;
+  projectName: string;
+  deadline: Date;
+};
+
+// "Дедлайны на этой неделе" — реальные сроки РАЗДЕЛОВ (не выдуманные
+// задачи, см. обсуждение при редизайне: Task/Document ещё без CRUD),
+// та же зона видимости, что и у остального дашборда.
+export async function getUpcomingDeadlines(daysAhead = 7): Promise<UpcomingDeadline[]> {
+  const session = await auth();
+  if (!session?.user) {
+    return [];
+  }
+
+  const isHead = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const projectScope = isHead
+    ? undefined
+    : { members: { some: { userId: session.user.id } } };
+
+  const now = new Date();
+  const until = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+
+  const sections = await prisma.section.findMany({
+    where: {
+      project: projectScope,
+      deadline: { gte: now, lte: until },
+      status: { not: "ВЫПОЛНЕНО" },
+    },
+    select: {
+      id: true,
+      name: true,
+      deadline: true,
+      project: { select: { id: true, name: true } },
+    },
+    orderBy: { deadline: "asc" },
+  });
+
+  return sections
+    .filter((section): section is typeof section & { deadline: Date } => section.deadline !== null)
+    .map((section) => ({
+      sectionId: section.id,
+      sectionName: section.name,
+      projectId: section.project.id,
+      projectName: section.project.name,
+      deadline: section.deadline,
+    }));
+}
+
 export type ProjectTimeline = {
   id: string;
   name: string;

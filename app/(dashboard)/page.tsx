@@ -10,75 +10,95 @@ import { WorkloadBoard } from "@/components/dashboard/workload-board";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
 import { UpcomingPayments } from "@/components/dashboard/upcoming-payments";
 import { ProjectGantt } from "@/components/dashboard/project-gantt";
-import { DashboardPanel } from "@/components/dashboard/dashboard-panel";
+import { ProjectStatusChart } from "@/components/dashboard/project-status-chart";
+import { EmployeeDashboard } from "@/components/dashboard/employee-dashboard";
 import {
   getDashboardStats,
   getEmployeeWorkload,
   getRecentActivity,
   getUpcomingPayments,
   getProjectTimelines,
+  getProjectStatusBreakdown,
+  getUpcomingDeadlines,
 } from "@/lib/dashboard/queries";
+import { getProjectsForCurrentUser } from "@/lib/projects/queries";
 import { formatTenge, formatTodayLabel } from "@/lib/utils";
 
 export default async function DashboardPage() {
-  const [session, stats, workload, activity, upcomingPayments, timelines] =
+  const session = await auth();
+  const isHead = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const today = new Date();
+  const currentYear = today.getFullYear();
+
+  const cabinetButton = session?.user ? (
+    <Button nativeButton={false} render={<Link href={`/employees/${session.user.id}`} />}>
+      <User className="size-4" />
+      Личный кабинет
+    </Button>
+  ) : undefined;
+
+  if (!isHead) {
+    const [stats, deadlines, projects, activity] = await Promise.all([
+      getDashboardStats(),
+      getUpcomingDeadlines(),
+      getProjectsForCurrentUser(),
+      getRecentActivity(),
+    ]);
+
+    return (
+      <>
+        <PageHeader title="Дашборд" subtitle={formatTodayLabel(today)} action={cabinetButton} />
+        <EmployeeDashboard
+          fullName={session?.user.name ?? "коллега"}
+          activeProjectsCount={stats.activeProjectsCount}
+          completedThisYearCount={stats.completedThisYearCount}
+          deadlines={deadlines}
+          projects={projects}
+          activity={activity}
+        />
+      </>
+    );
+  }
+
+  const [stats, workload, activity, upcomingPayments, timelines, statusBreakdown] =
     await Promise.all([
-      auth(),
       getDashboardStats(),
       getEmployeeWorkload(),
       getRecentActivity(),
       getUpcomingPayments(),
       getProjectTimelines(),
+      getProjectStatusBreakdown(),
     ]);
-  const isHead = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
-  const today = new Date();
-  const currentYear = today.getFullYear();
 
   return (
     <>
-      <PageHeader
-        title="Дашборд"
-        subtitle={formatTodayLabel(today)}
-        action={
-          session?.user ? (
-            <Button
-              nativeButton={false}
-              render={<Link href={`/employees/${session.user.id}`} />}
-            >
-              <User className="size-4" />
-              Личный кабинет
-            </Button>
-          ) : undefined
-        }
-      />
-      <div
-        className={`grid grid-cols-1 gap-4 p-8 sm:grid-cols-2 ${isHead ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
-      >
+      <PageHeader title="Дашборд" subtitle={formatTodayLabel(today)} action={cabinetButton} />
+      <div className="grid grid-cols-1 gap-4 p-8 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Активные проекты"
           value={String(stats.activeProjectsCount)}
           icon={FolderKanban}
+          color="blue"
         />
         <StatCard
           label="Сотрудники"
           value={String(stats.employeesCount)}
           icon={Users}
+          color="green"
         />
-        {isHead ? (
-          <StatCard
-            label="К получению"
-            value={
-              stats.pendingPaymentsTotal === null
-                ? "—"
-                : formatTenge(stats.pendingPaymentsTotal)
-            }
-            icon={Banknote}
-          />
-        ) : null}
+        <StatCard
+          label="К получению"
+          value={
+            stats.pendingPaymentsTotal === null ? "—" : formatTenge(stats.pendingPaymentsTotal)
+          }
+          icon={Banknote}
+          color="gold"
+        />
         <StatCard
           label={`Завершено в ${currentYear} году`}
           value={String(stats.completedThisYearCount)}
           icon={CheckCircle2}
+          color="purple"
         />
       </div>
 
@@ -87,18 +107,12 @@ export default async function DashboardPage() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <WorkloadBoard employees={workload} />
-          <RecentActivity items={activity} />
+          <ProjectStatusChart data={statusBreakdown} />
         </div>
 
-        {isHead ? (
-          <UpcomingPayments payments={upcomingPayments} />
-        ) : (
-          <DashboardPanel title="Предстоящие платежи">
-            <p className="text-sm text-muted-foreground">
-              Финансовые данные доступны только руководителю.
-            </p>
-          </DashboardPanel>
-        )}
+        <RecentActivity items={activity} />
+
+        <UpcomingPayments payments={upcomingPayments} />
       </div>
     </>
   );

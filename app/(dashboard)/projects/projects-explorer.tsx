@@ -6,6 +6,7 @@ import { ProjectStatus } from "@prisma/client";
 import { ArrowRight, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -88,9 +89,9 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
               type="button"
               onClick={() => setStatusFilter(filter.value)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-sm font-medium transition-colors duration-150",
+                "rounded-full border px-3 py-1.5 text-sm font-medium transition-all duration-150",
                 statusFilter === filter.value
-                  ? "border-transparent bg-primary text-primary-foreground"
+                  ? "border-transparent bg-primary text-primary-foreground shadow-[0_0_0_1px_rgba(232,160,48,0.3),0_0_14px_rgba(232,160,48,0.35)]"
                   : "border-input bg-background text-foreground hover:bg-muted",
               )}
             >
@@ -103,6 +104,7 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
       {filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">Ничего не найдено.</p>
       ) : (
+        <Card className="p-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -188,6 +190,7 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
             })}
           </TableBody>
         </Table>
+        </Card>
       )}
     </div>
   );

@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 
 import { signIn } from "@/auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 async function loginAction(formData: FormData) {
   "use server";
@@ -29,55 +32,60 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-sidebar px-4">
+      <div
+        className="pointer-events-none absolute -top-40 -left-40 size-[32rem] rounded-full bg-[color-mix(in_oklab,var(--sidebar-primary),transparent_78%)] blur-3xl"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute -right-32 -bottom-32 size-[28rem] rounded-full bg-[color-mix(in_oklab,var(--sidebar-primary),transparent_85%)] blur-3xl"
+        aria-hidden
+      />
+
       <form
         action={loginAction}
-        className="w-full max-w-sm space-y-4 rounded-lg bg-white p-8 shadow"
+        className="relative w-full max-w-sm space-y-5 rounded-2xl bg-card p-8 text-card-foreground shadow-pop ring-1 ring-white/10"
       >
-        <h1 className="text-center text-xl font-semibold">Вход в личный кабинет</h1>
+        <div className="flex flex-col items-center gap-3 text-center">
+          <svg viewBox="0 0 28 28" fill="none" className="size-9" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 14 L14 4 L24 14 L14 24 Z" stroke="var(--primary)" strokeWidth="2" />
+            <path
+              d="M14 4 L14 24 M4 14 L24 14"
+              stroke="var(--primary)"
+              strokeWidth="1.5"
+              opacity="0.4"
+            />
+            <circle cx="14" cy="14" r="3" fill="var(--primary)" />
+          </svg>
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">Вход в личный кабинет</h1>
+            <p className="text-sm text-muted-foreground">Tortay Engineering</p>
+          </div>
+        </div>
 
         {error && (
-          <p className="text-center text-sm text-red-600">
+          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
             Неверный email или пароль
           </p>
         )}
 
-        <div className="space-y-1">
-          <label htmlFor="email" className="text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            className="w-full rounded border px-3 py-2 text-sm"
-          />
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Email</Label>
+          <Input id="email" name="email" type="email" required autoFocus />
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor="password" className="text-sm font-medium">
-            Пароль
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            className="w-full rounded border px-3 py-2 text-sm"
-          />
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Пароль</Label>
+          <Input id="password" name="password" type="password" required />
         </div>
 
-        <button
-          type="submit"
-          className="w-full rounded bg-black py-2 text-sm font-medium text-white"
-        >
+        <Button type="submit" className="w-full">
           Войти
-        </button>
+        </Button>
 
         <p className="text-center text-sm text-muted-foreground">
           Нет аккаунта?{" "}
-          <Link href="/register" className="underline">
+          <Link href="/register" className="font-medium text-primary hover:underline">
             Зарегистрироваться
           </Link>
         </p>

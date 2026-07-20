@@ -14,7 +14,7 @@ export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
 
   return (
     <Link href={`/employees/${employee.id}`} className="block">
-      <Card className="h-full transition-shadow duration-150 hover:shadow-md">
+      <Card hoverable className="h-full">
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <span
