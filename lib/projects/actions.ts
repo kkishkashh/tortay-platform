@@ -205,6 +205,74 @@ export async function updateProjectNameAction(projectId: string, name: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
+// Назначить/сменить ГИП можно и после создания проекта (изначально это
+// было только в мастере создания). Если у проекта уже был другой ГИП —
+// он не выпадает из проекта, а становится МЕНЕДЖЕРОМ (та же логика,
+// что и в createProjectAction для создателя-не-ГИПа): так не теряется
+// его связь с уже созданными на нём договорами (createdByMemberId).
+export async function assignGipAction(projectId: string, gipUserId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  if (!canManageOperations(session.user)) {
+    throw new Error("Назначать ГИП может только руководитель");
+  }
+
+  const [project, gipUser] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } }),
+    prisma.user.findUnique({ where: { id: gipUserId }, select: { id: true, fullName: true } }),
+  ]);
+  if (!project) {
+    throw new Error("Проект не найден");
+  }
+  if (!gipUser) {
+    throw new Error("Выбранный сотрудник не найден");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const currentGip = await tx.projectMember.findFirst({
+      where: { projectId, projectRole: ProjectRole.ГИП },
+    });
+
+    if (currentGip?.userId === gipUserId) {
+      return;
+    }
+
+    if (currentGip) {
+      await tx.projectMember.update({
+        where: { id: currentGip.id },
+        data: { projectRole: ProjectRole.МЕНЕДЖЕР },
+      });
+    }
+
+    const existingMembership = await tx.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId: gipUserId } },
+    });
+
+    if (existingMembership) {
+      await tx.projectMember.update({
+        where: { id: existingMembership.id },
+        data: { projectRole: ProjectRole.ГИП },
+      });
+    } else {
+      await tx.projectMember.create({
+        data: { projectId, userId: gipUserId, projectRole: ProjectRole.ГИП },
+      });
+    }
+
+    await logActivity(tx, {
+      projectId,
+      actorId: session.user.id,
+      message: `${session.user.name} назначил(а) ${gipUser.fullName} ГИП-ом проекта «${project.name}»`,
+    });
+  });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
 // Каскадное удаление вручную: в схеме нет onDelete: Cascade (см.
 // prisma/schema.prisma), поэтому Postgres запретит удалить проект, пока
 // не удалены все зависимые записи. Порядок — от самых "листовых" таблиц

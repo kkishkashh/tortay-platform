@@ -1,15 +1,19 @@
 import { notFound } from "next/navigation";
+import { ProjectRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
+import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
 import { canManageOperations } from "@/lib/projects/permissions";
 import {
   PROJECT_STATUS_LABELS,
   SECTION_STATUS_LABELS,
 } from "@/lib/projects/status-labels";
+import { getAvatarColor, getInitials } from "@/lib/utils";
 
+import { AssignGipDialog } from "./assign-gip-dialog";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { ProjectStatusSelect } from "./project-status-select";
@@ -30,13 +34,18 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
 
-  const [session, project, sections] = await Promise.all([
+  const [session, project, sections, gipMember, employees] = await Promise.all([
     auth(),
     prisma.project.findUnique({ where: { id } }),
     prisma.section.findMany({
       where: { projectId: id },
       orderBy: { orderIndex: "asc" },
     }),
+    prisma.projectMember.findFirst({
+      where: { projectId: id, projectRole: ProjectRole.ГИП },
+      include: { user: { select: { id: true, fullName: true } } },
+    }),
+    getEmployeesForSelect(),
   ]);
   if (!project) {
     notFound();
@@ -58,11 +67,39 @@ export default async function ProjectDetailPage({
         }
       />
       <div className="p-8">
-        {canChangeStatus ? (
-          <ProjectStatusSelect projectId={project.id} status={project.status} />
-        ) : (
-          <Badge variant="secondary">{PROJECT_STATUS_LABELS[project.status]}</Badge>
-        )}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {canChangeStatus ? (
+            <ProjectStatusSelect projectId={project.id} status={project.status} />
+          ) : (
+            <Badge variant="secondary">{PROJECT_STATUS_LABELS[project.status]}</Badge>
+          )}
+
+          <div className="flex items-center gap-3">
+            {gipMember ? (
+              <div className="flex items-center gap-2">
+                <span
+                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                  style={{ backgroundColor: getAvatarColor(gipMember.user.id) }}
+                >
+                  {getInitials(gipMember.user.fullName)}
+                </span>
+                <div className="leading-tight">
+                  <p className="text-xs text-muted-foreground">ГИП</p>
+                  <p className="text-sm font-medium">{gipMember.user.fullName}</p>
+                </div>
+              </div>
+            ) : canChangeStatus ? (
+              <p className="text-sm text-muted-foreground">ГИП не назначен</p>
+            ) : null}
+            {canChangeStatus ? (
+              <AssignGipDialog
+                projectId={project.id}
+                gipUserId={gipMember?.user.id ?? null}
+                employees={employees}
+              />
+            ) : null}
+          </div>
+        </div>
 
         <h2 className="mt-8 mb-3 text-sm font-medium text-muted-foreground">
           Разделы
