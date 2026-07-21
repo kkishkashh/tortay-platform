@@ -45,6 +45,12 @@ model User {
   birthDate    DateTime?  @db.Date
   salary       Decimal?   @db.Decimal(12, 2) // оклад — финансовые данные, нигде пока не отображается
   avatarUrl    String?    // ссылка на файл в Vercel Blob (см. app/api/uploads/avatar)
+  // Косметическое поле, НЕ используется для входа (вход остаётся по email,
+  // см. auth.ts) — только для формы создания руководителя (см. план, D1).
+  username     String?    @unique
+  // Деактивированный пользователь не может войти (см. auth.ts::authorize) —
+  // запись и вся её история остаются, в отличие от полного удаления.
+  isActive     Boolean    @default(true)
   createdAt    DateTime   @default(now())
 
   // "Домашний" департамент сотрудника (Employees-таб на странице департамента).
@@ -201,6 +207,12 @@ model Task {
 enum NotificationType {
   ЗАДАЧА_НАЗНАЧЕНА
   ЗАДАЧА_НА_ПРОВЕРКЕ
+  МЕНЕДЖЕР_СОЗДАН
+  // Забран из батча Phase 14 раньше времени — нужен уже здесь для
+  // resetManagerPasswordAction; changePasswordAction (сброс пароля
+  // руководителем для обычного сотрудника) переиспользует ту же функцию
+  // на Phase 14, не заводя дублирующее значение enum.
+  ПАРОЛЬ_СБРОШЕН
 }
 
 model Notification {

@@ -40,6 +40,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        // Деактивированный аккаунт (см. lib/managers/actions.ts) отклоняем
+        // той же общей ошибкой, что и неверный пароль — не сообщаем причину
+        // отдельно, чтобы не раскрывать сам факт деактивации.
+        if (!user.isActive) {
+          return null;
+        }
+
         return {
           id: user.id,
           email: user.email,

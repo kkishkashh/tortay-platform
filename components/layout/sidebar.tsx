@@ -26,8 +26,9 @@ import { NotificationBell } from "@/components/layout/notification-bell";
 import { AccountPortal } from "@/components/layout/account-portal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import type { NotificationListItem } from "@/lib/notifications/queries";
-import type { RoleTier } from "@/lib/departments/queries";
+import type { DepartmentListItem, RoleTier } from "@/lib/departments/queries";
 import type { EmployeeProfile } from "@/lib/employees/queries";
+import type { ManagerListItem } from "@/lib/managers/queries";
 
 type NavItem = {
   href: string;
@@ -86,6 +87,8 @@ type SidebarProps = {
   notifications: NotificationListItem[];
   unreadNotificationCount: number;
   profile: EmployeeProfile | null;
+  managers: ManagerListItem[] | null;
+  departments: DepartmentListItem[] | null;
 };
 
 export function Sidebar({
@@ -96,6 +99,8 @@ export function Sidebar({
   notifications,
   unreadNotificationCount,
   profile,
+  managers,
+  departments,
 }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -245,6 +250,8 @@ export function Sidebar({
           {profile ? (
             <AccountPortal
               profile={profile}
+              managers={managers}
+              departments={departments}
               trigger={
                 <button
                   type="button"

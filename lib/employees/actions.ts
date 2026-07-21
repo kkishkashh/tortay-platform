@@ -129,6 +129,10 @@ export async function deleteEmployeeAction(userId: string) {
       data: { assigneeMemberId: null },
     });
     await tx.projectMember.deleteMany({ where: { userId } });
+    // Notification.userId — обязательный (RESTRICT) внешний ключ, в отличие
+    // от actorId (SET NULL) — без явной очистки удаление упадёт, если у
+    // пользователя есть хоть одно полученное уведомление.
+    await tx.notification.deleteMany({ where: { userId } });
     await tx.user.delete({ where: { id: userId } });
   });
 

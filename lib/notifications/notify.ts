@@ -50,3 +50,42 @@ export async function notifyTaskReadyForReview(
     },
   });
 }
+
+// Уведомление для САМОГО нового руководителя — увидит его, как только
+// впервые войдёт (учётные данные приходят отдельно письмом, см.
+// sendManagerCreatedEmail).
+export async function notifyManagerCreated(
+  db: Db,
+  data: { userId: string; actorId: string; departmentName: string | null },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.МЕНЕДЖЕР_СОЗДАН,
+      title: "Вас назначили руководителем",
+      body: data.departmentName
+        ? `Вам создан аккаунт руководителя департамента «${data.departmentName}»`
+        : "Вам создан аккаунт руководителя — департамент пока не назначен",
+    },
+  });
+}
+
+// Только для АДМИНСКОГО сброса чужого пароля (resetManagerPasswordAction,
+// а с Phase 14 — и changePasswordAction для обычных сотрудников).
+// Самостоятельная смена пароля этим НЕ пользуется — вызывающая сторона
+// сама решает, когда звать эту функцию.
+export async function notifyPasswordReset(
+  db: Db,
+  data: { userId: string; actorId: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ПАРОЛЬ_СБРОШЕН,
+      title: "Ваш пароль был сброшен",
+      body: "Администратор сбросил пароль вашей учётной записи — уточните новый пароль у него.",
+    },
+  });
+}

@@ -1,5 +1,14 @@
 import nodemailer from "nodemailer";
 
+// Тот же принцип толерантности, что и у GMAIL_*: письмо со ссылкой для
+// входа всё равно уходит, просто со ссылкой на прод-домен по умолчанию.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://tortay-platform.vercel.app";
+if (!process.env.NEXT_PUBLIC_APP_URL) {
+  console.warn(
+    "[email] NEXT_PUBLIC_APP_URL не задан — ссылка для входа в письмах будет вести на URL по умолчанию",
+  );
+}
+
 // Отправка через личный Gmail руководителя (SMTP + App Password), а не
 // через Resend: у компании нет своего домена, а Resend без верифицированного
 // домена физически отказывается слать письма на чужие адреса (только на
@@ -111,6 +120,81 @@ export async function sendTaskReadyForReviewEmail({
       <p>Здравствуйте, ${managerName}!</p>
       <p>${employeeName} отправил(а) задачу «${taskTitle}» на проверку в проекте «${projectName}».</p>
       <p>Требуется проверка — подробности на платформе.</p>
+    `,
+  });
+}
+
+export async function sendManagerCreatedEmail({
+  to,
+  employeeName,
+  username,
+  temporaryPassword,
+  departmentName,
+}: {
+  to: string;
+  employeeName: string;
+  username: string | null;
+  temporaryPassword: string;
+  departmentName: string | null;
+}) {
+  if (!transporter) {
+    console.warn(
+      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о создании аккаунта руководителя (${to}) не отправлено`,
+    );
+    return;
+  }
+
+  const loginLink = `${APP_URL}/login`;
+  const usernameLine = username ? `<p>Логин (для справки): ${username}</p>` : "";
+  const departmentLine = departmentName
+    ? `<p>Вам назначен департамент «${departmentName}».</p>`
+    : "";
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: "Для вас создан аккаунт руководителя в Tortay Engineering",
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Для вас создан аккаунт руководителя в Tortay Engineering.</p>
+      ${departmentLine}
+      <p>Email для входа: ${to}</p>
+      ${usernameLine}
+      <p>Временный пароль: <strong>${temporaryPassword}</strong></p>
+      <p>Рекомендуем сменить пароль после первого входа в личном кабинете.</p>
+      <p><a href="${loginLink}">Войти в платформу</a></p>
+    `,
+  });
+}
+
+export async function sendPasswordResetEmail({
+  to,
+  employeeName,
+  temporaryPassword,
+}: {
+  to: string;
+  employeeName: string;
+  temporaryPassword: string;
+}) {
+  if (!transporter) {
+    console.warn(
+      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о сбросе пароля (${to}) не отправлено`,
+    );
+    return;
+  }
+
+  const loginLink = `${APP_URL}/login`;
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: "Ваш пароль был сброшен",
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Администратор сбросил пароль вашей учётной записи в Tortay Engineering.</p>
+      <p>Новый временный пароль: <strong>${temporaryPassword}</strong></p>
+      <p>Рекомендуем сменить пароль после входа в личном кабинете.</p>
+      <p><a href="${loginLink}">Войти в платформу</a></p>
     `,
   });
 }

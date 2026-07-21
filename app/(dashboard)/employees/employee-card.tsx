@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import type { EmployeeListItem } from "@/lib/employees/queries";
@@ -25,7 +26,14 @@ export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
               className="size-12 text-sm"
             />
             <div className="min-w-0">
-              <p className="truncate font-medium">{employee.fullName}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="truncate font-medium">{employee.fullName}</p>
+                {!employee.isActive ? (
+                  <Badge variant="secondary" className="shrink-0">
+                    Деактивирован
+                  </Badge>
+                ) : null}
+              </div>
               <p className="truncate text-xs text-muted-foreground">
                 {employee.position ?? "—"}
               </p>

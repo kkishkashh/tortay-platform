@@ -21,6 +21,7 @@ export type EmployeeListItem = {
   phone: string | null;
   position: string | null;
   avatarUrl: string | null;
+  isActive: boolean;
   activeProjectsCount: number;
   completedProjectsCount: number;
   totalProjectsCount: number;
@@ -40,6 +41,7 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
       phone: true,
       position: true,
       avatarUrl: true,
+      isActive: true,
       projectMemberships: {
         select: { project: { select: { status: true } } },
       },
@@ -64,6 +66,7 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
       phone: employee.phone,
       position: employee.position,
       avatarUrl: employee.avatarUrl,
+      isActive: employee.isActive,
       activeProjectsCount,
       completedProjectsCount,
       totalProjectsCount: statuses.length,
