@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { getCommentsForTask } from "@/lib/comments/queries";
+import { getDocumentsForTask } from "@/lib/documents/queries";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getMyTasks } from "@/lib/tasks/queries";
@@ -11,12 +12,14 @@ export default async function MyTasksPage() {
   const [session, tasks] = await Promise.all([auth(), getMyTasks()]);
 
   const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
-  const [projectMembersEntries, commentsEntries] = await Promise.all([
+  const [projectMembersEntries, commentsEntries, documentsEntries] = await Promise.all([
     Promise.all(projectIds.map(async (id) => [id, await getProjectMembersForTaskAssignment(id)] as const)),
     Promise.all(tasks.map(async (t) => [t.id, await getCommentsForTask(t.id)] as const)),
+    Promise.all(tasks.map(async (t) => [t.id, await getDocumentsForTask(t.id)] as const)),
   ]);
   const projectMembersByProject = new Map(projectMembersEntries);
   const commentsByTask = new Map(commentsEntries);
+  const documentsByTask = new Map(documentsEntries);
 
   const grouped = new Map<string, { projectName: string; tasks: typeof tasks }>();
   for (const task of tasks) {
@@ -43,6 +46,7 @@ export default async function MyTasksPage() {
                     key={task.id}
                     task={task}
                     comments={commentsByTask.get(task.id) ?? []}
+                    documents={documentsByTask.get(task.id) ?? []}
                     currentUserId={session?.user.id}
                     canManage={
                       session?.user

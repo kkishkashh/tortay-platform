@@ -13,6 +13,7 @@ import {
 import { TaskDialog } from "@/app/(dashboard)/projects/[id]/task-dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import type { TaskCommentItem } from "@/lib/comments/queries";
+import type { TaskAttachmentItem } from "@/lib/documents/queries";
 import type { TaskListItem } from "@/lib/tasks/queries";
 import {
   TASK_PRIORITY_BADGE_VARIANT,
@@ -38,6 +39,7 @@ type ProjectMemberOption = { id: string; fullName: string };
 export function TaskCard({
   task,
   comments,
+  documents,
   currentUserId,
   canManage,
   isAssignee,
@@ -45,6 +47,7 @@ export function TaskCard({
 }: {
   task: TaskListItem;
   comments: TaskCommentItem[];
+  documents: TaskAttachmentItem[];
   currentUserId: string | undefined;
   canManage: boolean;
   isAssignee: boolean;
@@ -125,6 +128,7 @@ export function TaskCard({
             <TaskCommentsDialog
               taskId={task.id}
               comments={comments}
+              documents={documents}
               currentUserId={currentUserId}
               canModerate={canManage}
             />

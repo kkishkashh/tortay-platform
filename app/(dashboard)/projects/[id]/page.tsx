@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { DepartmentIcon } from "@/components/departments/department-icon";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { getCommentsForTask } from "@/lib/comments/queries";
+import { getDocumentsForTask } from "@/lib/documents/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForSection } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
@@ -66,7 +67,11 @@ export default async function ProjectDetailPage({
     sections.map(async (section) => {
       const tasks = await getTasksForSection(section.id);
       const tasksWithComments = await Promise.all(
-        tasks.map(async (task) => ({ task, comments: await getCommentsForTask(task.id) })),
+        tasks.map(async (task) => ({
+          task,
+          comments: await getCommentsForTask(task.id),
+          documents: await getDocumentsForTask(task.id),
+        })),
       );
       return {
         section,
@@ -179,11 +184,12 @@ export default async function ProjectDetailPage({
                   <p className="pl-1 text-sm text-muted-foreground">Задач пока нет.</p>
                 ) : (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {tasksWithComments.map(({ task, comments }) => (
+                    {tasksWithComments.map(({ task, comments, documents }) => (
                       <TaskCard
                         key={task.id}
                         task={task}
                         comments={comments}
+                        documents={documents}
                         currentUserId={currentUserId}
                         canManage={canManageTasks}
                         isAssignee={task.assignee?.userId === currentUserId}

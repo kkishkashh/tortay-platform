@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { upload } from "@vercel/blob/client";
-import { FileText, Paperclip, Trash2, Upload } from "lucide-react";
+import { FileText, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { createTaskAttachmentAction, deleteTaskAttachmentAction } from "@/lib/documents/actions";
@@ -127,5 +127,3 @@ export function TaskAttachments({
     </div>
   );
 }
-
-export { Paperclip };

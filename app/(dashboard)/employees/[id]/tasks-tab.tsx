@@ -1,5 +1,6 @@
 import { TaskCard } from "@/components/dashboard/task-card";
 import type { TaskCommentItem } from "@/lib/comments/queries";
+import type { TaskAttachmentItem } from "@/lib/documents/queries";
 import type { MyTaskItem } from "@/lib/tasks/queries";
 
 type ProjectMemberOption = { id: string; fullName: string };
@@ -7,12 +8,14 @@ type ProjectMemberOption = { id: string; fullName: string };
 export function TasksTab({
   tasks,
   commentsByTask,
+  documentsByTask,
   projectMembersByProject,
   currentUserId,
   canManageByTask,
 }: {
   tasks: MyTaskItem[];
   commentsByTask: Map<string, TaskCommentItem[]>;
+  documentsByTask: Map<string, TaskAttachmentItem[]>;
   projectMembersByProject: Map<string, ProjectMemberOption[]>;
   currentUserId: string | undefined;
   canManageByTask: Map<string, boolean>;
@@ -41,6 +44,7 @@ export function TasksTab({
                 key={task.id}
                 task={task}
                 comments={commentsByTask.get(task.id) ?? []}
+                documents={documentsByTask.get(task.id) ?? []}
                 currentUserId={currentUserId}
                 canManage={canManageByTask.get(task.id) ?? false}
                 isAssignee={task.assignee?.userId === currentUserId}

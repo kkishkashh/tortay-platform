@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { getCommentsForAssignee, getCommentsForTask } from "@/lib/comments/queries";
+import { getDocumentsForTask } from "@/lib/documents/queries";
 import { getEmployeeProfile } from "@/lib/employees/queries";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
@@ -59,12 +60,14 @@ export default async function EmployeeProfilePage({
   ]);
 
   const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
-  const [projectMembersEntries, commentsEntries] = await Promise.all([
+  const [projectMembersEntries, commentsEntries, documentsEntries] = await Promise.all([
     Promise.all(projectIds.map(async (pid) => [pid, await getProjectMembersForTaskAssignment(pid)] as const)),
     Promise.all(tasks.map(async (t) => [t.id, await getCommentsForTask(t.id)] as const)),
+    Promise.all(tasks.map(async (t) => [t.id, await getDocumentsForTask(t.id)] as const)),
   ]);
   const projectMembersByProject = new Map(projectMembersEntries);
   const commentsByTask = new Map(commentsEntries);
+  const documentsByTask = new Map(documentsEntries);
 
   const canManageByTask = new Map(
     tasks.map((task) => [
@@ -244,6 +247,7 @@ export default async function EmployeeProfilePage({
             <TasksTab
               tasks={tasks}
               commentsByTask={commentsByTask}
+              documentsByTask={documentsByTask}
               projectMembersByProject={projectMembersByProject}
               currentUserId={session?.user?.id}
               canManageByTask={canManageByTask}
