@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { workloadLevel, type WorkloadLevel } from "@/lib/workload";
 
 // ГИП — руководящая роль внутри компании, поэтому выбираем только
-// штатных сотрудников (аутсорсеров сюда не включаем).
+// штатных сотрудников (аутсорсеров сюда не включаем). Руководители
+// департаментов сюда не входят — они теперь отдельная категория (см.
+// Account Portal → Менеджеры); сотрудников себе добавляют сами.
 export async function getEmployeesForSelect() {
   return prisma.user.findMany({
-    where: { userType: UserType.ШТАТНЫЙ },
+    where: { userType: UserType.ШТАТНЫЙ, managedDepartments: { none: {} } },
     select: { id: true, fullName: true },
     orderBy: { fullName: "asc" },
   });
@@ -30,9 +32,12 @@ export type EmployeeListItem = {
 
 // Полный список для страницы "Сотрудники" — с проектной статистикой и
 // загруженностью (та же логика, что и на дашборде, см. lib/workload.ts).
+// Руководители департаментов сюда не входят (managedDepartments: none) —
+// это отдельная категория (Account Portal → Менеджеры); они сами
+// добавляют сотрудников в свой департамент.
 export async function getEmployees(): Promise<EmployeeListItem[]> {
   const employees = await prisma.user.findMany({
-    where: { userType: UserType.ШТАТНЫЙ },
+    where: { userType: UserType.ШТАТНЫЙ, managedDepartments: { none: {} } },
     select: {
       id: true,
       fullName: true,

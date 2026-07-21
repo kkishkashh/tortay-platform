@@ -99,10 +99,12 @@ export async function getDepartmentTaskStack(
 // Сотрудники, которых можно привязать к департаменту — все штатные
 // пользователи, независимо от того, состоят ли они уже в другом
 // департаменте (можно перепривязать, addEmployeeToDepartmentAction сам
-// переносит из старого департамента в новый).
+// переносит из старого департамента в новый). Руководители департаментов
+// сюда не входят — их самих в чужой департамент рядовым сотрудником не
+// добавляют.
 export async function getEmployeesForDepartmentAssignment() {
   return prisma.user.findMany({
-    where: { userType: UserType.ШТАТНЫЙ },
+    where: { userType: UserType.ШТАТНЫЙ, managedDepartments: { none: {} } },
     select: { id: true, fullName: true, homeDepartmentId: true },
     orderBy: { fullName: "asc" },
   });
