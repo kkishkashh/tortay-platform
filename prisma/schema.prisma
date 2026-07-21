@@ -44,6 +44,7 @@ model User {
   position     String?
   birthDate    DateTime?  @db.Date
   salary       Decimal?   @db.Decimal(12, 2) // оклад — финансовые данные, нигде пока не отображается
+  avatarUrl    String?    // ссылка на файл в Vercel Blob (см. app/api/uploads/avatar)
   createdAt    DateTime   @default(now())
 
   // "Домашний" департамент сотрудника (Employees-таб на странице департамента).
@@ -185,6 +186,7 @@ model Task {
 
   comments      Comment[]
   notifications Notification[]
+  documents     Document[]
 
   @@map("tasks")
 }
@@ -267,10 +269,17 @@ model DepartmentTaskTemplateItem {
 // БЛОК 2: Документы, комментарии
 // ============================================================
 
+// sectionId/taskId — ровно одно из двух должно быть заполнено (та же
+// схема, что и у Comment ниже: правило проверяется в коде backend, не
+// в БД). sectionId сделан необязательным в той же миграции, где появился
+// taskId — вложения к задачам это первый реальный потребитель Document,
+// раздельные вложения к разделу пока нигде не используются в UI.
 model Document {
   id         String   @id @default(uuid())
-  sectionId  String
-  section    Section  @relation(fields: [sectionId], references: [id])
+  sectionId  String?
+  section    Section? @relation(fields: [sectionId], references: [id])
+  taskId     String?
+  task       Task?    @relation(fields: [taskId], references: [id])
   uploadedBy String
   uploader   User     @relation(fields: [uploadedBy], references: [id])
   fileName   String

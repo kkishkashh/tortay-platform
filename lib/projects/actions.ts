@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { PaymentType, ProjectRole, ProjectStatus, SectionStatus } from "@prisma/client";
+import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
@@ -362,6 +363,14 @@ export async function deleteProjectAction(projectId: string) {
     throw new Error("Удалять проект может только руководитель");
   }
 
+  // Файлы в Blob удаляются best-effort уже после коммита транзакции (см.
+  // конец функции) — сначала собираем их URL, пока строки Document ещё
+  // не удалены.
+  const attachments = await prisma.document.findMany({
+    where: { OR: [{ section: { projectId } }, { task: { section: { projectId } } }] },
+    select: { fileUrl: true },
+  });
+
   await prisma.$transaction(async (tx) => {
     await tx.closingDocument.deleteMany({ where: { contract: { projectId } } });
     await tx.digitalSignature.deleteMany({ where: { contract: { projectId } } });
@@ -378,7 +387,10 @@ export async function deleteProjectAction(projectId: string) {
         ],
       },
     });
-    await tx.document.deleteMany({ where: { section: { projectId } } });
+    await tx.notification.deleteMany({ where: { task: { section: { projectId } } } });
+    await tx.document.deleteMany({
+      where: { OR: [{ section: { projectId } }, { task: { section: { projectId } } }] },
+    });
     await tx.task.deleteMany({ where: { section: { projectId } } });
     await tx.section.deleteMany({ where: { projectId } });
 
@@ -387,6 +399,12 @@ export async function deleteProjectAction(projectId: string) {
 
     await tx.project.delete({ where: { id: projectId } });
   });
+
+  for (const attachment of attachments) {
+    del(attachment.fileUrl).catch((error) => {
+      console.error("Не удалось удалить файл из Blob", error);
+    });
+  }
 
   revalidatePath("/");
   revalidatePath("/projects");

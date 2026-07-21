@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { SystemRole, UserType } from "@prisma/client";
+import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -261,5 +262,35 @@ export async function changePasswordAction(formData: FormData) {
   const passwordHash = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
 
+  revalidatePath(`/employees/${userId}`);
+}
+
+// Аватар — только свой собственный: ни руководитель, ни кто-либо ещё не
+// редактирует чужое фото (в отличие от кадровых полей). userId сверяется
+// с сессией, а не просто доверяется параметру — иначе через devtools можно
+// было бы подставить чужой id.
+export async function updateAvatarAction(userId: string, blobUrl: string) {
+  const session = await auth();
+  if (!session?.user || session.user.id !== userId) {
+    throw new Error("Недостаточно прав");
+  }
+
+  const previous = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { avatarUrl: true },
+  });
+
+  await prisma.user.update({ where: { id: userId }, data: { avatarUrl: blobUrl } });
+
+  // Старый файл в Blob больше не нужен — удаляем best-effort, как и письма:
+  // если не получилось (сеть, файл уже удалён), это не должно ронять сам
+  // экшен, аватар уже сохранён в БД.
+  if (previous?.avatarUrl && previous.avatarUrl !== blobUrl) {
+    del(previous.avatarUrl).catch((error) => {
+      console.error("Не удалось удалить старый аватар из Blob", error);
+    });
+  }
+
+  revalidatePath("/");
   revalidatePath(`/employees/${userId}`);
 }

@@ -20,11 +20,14 @@ import {
   Calendar,
 } from "lucide-react";
 
-import { cn, getInitials } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { NotificationBell } from "@/components/layout/notification-bell";
+import { AccountPortal } from "@/components/layout/account-portal";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import type { NotificationListItem } from "@/lib/notifications/queries";
 import type { RoleTier } from "@/lib/departments/queries";
+import type { EmployeeProfile } from "@/lib/employees/queries";
 
 type NavItem = {
   href: string;
@@ -82,6 +85,7 @@ type SidebarProps = {
   onSignOut: () => Promise<void>;
   notifications: NotificationListItem[];
   unreadNotificationCount: number;
+  profile: EmployeeProfile | null;
 };
 
 export function Sidebar({
@@ -91,6 +95,7 @@ export function Sidebar({
   onSignOut,
   notifications,
   unreadNotificationCount,
+  profile,
 }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -115,8 +120,6 @@ export function Sidebar({
       return next;
     });
   }
-
-  const initials = getInitials(fullName);
 
   const navGroups = NAV_GROUPS.map((group) => ({
     ...group,
@@ -239,17 +242,35 @@ export function Sidebar({
 
       <div className="border-t border-sidebar-border px-4 py-4">
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-sm font-semibold text-sidebar-primary-foreground">
-            {initials}
-          </div>
+          {profile ? (
+            <AccountPortal
+              profile={profile}
+              trigger={
+                <button
+                  type="button"
+                  title="Мой аккаунт"
+                  className={cn(
+                    "flex min-w-0 items-center gap-3 rounded-lg text-left transition-opacity duration-150 hover:opacity-80",
+                    collapsed ? "shrink-0" : "flex-1",
+                  )}
+                >
+                  <UserAvatar avatarUrl={profile.avatarUrl} fullName={fullName} seed={profile.id} />
+                  {!collapsed ? (
+                    <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                      <span className="truncate text-sm font-medium">{fullName}</span>
+                      <span className="truncate text-xs text-sidebar-foreground/60">
+                        {systemRoleLabel}
+                      </span>
+                    </span>
+                  ) : null}
+                </button>
+              }
+            />
+          ) : (
+            <UserAvatar avatarUrl={null} fullName={fullName} seed={fullName} />
+          )}
           {!collapsed ? (
             <>
-              <div className="flex min-w-0 flex-1 flex-col leading-tight">
-                <span className="truncate text-sm font-medium">{fullName}</span>
-                <span className="truncate text-xs text-sidebar-foreground/60">
-                  {systemRoleLabel}
-                </span>
-              </div>
               <NotificationBell notifications={notifications} unreadCount={unreadNotificationCount} />
               <ThemeToggle />
               <form action={onSignOut}>

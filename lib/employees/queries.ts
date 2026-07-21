@@ -20,6 +20,7 @@ export type EmployeeListItem = {
   systemRole: SystemRole;
   phone: string | null;
   position: string | null;
+  avatarUrl: string | null;
   activeProjectsCount: number;
   completedProjectsCount: number;
   totalProjectsCount: number;
@@ -38,6 +39,7 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
       systemRole: true,
       phone: true,
       position: true,
+      avatarUrl: true,
       projectMemberships: {
         select: { project: { select: { status: true } } },
       },
@@ -61,6 +63,7 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
       systemRole: employee.systemRole,
       phone: employee.phone,
       position: employee.position,
+      avatarUrl: employee.avatarUrl,
       activeProjectsCount,
       completedProjectsCount,
       totalProjectsCount: statuses.length,
@@ -76,6 +79,7 @@ export type EmployeeProfile = {
   systemRole: SystemRole;
   phone: string | null;
   position: string | null;
+  avatarUrl: string | null;
   birthDate: Date | null;
   salary: number | null;
   createdAt: Date;
@@ -109,6 +113,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       systemRole: true,
       phone: true,
       position: true,
+      avatarUrl: true,
       birthDate: true,
       salary: true,
       createdAt: true,
@@ -144,6 +149,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     systemRole: user.systemRole,
     phone: user.phone,
     position: user.position,
+    avatarUrl: user.avatarUrl,
     birthDate: user.birthDate,
     salary: user.salary !== null ? Number(user.salary) : null,
     createdAt: user.createdAt,

@@ -11,16 +11,19 @@ export type TaskListItem = {
   priority: TaskPriority;
   deadline: Date | null;
   createdAt: Date;
-  assignee: { id: string; userId: string; fullName: string } | null;
+  assignee: { id: string; userId: string; fullName: string; avatarUrl: string | null } | null;
   commentsCount: number;
+  documentsCount: number;
 };
 
 export async function getTasksForSection(sectionId: string): Promise<TaskListItem[]> {
   const tasks = await prisma.task.findMany({
     where: { sectionId },
     include: {
-      assigneeMember: { include: { user: { select: { id: true, fullName: true } } } },
-      _count: { select: { comments: true } },
+      assigneeMember: {
+        include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
+      },
+      _count: { select: { comments: true, documents: true } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -38,9 +41,11 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
           id: task.assigneeMember.id,
           userId: task.assigneeMember.user.id,
           fullName: task.assigneeMember.user.fullName,
+          avatarUrl: task.assigneeMember.user.avatarUrl,
         }
       : null,
     commentsCount: task._count.comments,
+    documentsCount: task._count.documents,
   }));
 }
 
@@ -63,14 +68,16 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
   const tasks = await prisma.task.findMany({
     where: { assigneeMember: { userId } },
     include: {
-      assigneeMember: { include: { user: { select: { id: true, fullName: true } } } },
+      assigneeMember: {
+        include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
+      },
       section: {
         include: {
           project: { select: { id: true, name: true } },
           department: { select: { managerId: true } },
         },
       },
-      _count: { select: { comments: true } },
+      _count: { select: { comments: true, documents: true } },
     },
     orderBy: [{ deadline: "asc" }, { createdAt: "asc" }],
   });
@@ -88,9 +95,11 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
           id: task.assigneeMember.id,
           userId: task.assigneeMember.user.id,
           fullName: task.assigneeMember.user.fullName,
+          avatarUrl: task.assigneeMember.user.avatarUrl,
         }
       : null,
     commentsCount: task._count.comments,
+    documentsCount: task._count.documents,
     projectId: task.section.project.id,
     projectName: task.section.project.name,
     sectionId: task.section.id,

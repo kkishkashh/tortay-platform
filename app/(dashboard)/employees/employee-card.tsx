@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import type { EmployeeListItem } from "@/lib/employees/queries";
-import { getAvatarColor, getInitials, pluralizeProjects } from "@/lib/utils";
+import { pluralizeProjects } from "@/lib/utils";
 import { WORKLOAD_META, WORKLOAD_NONE_COLOR } from "@/lib/workload";
 
 export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
@@ -17,12 +18,12 @@ export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
       <Card hoverable className="h-full">
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <span
-              className="flex size-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-              style={{ backgroundColor: getAvatarColor(employee.id) }}
-            >
-              {getInitials(employee.fullName)}
-            </span>
+            <UserAvatar
+              avatarUrl={employee.avatarUrl}
+              fullName={employee.fullName}
+              seed={employee.id}
+              className="size-12 text-sm"
+            />
             <div className="min-w-0">
               <p className="truncate font-medium">{employee.fullName}</p>
               <p className="truncate text-xs text-muted-foreground">

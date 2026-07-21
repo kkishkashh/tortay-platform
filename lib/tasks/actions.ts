@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { SystemRole, TaskPriority, TaskStatus } from "@prisma/client";
+import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
@@ -274,8 +275,14 @@ export async function deleteTaskAction(taskId: string) {
     throw new Error("Недостаточно прав для удаления этой задачи");
   }
 
+  const attachments = await prisma.document.findMany({
+    where: { taskId },
+    select: { fileUrl: true },
+  });
+
   await prisma.$transaction(async (tx) => {
     await tx.notification.deleteMany({ where: { taskId } });
+    await tx.document.deleteMany({ where: { taskId } });
     await tx.comment.deleteMany({ where: { taskId } });
     await tx.task.delete({ where: { id: taskId } });
 
@@ -285,6 +292,13 @@ export async function deleteTaskAction(taskId: string) {
       message: `${session.user.name} удалил(а) задачу «${task.title}»`,
     });
   });
+
+  // Файлы в Blob — best-effort, как и остальные удаления вложений.
+  for (const attachment of attachments) {
+    del(attachment.fileUrl).catch((error) => {
+      console.error("Не удалось удалить файл из Blob", error);
+    });
+  }
 
   revalidatePath(`/projects/${task.section.projectId}`);
 }

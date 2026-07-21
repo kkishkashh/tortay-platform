@@ -13,15 +13,16 @@ import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForUser } from "@/lib/tasks/queries";
-import { getAvatarColor, getInitials } from "@/lib/utils";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import { WORKLOAD_META } from "@/lib/workload";
 import { FolderKanban, ListChecks, Percent, Gauge } from "lucide-react";
 
+import { ContactForm } from "@/components/employees/contact-form";
+import { DetailsForm } from "@/components/employees/details-form";
+import { PasswordForm } from "@/components/employees/password-form";
+
 import { CommentsTab } from "./comments-tab";
-import { ContactForm } from "./contact-form";
 import { DeleteEmployeeDialog } from "./delete-employee-dialog";
-import { DetailsForm } from "./details-form";
-import { PasswordForm } from "./password-form";
 import { TasksTab } from "./tasks-tab";
 
 const SYSTEM_ROLE_LABELS = {
@@ -86,12 +87,12 @@ export default async function EmployeeProfilePage({
       />
       <div className="space-y-6 p-8">
         <div className="flex items-center gap-4">
-          <span
-            className="flex size-16 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white"
-            style={{ backgroundColor: getAvatarColor(employee.id) }}
-          >
-            {getInitials(employee.fullName)}
-          </span>
+          <UserAvatar
+            avatarUrl={employee.avatarUrl}
+            fullName={employee.fullName}
+            seed={employee.id}
+            size="lg"
+          />
           <div>
             <p className="text-lg font-medium">{employee.fullName}</p>
             <p className="text-sm text-muted-foreground">

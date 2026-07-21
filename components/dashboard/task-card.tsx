@@ -11,6 +11,7 @@ import {
   ManagerTaskStatusControl,
 } from "@/app/(dashboard)/projects/[id]/task-status-control";
 import { TaskDialog } from "@/app/(dashboard)/projects/[id]/task-dialog";
+import { UserAvatar } from "@/components/ui/user-avatar";
 import type { TaskCommentItem } from "@/lib/comments/queries";
 import type { TaskListItem } from "@/lib/tasks/queries";
 import {
@@ -19,7 +20,6 @@ import {
   TASK_STATUS_BADGE_VARIANT,
   TASK_STATUS_LABELS,
 } from "@/lib/projects/status-labels";
-import { getAvatarColor, getInitials } from "@/lib/utils";
 
 const STATUS_STRIPE: Record<TaskStatus, string> = {
   [TaskStatus.НОВАЯ]: "bg-[#9ca3af]",
@@ -101,12 +101,12 @@ export function TaskCard({
           <div className="flex min-w-0 items-center gap-2">
             {task.assignee ? (
               <>
-                <span
-                  className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                  style={{ backgroundColor: getAvatarColor(task.assignee.userId) }}
-                >
-                  {getInitials(task.assignee.fullName)}
-                </span>
+                <UserAvatar
+                  avatarUrl={task.assignee.avatarUrl}
+                  fullName={task.assignee.fullName}
+                  seed={task.assignee.userId}
+                  size="sm"
+                />
                 <span className="truncate text-xs text-muted-foreground">
                   {task.assignee.fullName}
                 </span>
