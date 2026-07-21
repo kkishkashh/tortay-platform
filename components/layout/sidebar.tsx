@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Users,
+  UserCog,
   Handshake,
   FileText,
   LogOut,
@@ -26,9 +27,8 @@ import { NotificationBell } from "@/components/layout/notification-bell";
 import { AccountPortal } from "@/components/layout/account-portal";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import type { NotificationListItem } from "@/lib/notifications/queries";
-import type { DepartmentListItem, RoleTier } from "@/lib/departments/queries";
+import type { RoleTier } from "@/lib/departments/queries";
 import type { EmployeeProfile } from "@/lib/employees/queries";
-import type { ManagerListItem } from "@/lib/managers/queries";
 
 type NavItem = {
   href: string;
@@ -62,6 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2, visibility: "admin_or_manager" },
       { href: "/employees", label: "Сотрудники", icon: Users },
+      { href: "/managers", label: "Руководители", icon: UserCog, visibility: "admin" },
       { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin" },
     ],
   },
@@ -87,8 +88,6 @@ type SidebarProps = {
   notifications: NotificationListItem[];
   unreadNotificationCount: number;
   profile: EmployeeProfile | null;
-  managers: ManagerListItem[] | null;
-  departments: DepartmentListItem[] | null;
 };
 
 export function Sidebar({
@@ -99,8 +98,6 @@ export function Sidebar({
   notifications,
   unreadNotificationCount,
   profile,
-  managers,
-  departments,
 }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -250,8 +247,6 @@ export function Sidebar({
           {profile ? (
             <AccountPortal
               profile={profile}
-              managers={managers}
-              departments={departments}
               trigger={
                 <button
                   type="button"
