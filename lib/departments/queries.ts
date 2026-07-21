@@ -128,6 +128,17 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
   });
 }
 
+// Департамент, которым руководит этот пользователь (обычно 0-1) — общий
+// хелпер для скоуп-проверок в lib/employees/actions.ts (создание/
+// редактирование/удаление сотрудников в СВОЁМ департаменте, см. план
+// "полный контроль над своим департаментом").
+export async function getManagedDepartment(userId: string) {
+  return prisma.department.findFirst({
+    where: { managerId: userId },
+    select: { id: true, name: true },
+  });
+}
+
 export type RoleTier = "admin" | "department_manager" | "employee";
 
 // Определяет, какой из трёх дашбордов/меню показать (см. app/(dashboard)/

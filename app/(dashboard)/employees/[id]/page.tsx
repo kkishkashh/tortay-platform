@@ -4,6 +4,7 @@ import { SystemRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
+import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -45,13 +46,29 @@ export default async function EmployeeProfilePage({
 
   const isSelf = session?.user.id === employee.id;
   const isHead = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
-  // Личный кабинет — только свой или (для руководителя) любой чужой.
-  if (!isSelf && !isHead) {
+
+  // Руководитель департамента получает те же права здесь, что и
+  // администратор, но только для сотрудников СВОЕГО департамента (см.
+  // план: "полный контроль над своим департаментом"). Оклад и системная
+  // роль (DetailsForm's isAdmin prop) остаются заведомо только у admin.
+  let isDeptManagerOfEmployee = false;
+  if (!isSelf && !isHead && session?.user && employee.homeDepartmentId) {
+    const managed = await prisma.department.findFirst({
+      where: { id: employee.homeDepartmentId, managerId: session.user.id },
+      select: { id: true },
+    });
+    isDeptManagerOfEmployee = !!managed;
+  }
+
+  // Личный кабинет — только свой, или (для админа/руководителя его
+  // департамента) чужой.
+  if (!isSelf && !isHead && !isDeptManagerOfEmployee) {
     redirect("/employees");
   }
 
-  const canEditContact = isSelf || isHead;
-  const canEditDetails = isHead;
+  const canManage = isHead || isDeptManagerOfEmployee;
+  const canEditContact = isSelf || canManage;
+  const canEditDetails = canManage;
   const workloadMeta = WORKLOAD_META[employee.workload];
 
   const [tasks, comments] = await Promise.all([
@@ -83,7 +100,7 @@ export default async function EmployeeProfilePage({
       <PageHeader
         title={employee.fullName}
         action={
-          isHead && !isSelf ? (
+          canManage && !isSelf ? (
             <DeleteEmployeeDialog userId={employee.id} fullName={employee.fullName} />
           ) : undefined
         }
@@ -200,6 +217,7 @@ export default async function EmployeeProfilePage({
                     birthDate={employee.birthDate}
                     salary={employee.salary}
                     systemRole={employee.systemRole}
+                    isAdmin={isHead}
                   />
                 </CardContent>
               </Card>

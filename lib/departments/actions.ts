@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  canManageDepartment,
   canManageDepartments,
   canManageTaskStack,
 } from "@/lib/departments/permissions";
@@ -123,30 +124,58 @@ export async function assignDepartmentManagerAction(
   revalidatePath(`/departments/${departmentId}`);
 }
 
+// В отличие от назначения руководителя (структурное решение, только
+// администратор) — добавлять/убирать рядовых сотрудников своего же
+// департамента может и его руководитель (см. план: "полный контроль над
+// своим департаментом").
 export async function addEmployeeToDepartmentAction(departmentId: string, userId: string) {
   const session = await auth();
-  if (!session?.user || !canManageDepartments(session.user)) {
-    throw new Error("Добавлять сотрудников в департамент может только администратор");
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  const department = await loadDepartmentOrThrow(departmentId);
+  if (!canManageDepartment(session.user, department)) {
+    throw new Error("Добавлять сотрудников может только руководитель этого департамента или администратор");
+  }
+
+  // Руководитель департамента может забрать в свой департамент только
+  // ещё никуда не привязанного сотрудника — "переманить" человека из
+  // ЧУЖОГО департамента это структурное решение, только администратор
+  // (canManageDepartments) может так делать через тот же экшен.
+  if (!canManageDepartments(session.user)) {
+    const target = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { homeDepartmentId: true },
+    });
+    if (target?.homeDepartmentId && target.homeDepartmentId !== departmentId) {
+      throw new Error("Этот сотрудник уже состоит в другом департаменте — переназначить может только администратор");
+    }
   }
 
   await prisma.user.update({ where: { id: userId }, data: { homeDepartmentId: departmentId } });
 
   revalidatePath("/departments");
   revalidatePath(`/departments/${departmentId}`);
+  revalidatePath("/employees");
 }
 
 // userId, не departmentId: сотрудник может состоять только в одном
 // департаменте, поэтому "убрать" однозначно определяется самим сотрудником.
 export async function removeEmployeeFromDepartmentAction(userId: string, departmentId: string) {
   const session = await auth();
-  if (!session?.user || !canManageDepartments(session.user)) {
-    throw new Error("Убирать сотрудников из департамента может только администратор");
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  const department = await loadDepartmentOrThrow(departmentId);
+  if (!canManageDepartment(session.user, department)) {
+    throw new Error("Убирать сотрудников может только руководитель этого департамента или администратор");
   }
 
   await prisma.user.update({ where: { id: userId }, data: { homeDepartmentId: null } });
 
   revalidatePath("/departments");
   revalidatePath(`/departments/${departmentId}`);
+  revalidatePath("/employees");
 }
 
 // ============================================================

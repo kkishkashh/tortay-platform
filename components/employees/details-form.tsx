@@ -22,8 +22,10 @@ function toDateInputValue(date: Date | null) {
   return date.toISOString().slice(0, 10);
 }
 
-// ФИО/должность/оклад/системная роль — кадровые поля, доступны только
-// руководителю (см. lib/employees/actions.ts, updateEmployeeDetailsAction).
+// ФИО/должность/дата рождения — доступны администратору и руководителю
+// департамента этого сотрудника. Оклад и системная роль — ЗАВЕДОМО только
+// администратору (isAdmin=false скрывает эти два поля; сервер тоже их
+// игнорирует для не-админов, см. lib/employees/actions.ts).
 export function DetailsForm({
   userId,
   fullName,
@@ -31,6 +33,7 @@ export function DetailsForm({
   birthDate,
   salary,
   systemRole,
+  isAdmin,
 }: {
   userId: string;
   fullName: string;
@@ -38,6 +41,7 @@ export function DetailsForm({
   birthDate: Date | null;
   salary: number | null;
   systemRole: SystemRole;
+  isAdmin: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -100,37 +104,41 @@ export function DetailsForm({
           />
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="details-salary">Оклад, ₸</Label>
-          <Input
-            id="details-salary"
-            name="salary"
-            type="number"
-            min="0"
-            step="1000"
-            defaultValue={salary ?? ""}
-          />
-        </div>
+        {isAdmin ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="details-salary">Оклад, ₸</Label>
+            <Input
+              id="details-salary"
+              name="salary"
+              type="number"
+              min="0"
+              step="1000"
+              defaultValue={salary ?? ""}
+            />
+          </div>
+        ) : null}
 
-        <div className="space-y-1.5">
-          <Label htmlFor="details-systemRole">Системная роль</Label>
-          <Select
-            name="systemRole"
-            defaultValue={systemRole}
-            items={[
-              { value: "СОТРУДНИК", label: "Сотрудник" },
-              { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
-            ]}
-          >
-            <SelectTrigger id="details-systemRole" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
-              <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        {isAdmin ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="details-systemRole">Системная роль</Label>
+            <Select
+              name="systemRole"
+              defaultValue={systemRole}
+              items={[
+                { value: "СОТРУДНИК", label: "Сотрудник" },
+                { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
+              ]}
+            >
+              <SelectTrigger id="details-systemRole" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
+                <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         {error ? <p className="text-sm text-destructive sm:col-span-2">{error}</p> : null}
 

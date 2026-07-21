@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function NewEmployeeDialog() {
+export function NewEmployeeDialog({ isAdmin }: { isAdmin: boolean }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [showToast, setShowToast] = useState(false);
@@ -130,25 +130,27 @@ export function NewEmployeeDialog() {
               <Input id="password" name="password" type="password" required minLength={6} />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="systemRole">Системная роль</Label>
-              <Select
-                name="systemRole"
-                defaultValue="СОТРУДНИК"
-                items={[
-                  { value: "СОТРУДНИК", label: "Сотрудник" },
-                  { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
-                ]}
-              >
-                <SelectTrigger id="systemRole" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
-                  <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {isAdmin ? (
+              <div className="space-y-2">
+                <Label htmlFor="systemRole">Системная роль</Label>
+                <Select
+                  name="systemRole"
+                  defaultValue="СОТРУДНИК"
+                  items={[
+                    { value: "СОТРУДНИК", label: "Сотрудник" },
+                    { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
+                  ]}
+                >
+                  <SelectTrigger id="systemRole" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
+                    <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
 
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button

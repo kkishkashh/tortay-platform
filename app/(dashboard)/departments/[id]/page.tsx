@@ -48,12 +48,18 @@ export default async function DepartmentDetailPage({
     redirect("/");
   }
 
-  const [taskStack, allEmployees, projects, analyticsStats] = await Promise.all([
+  const [taskStack, allEmployeesRaw, projects, analyticsStats] = await Promise.all([
     getDepartmentTaskStack(id),
     getEmployeesForDepartmentAssignment(),
     getDepartmentProjects(id),
     getDepartmentDashboardStats(id),
   ]);
+  // Не-админ (руководитель департамента) может добавить только ещё
+  // никуда не привязанного сотрудника — "переманивание" из чужого
+  // департамента остаётся решением администратора (см. addEmployeeToDepartmentAction).
+  const allEmployees = isAdmin
+    ? allEmployeesRaw
+    : allEmployeesRaw.filter((e) => e.homeDepartmentId === null);
 
   return (
     <>
@@ -100,7 +106,8 @@ export default async function DepartmentDetailPage({
               managerId={department.managerId}
               employees={department.employees}
               allEmployees={allEmployees}
-              canManageDept={isAdmin}
+              canAssignManager={isAdmin}
+              canManageEmployees={canManageDept}
             />
           </TabsContent>
 

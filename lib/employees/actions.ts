@@ -9,18 +9,36 @@ import { del } from "@vercel/blob";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
-// Добавлять сотрудников может только РУКОВОДИТЕЛЬ — управление
-// персоналом это его зона ответственности (см. бриф).
+// Полный контроль над своим департаментом (см. план): руководитель
+// департамента может создавать сотрудников, но только в СВОЁМ департаменте,
+// всегда с ролью СОТРУДНИК — ни назначить произвольный департамент, ни
+// выдать через эту форму системную роль РУКОВОДИТЕЛЬ он не может.
+// Администратор (РУКОВОДИТЕЛЬ) — без ограничений, как и раньше.
 export async function createEmployeeAction(formData: FormData) {
   const session = await auth();
-  if (session?.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
-    throw new Error("Недостаточно прав");
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  let scopedDepartmentId: string | null = null;
+  if (!isAdmin) {
+    const managed = await prisma.department.findFirst({
+      where: { managerId: session.user.id },
+      select: { id: true },
+    });
+    if (!managed) {
+      throw new Error("Недостаточно прав");
+    }
+    scopedDepartmentId = managed.id;
   }
 
   const fullName = (formData.get("fullName") as string | null)?.trim();
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
   const password = formData.get("password") as string | null;
-  const systemRole = formData.get("systemRole") as SystemRole | null;
+  const systemRole = isAdmin
+    ? ((formData.get("systemRole") as SystemRole | null) ?? SystemRole.СОТРУДНИК)
+    : SystemRole.СОТРУДНИК;
   const phone = (formData.get("phone") as string | null)?.trim() || null;
   const position = (formData.get("position") as string | null)?.trim() || null;
   const birthDateRaw = formData.get("birthDate") as string | null;
@@ -51,17 +69,21 @@ export async function createEmployeeAction(formData: FormData) {
       fullName,
       email,
       passwordHash,
-      systemRole: systemRole ?? SystemRole.СОТРУДНИК,
+      systemRole,
       userType: UserType.ШТАТНЫЙ,
       phone,
       position,
       birthDate,
       salary,
+      homeDepartmentId: scopedDepartmentId,
     },
   });
 
   revalidatePath("/employees");
   revalidatePath("/projects");
+  if (scopedDepartmentId) {
+    revalidatePath(`/departments/${scopedDepartmentId}`);
+  }
 }
 
 // Жёсткое удаление User заблокировано, если на него ссылаются записи с
@@ -75,17 +97,20 @@ export async function createEmployeeAction(formData: FormData) {
 // просто снимаем назначение.
 export async function deleteEmployeeAction(userId: string) {
   const session = await auth();
-  if (!session?.user || session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
-    throw new Error("Недостаточно прав");
+  if (!session?.user) {
+    throw new Error("Не авторизован");
   }
   if (session.user.id === userId) {
     throw new Error("Нельзя удалить свой собственный аккаунт");
   }
 
+  const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       fullName: true,
+      homeDepartmentId: true,
       _count: { select: { documentsUploaded: true, comments: true } },
       projectMemberships: {
         select: {
@@ -96,6 +121,16 @@ export async function deleteEmployeeAction(userId: string) {
   });
   if (!user) {
     throw new Error("Сотрудник не найден");
+  }
+
+  if (!isAdmin) {
+    const managed = await prisma.department.findFirst({
+      where: { managerId: session.user.id },
+      select: { id: true },
+    });
+    if (!managed || user.homeDepartmentId !== managed.id) {
+      throw new Error("Недостаточно прав");
+    }
   }
 
   const contractsCreated = user.projectMemberships.reduce(
@@ -142,13 +177,32 @@ export async function deleteEmployeeAction(userId: string) {
   redirect("/employees");
 }
 
-function isSelfOrHead(sessionUser: { id: string; systemRole: SystemRole }, targetUserId: string) {
-  return sessionUser.id === targetUserId || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+// Сам сотрудник, администратор, или руководитель ЕГО департамента (см.
+// план: "полный контроль над своим департаментом") — единая проверка,
+// используется контактными данными, кадровыми данными и сбросом пароля.
+async function canActOnEmployee(
+  sessionUser: { id: string; systemRole: SystemRole },
+  targetUserId: string,
+) {
+  if (sessionUser.id === targetUserId) return true;
+  if (sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) return true;
+
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { homeDepartmentId: true },
+  });
+  if (!target?.homeDepartmentId) return false;
+
+  const managed = await prisma.department.findFirst({
+    where: { id: target.homeDepartmentId, managerId: sessionUser.id },
+    select: { id: true },
+  });
+  return !!managed;
 }
 
 // Контактные данные (email/телефон) — их может менять сам сотрудник в
-// своём кабинете или руководитель (в чужом). Остальные, "кадровые",
-// поля — только руководитель, см. updateEmployeeDetailsAction.
+// своём кабинете, администратор, или руководитель его департамента.
+// Остальные, "кадровые", поля — см. updateEmployeeDetailsAction.
 export async function updateEmployeeContactAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) {
@@ -156,7 +210,7 @@ export async function updateEmployeeContactAction(formData: FormData) {
   }
 
   const userId = formData.get("userId") as string | null;
-  if (!userId || !isSelfOrHead(session.user, userId)) {
+  if (!userId || !(await canActOnEmployee(session.user, userId))) {
     throw new Error("Недостаточно прав");
   }
 
@@ -178,36 +232,48 @@ export async function updateEmployeeContactAction(formData: FormData) {
   revalidatePath("/employees");
 }
 
-// ФИО/должность/оклад/системная роль — кадровые данные, редактирует
-// только руководитель (даже в собственном кабинете сотрудник их не трогает).
+// ФИО/должность/дата рождения — редактирует администратор или руководитель
+// департамента этого сотрудника (даже в собственном кабинете сотрудник их
+// не трогает). Оклад и системная роль — ЗАВЕДОМО только администратор:
+// руководитель департамента не должен ни видеть чужую зарплату через эту
+// форму, ни тем более выдать кому-то полный админский доступ.
 export async function updateEmployeeDetailsAction(formData: FormData) {
   const session = await auth();
-  if (!session?.user || session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
-    throw new Error("Недостаточно прав");
+  if (!session?.user) {
+    throw new Error("Не авторизован");
   }
 
   const userId = formData.get("userId") as string | null;
   if (!userId) {
     throw new Error("Не указан сотрудник");
   }
+  if (!(await canActOnEmployee(session.user, userId))) {
+    throw new Error("Недостаточно прав");
+  }
+
+  const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
 
   const fullName = (formData.get("fullName") as string | null)?.trim();
   const position = (formData.get("position") as string | null)?.trim() || null;
   const birthDateRaw = formData.get("birthDate") as string | null;
   const birthDate = birthDateRaw ? new Date(birthDateRaw) : null;
-  const systemRole = formData.get("systemRole") as SystemRole | null;
 
   if (!fullName) {
     throw new Error("ФИО обязательно");
   }
 
-  const salaryRaw = (formData.get("salary") as string | null)?.trim();
-  let salary: number | null = null;
-  if (salaryRaw) {
-    salary = Number(salaryRaw);
-    if (Number.isNaN(salary) || salary <= 0) {
-      throw new Error("Оклад должен быть положительным числом");
+  let salary: number | null | undefined = undefined;
+  let systemRole: SystemRole | undefined = undefined;
+  if (isAdmin) {
+    const salaryRaw = (formData.get("salary") as string | null)?.trim();
+    salary = null;
+    if (salaryRaw) {
+      salary = Number(salaryRaw);
+      if (Number.isNaN(salary) || salary <= 0) {
+        throw new Error("Оклад должен быть положительным числом");
+      }
     }
+    systemRole = (formData.get("systemRole") as SystemRole | null) ?? undefined;
   }
 
   await prisma.user.update({
@@ -217,7 +283,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
       position,
       birthDate,
       salary,
-      systemRole: systemRole ?? undefined,
+      systemRole,
     },
   });
 
@@ -235,7 +301,7 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   const userId = formData.get("userId") as string | null;
-  if (!userId || !isSelfOrHead(session.user, userId)) {
+  if (!userId || !(await canActOnEmployee(session.user, userId))) {
     throw new Error("Недостаточно прав");
   }
 

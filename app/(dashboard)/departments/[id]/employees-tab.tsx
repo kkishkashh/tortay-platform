@@ -27,13 +27,18 @@ export function EmployeesTab({
   managerId,
   employees,
   allEmployees,
-  canManageDept,
+  canAssignManager,
+  canManageEmployees,
 }: {
   departmentId: string;
   managerId: string | null;
   employees: Employee[];
   allEmployees: { id: string; fullName: string; homeDepartmentId: string | null }[];
-  canManageDept: boolean;
+  // Назначение руководителя — структурное решение, только администратор.
+  canAssignManager: boolean;
+  // Добавлять/убирать рядовых сотрудников может и руководитель ЭТОГО
+  // департамента (см. план: "полный контроль над своим департаментом").
+  canManageEmployees: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +89,7 @@ export function EmployeesTab({
 
   return (
     <div className="space-y-6">
-      {canManageDept ? (
+      {canAssignManager ? (
         <div className="space-y-2">
           <p className="text-sm font-medium">Руководитель департамента</p>
           <Select
@@ -114,7 +119,7 @@ export function EmployeesTab({
         </div>
       ) : null}
 
-      {canManageDept ? (
+      {canManageEmployees ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-2">
             <p className="text-sm font-medium">Добавить сотрудника</p>
@@ -173,7 +178,7 @@ export function EmployeesTab({
                   </p>
                 </div>
               </div>
-              {canManageDept ? (
+              {canManageEmployees ? (
                 <Button
                   type="button"
                   variant="ghost"
