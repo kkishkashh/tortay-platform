@@ -9,7 +9,6 @@ import { logActivity } from "@/lib/activity/log";
 import { sendGipAssignedEmail } from "@/lib/email/send";
 import { prisma } from "@/lib/prisma";
 import { canManageOperations } from "@/lib/projects/permissions";
-import { SECTION_TEMPLATES, sectionTemplateName } from "@/lib/projects/section-templates";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 
 // Делим сумму договора на 3 фиксированных транша по стандартной для
@@ -24,6 +23,41 @@ function splitIntoTranches(totalAmount: number): [number, number, number] {
   const tranche2 = round2(totalAmount * 0.4);
   const tranche3 = round2(totalAmount - avans - tranche2);
   return [avans, tranche2, tranche3];
+}
+
+// Данные по одному департаменту, выбранному при создании проекта — какие
+// пункты его базового стека отмечены и какие свои задачи добавлены.
+// Присылаются клиентом как JSON в скрытом поле `deptData_<id>` (обычная
+// FormData не умеет вкладывать структуры), см. new-project-dialog.tsx.
+// Заголовок/описание задач из базового стека НИКОГДА не берём из этого
+// JSON — только реальные id, а тексты подтягиваем заново из БД, чтобы
+// клиент не мог подменить содержимое задачи через devtools.
+type DepartmentTaskSelection = {
+  checkedTemplateItemIds: string[];
+  customTaskTitles: string[];
+};
+
+function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelection {
+  if (!raw) {
+    return { checkedTemplateItemIds: [], customTaskTitles: [] };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Некорректные данные задач департамента");
+  }
+  const obj = parsed as { checkedTemplateItemIds?: unknown; customTaskTitles?: unknown };
+  const checkedTemplateItemIds = Array.isArray(obj.checkedTemplateItemIds)
+    ? obj.checkedTemplateItemIds.filter((v): v is string => typeof v === "string")
+    : [];
+  const customTaskTitles = Array.isArray(obj.customTaskTitles)
+    ? obj.customTaskTitles
+        .filter((v): v is string => typeof v === "string")
+        .map((v) => v.trim())
+        .filter(Boolean)
+    : [];
+  return { checkedTemplateItemIds, customTaskTitles };
 }
 
 // Создать проект может только РУКОВОДИТЕЛЬ — операционная часть
@@ -63,12 +97,41 @@ export async function createProjectAction(formData: FormData) {
     throw new Error("Выбранный ГИП не найден");
   }
 
-  const selectedCodes = formData.getAll("sectionTemplates") as string[];
-  // Порядок разделов — по каноническому списку шаблонов, а не по
-  // порядку кликов пользователя (иначе Гантт будет выглядеть хаотично).
-  const orderedTemplates = SECTION_TEMPLATES.filter((template) =>
-    selectedCodes.includes(template.code),
-  );
+  // Порядок департаментов — по их orderIndex (canonical), а не по порядку
+  // кликов пользователя, чтобы список разделов/Гантт выглядел предсказуемо.
+  const selectedDepartmentIds = formData.getAll("departmentIds") as string[];
+  const selectedDepartments =
+    selectedDepartmentIds.length > 0
+      ? await prisma.department.findMany({
+          where: { id: { in: selectedDepartmentIds } },
+          select: {
+            id: true,
+            name: true,
+            orderIndex: true,
+            taskTemplateItems: { select: { id: true, title: true, description: true } },
+          },
+          orderBy: { orderIndex: "asc" },
+        })
+      : [];
+
+  const sectionPlans = selectedDepartments.map((department) => {
+    const selection = parseDepartmentTaskSelection(
+      formData.get(`deptData_${department.id}`) as string | null,
+    );
+    const checkedIds = new Set(selection.checkedTemplateItemIds);
+
+    const tasks: { title: string; description: string | null }[] = [];
+    for (const item of department.taskTemplateItems) {
+      if (checkedIds.has(item.id)) {
+        tasks.push({ title: item.title, description: item.description });
+      }
+    }
+    for (const title of selection.customTaskTitles) {
+      tasks.push({ title, description: null });
+    }
+
+    return { departmentId: department.id, name: department.name, tasks };
+  });
 
   const clientName = (formData.get("clientName") as string | null)?.trim() || null;
   const binIin = (formData.get("binIin") as string | null)?.trim() || null;
@@ -112,14 +175,25 @@ export async function createProjectAction(formData: FormData) {
           },
         });
 
-    if (orderedTemplates.length > 0) {
-      await tx.section.createMany({
-        data: orderedTemplates.map((template, index) => ({
+    for (const [index, plan] of sectionPlans.entries()) {
+      const section = await tx.section.create({
+        data: {
           projectId: project.id,
-          name: sectionTemplateName(template.code, template.label),
+          departmentId: plan.departmentId,
+          name: plan.name,
           orderIndex: index,
-        })),
+        },
       });
+
+      if (plan.tasks.length > 0) {
+        await tx.task.createMany({
+          data: plan.tasks.map((task) => ({
+            sectionId: section.id,
+            title: task.title,
+            description: task.description,
+          })),
+        });
+      }
     }
 
     if (totalAmount !== null) {

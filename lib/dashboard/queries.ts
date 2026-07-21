@@ -105,6 +105,41 @@ export async function getEmployeeWorkload(): Promise<EmployeeWorkload[]> {
     .sort((a, b) => b.activeProjectsCount - a.activeProjectsCount);
 }
 
+// Тот же формат, что и getEmployeeWorkload, но только для сотрудников
+// ОДНОГО департамента — для дашборда руководителя департамента (см. план,
+// Phase 7), чтобы переиспользовать компонент WorkloadBoard без изменений.
+export async function getDepartmentEmployeeWorkload(
+  departmentId: string,
+): Promise<EmployeeWorkload[]> {
+  const [employees, activeMemberships] = await Promise.all([
+    prisma.user.findMany({
+      where: { homeDepartmentId: departmentId },
+      select: { id: true, fullName: true },
+    }),
+    prisma.projectMember.findMany({
+      where: { project: { status: ProjectStatus.В_РАБОТЕ } },
+      select: { userId: true },
+    }),
+  ]);
+
+  const countByUserId = new Map<string, number>();
+  for (const membership of activeMemberships) {
+    countByUserId.set(membership.userId, (countByUserId.get(membership.userId) ?? 0) + 1);
+  }
+
+  return employees
+    .map((employee) => {
+      const activeProjectsCount = countByUserId.get(employee.id) ?? 0;
+      return {
+        id: employee.id,
+        fullName: employee.fullName,
+        activeProjectsCount,
+        level: workloadLevel(activeProjectsCount),
+      };
+    })
+    .sort((a, b) => b.activeProjectsCount - a.activeProjectsCount);
+}
+
 export type ActivityItem = {
   id: string;
   message: string;

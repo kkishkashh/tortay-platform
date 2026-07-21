@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
+import { getDepartmentsWithTaskStackForProjectCreation } from "@/lib/departments/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { canManageOperations } from "@/lib/projects/permissions";
 import { getProjectsForCurrentUser } from "@/lib/projects/queries";
@@ -9,10 +10,11 @@ import { NewProjectDialog } from "./new-project-dialog";
 import { ProjectsExplorer } from "./projects-explorer";
 
 export default async function ProjectsPage() {
-  const [session, projects, employees] = await Promise.all([
+  const [session, projects, employees, departments] = await Promise.all([
     auth(),
     getProjectsForCurrentUser(),
     getEmployeesForSelect(),
+    getDepartmentsWithTaskStackForProjectCreation(),
   ]);
   const canManage = session?.user ? canManageOperations(session.user) : false;
 
@@ -21,7 +23,11 @@ export default async function ProjectsPage() {
       <PageHeader
         title="Проекты"
         subtitle={formatTodayLabel(new Date())}
-        action={canManage ? <NewProjectDialog employees={employees} /> : undefined}
+        action={
+          canManage ? (
+            <NewProjectDialog employees={employees} departments={departments} />
+          ) : undefined
+        }
       />
       <div className="p-8">
         {projects.length === 0 ? (

@@ -5,17 +5,24 @@ import { SystemRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
+import { getCommentsForAssignee, getCommentsForTask } from "@/lib/comments/queries";
 import { getEmployeeProfile } from "@/lib/employees/queries";
+import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
+import { canManageProjectTasks } from "@/lib/tasks/permissions";
+import { getTasksForUser } from "@/lib/tasks/queries";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 import { WORKLOAD_META } from "@/lib/workload";
 import { FolderKanban, ListChecks, Percent, Gauge } from "lucide-react";
 
+import { CommentsTab } from "./comments-tab";
 import { ContactForm } from "./contact-form";
 import { DeleteEmployeeDialog } from "./delete-employee-dialog";
 import { DetailsForm } from "./details-form";
 import { PasswordForm } from "./password-form";
+import { TasksTab } from "./tasks-tab";
 
 const SYSTEM_ROLE_LABELS = {
   РУКОВОДИТЕЛЬ: "Руководитель",
@@ -45,6 +52,28 @@ export default async function EmployeeProfilePage({
   const canEditDetails = isHead;
   const workloadMeta = WORKLOAD_META[employee.workload];
 
+  const [tasks, comments] = await Promise.all([
+    getTasksForUser(employee.id),
+    getCommentsForAssignee(employee.id),
+  ]);
+
+  const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
+  const [projectMembersEntries, commentsEntries] = await Promise.all([
+    Promise.all(projectIds.map(async (pid) => [pid, await getProjectMembersForTaskAssignment(pid)] as const)),
+    Promise.all(tasks.map(async (t) => [t.id, await getCommentsForTask(t.id)] as const)),
+  ]);
+  const projectMembersByProject = new Map(projectMembersEntries);
+  const commentsByTask = new Map(commentsEntries);
+
+  const canManageByTask = new Map(
+    tasks.map((task) => [
+      task.id,
+      session?.user
+        ? canManageProjectTasks(session.user, { department: { managerId: task.departmentManagerId } })
+        : false,
+    ]),
+  );
+
   return (
     <>
       <PageHeader
@@ -72,134 +101,158 @@ export default async function EmployeeProfilePage({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Активных проектов"
-            value={String(employee.activeProjectsCount)}
-            icon={FolderKanban}
-          />
-          <StatCard
-            label="Всего проектов"
-            value={String(employee.totalProjectsCount)}
-            icon={ListChecks}
-          />
-          <StatCard
-            label="Завершено"
-            value={`${employee.completionRate}%`}
-            icon={Percent}
-          />
-          <StatCard label="Загруженность" value={workloadMeta.label} icon={Gauge} />
-        </div>
+        <Tabs defaultValue="overview">
+          <TabsList>
+            <TabsTrigger value="overview">Обзор</TabsTrigger>
+            <TabsTrigger value="tasks">Проекты и задачи</TabsTrigger>
+            <TabsTrigger value="comments">Комментарии</TabsTrigger>
+          </TabsList>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Проекты</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {employee.totalProjectsCount === 0 ? (
-              <p className="text-sm text-muted-foreground">Пока нет проектов.</p>
-            ) : (
-              employee.projectsByStatus.map(({ status, projects }) =>
-                projects.length === 0 ? null : (
-                  <div key={status}>
-                    <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">
-                      {PROJECT_STATUS_LABELS[status]}
-                    </p>
-                    <ul className="space-y-1">
-                      {projects.map((project) => (
-                        <li key={project.id}>
-                          <Link
-                            href={`/projects/${project.id}`}
-                            className="text-sm text-primary hover:underline"
-                          >
-                            {project.name}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ),
-              )
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Личные данные</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {canEditContact ? (
-              <ContactForm userId={employee.id} email={employee.email} phone={employee.phone} />
-            ) : (
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Email</dt>
-                  <dd className="text-sm">{employee.email}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Телефон</dt>
-                  <dd className="text-sm">{employee.phone ?? "—"}</dd>
-                </div>
-              </dl>
-            )}
-          </CardContent>
-        </Card>
-
-        {canEditDetails ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Кадровые данные</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <DetailsForm
-                userId={employee.id}
-                fullName={employee.fullName}
-                position={employee.position}
-                birthDate={employee.birthDate}
-                salary={employee.salary}
-                systemRole={employee.systemRole}
+          <TabsContent value="overview" className="mt-4 space-y-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard
+                label="Активных проектов"
+                value={String(employee.activeProjectsCount)}
+                icon={FolderKanban}
               />
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle>Кадровые данные</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Должность</dt>
-                  <dd className="text-sm">{employee.position ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Дата рождения</dt>
-                  <dd className="text-sm">
-                    {employee.birthDate
-                      ? employee.birthDate.toLocaleDateString("ru-RU")
-                      : "—"}
-                  </dd>
-                </div>
-                {isSelf && employee.salary !== null ? (
-                  <div>
-                    <dt className="text-xs text-muted-foreground">Оклад</dt>
-                    <dd className="text-sm">{employee.salary.toLocaleString("ru-RU")} ₸</dd>
-                  </div>
-                ) : null}
-              </dl>
-            </CardContent>
-          </Card>
-        )}
+              <StatCard
+                label="Всего проектов"
+                value={String(employee.totalProjectsCount)}
+                icon={ListChecks}
+              />
+              <StatCard
+                label="Завершено"
+                value={`${employee.completionRate}%`}
+                icon={Percent}
+              />
+              <StatCard label="Загруженность" value={workloadMeta.label} icon={Gauge} />
+            </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{isSelf ? "Смена пароля" : "Сброс пароля"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PasswordForm userId={employee.id} isSelf={Boolean(isSelf)} />
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Проекты</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {employee.totalProjectsCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">Пока нет проектов.</p>
+                ) : (
+                  employee.projectsByStatus.map(({ status, projects }) =>
+                    projects.length === 0 ? null : (
+                      <div key={status}>
+                        <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">
+                          {PROJECT_STATUS_LABELS[status]}
+                        </p>
+                        <ul className="space-y-1">
+                          {projects.map((project) => (
+                            <li key={project.id}>
+                              <Link
+                                href={`/projects/${project.id}`}
+                                className="text-sm text-primary hover:underline"
+                              >
+                                {project.name}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ),
+                  )
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Личные данные</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {canEditContact ? (
+                  <ContactForm userId={employee.id} email={employee.email} phone={employee.phone} />
+                ) : (
+                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Email</dt>
+                      <dd className="text-sm">{employee.email}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Телефон</dt>
+                      <dd className="text-sm">{employee.phone ?? "—"}</dd>
+                    </div>
+                  </dl>
+                )}
+              </CardContent>
+            </Card>
+
+            {canEditDetails ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Кадровые данные</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DetailsForm
+                    userId={employee.id}
+                    fullName={employee.fullName}
+                    position={employee.position}
+                    birthDate={employee.birthDate}
+                    salary={employee.salary}
+                    systemRole={employee.systemRole}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Кадровые данные</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Должность</dt>
+                      <dd className="text-sm">{employee.position ?? "—"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Дата рождения</dt>
+                      <dd className="text-sm">
+                        {employee.birthDate
+                          ? employee.birthDate.toLocaleDateString("ru-RU")
+                          : "—"}
+                      </dd>
+                    </div>
+                    {isSelf && employee.salary !== null ? (
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Оклад</dt>
+                        <dd className="text-sm">{employee.salary.toLocaleString("ru-RU")} ₸</dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>{isSelf ? "Смена пароля" : "Сброс пароля"}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PasswordForm userId={employee.id} isSelf={Boolean(isSelf)} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="tasks" className="mt-4">
+            <TasksTab
+              tasks={tasks}
+              commentsByTask={commentsByTask}
+              projectMembersByProject={projectMembersByProject}
+              currentUserId={session?.user?.id}
+              canManageByTask={canManageByTask}
+            />
+          </TabsContent>
+
+          <TabsContent value="comments" className="mt-4">
+            <CommentsTab comments={comments} />
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   );

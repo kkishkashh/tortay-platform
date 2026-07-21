@@ -1,12 +1,20 @@
 import { notFound } from "next/navigation";
+import { Plus } from "lucide-react";
 import { ProjectRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DepartmentIcon } from "@/components/departments/department-icon";
+import { TaskCard } from "@/components/dashboard/task-card";
+import { getCommentsForTask } from "@/lib/comments/queries";
+import { canManageProjectTasks } from "@/lib/tasks/permissions";
+import { getTasksForSection } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
 import { canManageOperations } from "@/lib/projects/permissions";
+import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import {
   PROJECT_STATUS_LABELS,
   SECTION_STATUS_LABELS,
@@ -19,6 +27,7 @@ import { EditProjectDialog } from "./edit-project-dialog";
 import { ProjectStatusSelect } from "./project-status-select";
 import { SectionDatesFields } from "./section-dates-fields";
 import { SectionStatusSelect } from "./section-status-select";
+import { TaskDialog } from "./task-dialog";
 
 function formatSectionDates(startDate: Date | null, deadline: Date | null) {
   if (!startDate && !deadline) return "Сроки не заданы";
@@ -34,24 +43,41 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
 
-  const [session, project, sections, gipMember, employees] = await Promise.all([
+  const [session, project, sections, gipMember, employees, projectMembers] = await Promise.all([
     auth(),
     prisma.project.findUnique({ where: { id } }),
     prisma.section.findMany({
       where: { projectId: id },
       orderBy: { orderIndex: "asc" },
+      include: { department: { select: { id: true, name: true, color: true, icon: true, managerId: true } } },
     }),
     prisma.projectMember.findFirst({
       where: { projectId: id, projectRole: ProjectRole.ГИП },
       include: { user: { select: { id: true, fullName: true } } },
     }),
     getEmployeesForSelect(),
+    getProjectMembersForTaskAssignment(id),
   ]);
   if (!project) {
     notFound();
   }
 
+  const sectionsWithTasks = await Promise.all(
+    sections.map(async (section) => {
+      const tasks = await getTasksForSection(section.id);
+      const tasksWithComments = await Promise.all(
+        tasks.map(async (task) => ({ task, comments: await getCommentsForTask(task.id) })),
+      );
+      return {
+        section,
+        tasksWithComments,
+        canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
+      };
+    }),
+  );
+
   const canChangeStatus = session?.user ? canManageOperations(session.user) : false;
+  const currentUserId = session?.user?.id;
 
   return (
     <>
@@ -101,50 +127,89 @@ export default async function ProjectDetailPage({
           </div>
         </div>
 
-        <h2 className="mt-8 mb-3 text-sm font-medium text-muted-foreground">
-          Разделы
-        </h2>
-        {sections.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Разделов пока нет.</p>
-        ) : (
-          <ul className="divide-y rounded-lg border">
-            {sections.map((section) => (
-              <li
-                key={section.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
-              >
-                <span className="text-sm font-medium">{section.name}</span>
-                <div className="flex flex-wrap items-center gap-3">
-                  {canChangeStatus ? (
-                    <SectionDatesFields
-                      sectionId={section.id}
-                      startDate={section.startDate}
-                      deadline={section.deadline}
-                    />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">
-                      {formatSectionDates(section.startDate, section.deadline)}
-                    </span>
-                  )}
-                  {canChangeStatus ? (
-                    <SectionStatusSelect
-                      sectionId={section.id}
-                      status={section.status}
-                    />
-                  ) : (
-                    <Badge variant="secondary">
-                      {SECTION_STATUS_LABELS[section.status]}
-                    </Badge>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mt-8 space-y-8">
+          {sectionsWithTasks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Разделов пока нет.</p>
+          ) : (
+            sectionsWithTasks.map(({ section, tasksWithComments, canManageTasks }) => (
+              <div key={section.id} className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+                  <div className="flex items-center gap-2.5">
+                    {section.department ? (
+                      <span
+                        className="flex size-8 shrink-0 items-center justify-center rounded-lg text-white"
+                        style={{ backgroundColor: section.department.color }}
+                      >
+                        <DepartmentIcon name={section.department.icon} className="size-4" />
+                      </span>
+                    ) : (
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                        —
+                      </span>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">{section.name}</p>
+                      {!section.department ? (
+                        <p className="text-xs text-muted-foreground">Без отдела</p>
+                      ) : null}
+                    </div>
+                  </div>
 
-        <p className="mt-8 text-sm text-muted-foreground">
-          Задачи и документы появятся здесь на следующих шагах.
-        </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    {canChangeStatus ? (
+                      <SectionDatesFields
+                        sectionId={section.id}
+                        startDate={section.startDate}
+                        deadline={section.deadline}
+                      />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {formatSectionDates(section.startDate, section.deadline)}
+                      </span>
+                    )}
+                    {canChangeStatus ? (
+                      <SectionStatusSelect sectionId={section.id} status={section.status} />
+                    ) : (
+                      <Badge variant="secondary">{SECTION_STATUS_LABELS[section.status]}</Badge>
+                    )}
+                  </div>
+                </div>
+
+                {tasksWithComments.length === 0 ? (
+                  <p className="pl-1 text-sm text-muted-foreground">Задач пока нет.</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {tasksWithComments.map(({ task, comments }) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        comments={comments}
+                        currentUserId={currentUserId}
+                        canManage={canManageTasks}
+                        isAssignee={task.assignee?.userId === currentUserId}
+                        projectMembers={projectMembers}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {canManageTasks ? (
+                  <TaskDialog
+                    mode="create"
+                    sectionId={section.id}
+                    projectMembers={projectMembers}
+                    trigger={
+                      <Button variant="outline" size="sm">
+                        <Plus className="size-3.5" />
+                        Добавить задачу
+                      </Button>
+                    }
+                  />
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </>
   );

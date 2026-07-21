@@ -14,19 +14,27 @@ import {
   ChevronsRight,
   Menu,
   X,
+  Building2,
+  Bell,
+  ListTodo,
+  Calendar,
 } from "lucide-react";
 
 import { cn, getInitials } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/layout/notification-bell";
+import type { NotificationListItem } from "@/lib/notifications/queries";
+import type { RoleTier } from "@/lib/departments/queries";
 
 type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  // Аутсорсеры и договоры — операционка, видна только руководителю
-  // (см. lib/projects/permissions.ts), сотруднику пункт вообще не
-  // показываем, а не просто блокируем действия внутри.
-  headOnly?: boolean;
+  // "all" — виден всем; "admin_or_manager" — админу и руководителям
+  // департаментов (напр. Департаменты — руководителю нужно попасть в свой
+  // же департамент); "admin" — только администратору (финансовая/
+  // операционная зона, см. lib/projects/permissions.ts).
+  visibility?: "all" | "admin_or_manager" | "admin";
 };
 
 type NavGroup = {
@@ -37,32 +45,53 @@ type NavGroup = {
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Обзор",
-    items: [{ href: "/", label: "Дашборд", icon: LayoutDashboard }],
+    items: [
+      { href: "/", label: "Дашборд", icon: LayoutDashboard },
+      { href: "/my-tasks", label: "Мои задачи", icon: ListTodo },
+      { href: "/calendar", label: "Календарь", icon: Calendar },
+      { href: "/notifications", label: "Уведомления", icon: Bell },
+    ],
   },
   {
     label: "Работа",
     items: [
       { href: "/projects", label: "Проекты", icon: FolderKanban },
+      { href: "/departments", label: "Департаменты", icon: Building2, visibility: "admin_or_manager" },
       { href: "/employees", label: "Сотрудники", icon: Users },
-      { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, headOnly: true },
+      { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin" },
     ],
   },
   {
     label: "Финансы",
-    items: [{ href: "/contracts", label: "Договоры", icon: FileText, headOnly: true }],
+    items: [{ href: "/contracts", label: "Договоры", icon: FileText, visibility: "admin" }],
   },
 ];
+
+function isNavItemVisible(item: NavItem, roleTier: RoleTier) {
+  if (!item.visibility || item.visibility === "all") return true;
+  if (item.visibility === "admin") return roleTier === "admin";
+  return roleTier === "admin" || roleTier === "department_manager";
+}
 
 const COLLAPSE_STORAGE_KEY = "tortay:sidebar-collapsed";
 
 type SidebarProps = {
   fullName: string;
   systemRoleLabel: string;
-  isHead: boolean;
+  roleTier: RoleTier;
   onSignOut: () => Promise<void>;
+  notifications: NotificationListItem[];
+  unreadNotificationCount: number;
 };
 
-export function Sidebar({ fullName, systemRoleLabel, isHead, onSignOut }: SidebarProps) {
+export function Sidebar({
+  fullName,
+  systemRoleLabel,
+  roleTier,
+  onSignOut,
+  notifications,
+  unreadNotificationCount,
+}: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -91,7 +120,7 @@ export function Sidebar({ fullName, systemRoleLabel, isHead, onSignOut }: Sideba
 
   const navGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => !item.headOnly || isHead),
+    items: group.items.filter((item) => isNavItemVisible(item, roleTier)),
   })).filter((group) => group.items.length > 0);
 
   return (
@@ -221,6 +250,7 @@ export function Sidebar({ fullName, systemRoleLabel, isHead, onSignOut }: Sideba
                   {systemRoleLabel}
                 </span>
               </div>
+              <NotificationBell notifications={notifications} unreadCount={unreadNotificationCount} />
               <ThemeToggle />
               <form action={onSignOut}>
                 <button

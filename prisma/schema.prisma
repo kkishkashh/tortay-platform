@@ -46,11 +46,24 @@ model User {
   salary       Decimal?   @db.Decimal(12, 2) // оклад — финансовые данные, нигде пока не отображается
   createdAt    DateTime   @default(now())
 
+  // "Домашний" департамент сотрудника (Employees-таб на странице департамента).
+  // Отдельно от ProjectMember.projectRole — это постоянная орг. принадлежность,
+  // а не роль в конкретном проекте.
+  homeDepartmentId String?
+  homeDepartment    Department? @relation("DepartmentEmployees", fields: [homeDepartmentId], references: [id])
+  // Департаменты, которыми этот пользователь руководит (обычно 0-1, но не
+  // ограничиваем на уровне схемы — один человек в принципе может управлять
+  // несколькими небольшими департаментами).
+  managedDepartments Department[] @relation("DepartmentManager")
+
   // Во всех проектах, где этот человек участвует (в разных ролях)
   projectMemberships ProjectMember[]
   documentsUploaded  Document[]
   comments           Comment[]
   activityLogEntries ActivityLog[]
+
+  notifications           Notification[] @relation("NotificationRecipient")
+  notificationsTriggered  Notification[] @relation("NotificationActor")
 
   @@map("users")
 }
@@ -126,6 +139,14 @@ model Section {
   deadline           DateTime?
   orderIndex         Int           @default(0) // для сортировки разделов внутри проекта
 
+  // Департамент, ответственный за раздел — источник истины для базового
+  // стека задач, цвета/иконки и области видимости руководителя департамента.
+  // Nullable: у разделов, созданных до перехода на департаменты (см. миграцию
+  // prisma/scripts/migrate-departments.ts), однозначного соответствия может
+  // не быть — тогда остаётся NULL, а не угадывается.
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
   tasks     Task[]
   documents Document[]
   comments  Comment[]
@@ -141,6 +162,13 @@ enum TaskStatus {
   ВЫПОЛНЕНО
 }
 
+enum TaskPriority {
+  НИЗКИЙ
+  СРЕДНИЙ
+  ВЫСОКИЙ
+  СРОЧНЫЙ
+}
+
 model Task {
   id               String        @id @default(uuid())
   sectionId        String
@@ -150,13 +178,89 @@ model Task {
   assigneeMemberId String?
   assigneeMember   ProjectMember? @relation(fields: [assigneeMemberId], references: [id])
   status           TaskStatus    @default(НОВАЯ)
+  priority         TaskPriority  @default(СРЕДНИЙ)
   startDate        DateTime?     // для диаграммы Ганта
   deadline         DateTime?
   createdAt        DateTime      @default(now())
 
-  comments Comment[]
+  comments      Comment[]
+  notifications Notification[]
 
   @@map("tasks")
+}
+
+// ============================================================
+// БЛОК 1.6: Уведомления
+// ============================================================
+// Только два триггера пока (см. бриф): назначение задачи исполнителю и
+// отправка задачи на проверку менеджеру/руководителю департамента. Тип —
+// enum, а не свободный текст, чтобы интерфейс мог показывать разные
+// иконки/маршруты по типу, не парся текст сообщения.
+enum NotificationType {
+  ЗАДАЧА_НАЗНАЧЕНА
+  ЗАДАЧА_НА_ПРОВЕРКЕ
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation("NotificationRecipient", fields: [userId], references: [id])
+  actorId   String?
+  actor     User?            @relation("NotificationActor", fields: [actorId], references: [id])
+  type      NotificationType
+  title     String
+  body      String
+  taskId    String?
+  task      Task?            @relation(fields: [taskId], references: [id])
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================================
+// БЛОК 1.5: Департаменты — организационная структура компании
+// ============================================================
+// Полностью редактируемая администратором сущность (см. бриф): ничего про
+// департаменты не хардкодится в коде, только эти 8 строк заведены как
+// стартовые сидовые данные (prisma/scripts/migrate-departments.ts).
+
+model Department {
+  id           String   @id @default(uuid())
+  name         String
+  code         String   @unique // AR, KJ, VK, OV, EOM, SS, PB, SMR — короткий код для меток/бейджей
+  color        String   // hex, напр. "#7c3aed"
+  icon         String   // имя иконки lucide-react — резолвится через фиксированную карту в коде,
+                         // никогда не через eval/динамический импорт по произвольной строке
+  description  String?
+  orderIndex   Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  managerId String?
+  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id])
+
+  employees         User[]                        @relation("DepartmentEmployees")
+  taskTemplateItems DepartmentTaskTemplateItem[]
+  sections          Section[]
+
+  @@map("departments")
+}
+
+// Базовый стек задач — переиспользуемый шаблон, НЕ привязан ни к одному
+// проекту. При создании проекта менеджер выбирает галочками, какие пункты
+// стать реальными Task в конкретном разделе — сам шаблон при этом не
+// меняется (см. бриф, раздел "Custom Tasks").
+model DepartmentTaskTemplateItem {
+  id           String     @id @default(uuid())
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  title        String
+  description  String?
+  orderIndex   Int        @default(0)
+  createdAt    DateTime   @default(now())
+
+  @@map("department_task_template_items")
 }
 
 // ============================================================

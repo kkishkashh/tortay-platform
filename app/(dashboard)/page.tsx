@@ -1,5 +1,6 @@
-import { SystemRole } from "@prisma/client";
+import { TaskStatus } from "@prisma/client";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Banknote, CheckCircle2, FolderKanban, User, Users } from "lucide-react";
 
 import { auth } from "@/auth";
@@ -12,21 +13,27 @@ import { UpcomingPayments } from "@/components/dashboard/upcoming-payments";
 import { ProjectGantt } from "@/components/dashboard/project-gantt";
 import { ProjectStatusChart } from "@/components/dashboard/project-status-chart";
 import { EmployeeDashboard } from "@/components/dashboard/employee-dashboard";
+import { DepartmentManagerDashboard } from "@/components/dashboard/department-manager-dashboard";
 import {
   getDashboardStats,
+  getDepartmentEmployeeWorkload,
   getEmployeeWorkload,
   getRecentActivity,
   getUpcomingPayments,
   getProjectTimelines,
   getProjectStatusBreakdown,
-  getUpcomingDeadlines,
 } from "@/lib/dashboard/queries";
-import { getProjectsForCurrentUser } from "@/lib/projects/queries";
+import {
+  getCurrentUserRoleTier,
+  getDepartmentDashboardStats,
+} from "@/lib/departments/queries";
+import { getMyTasks } from "@/lib/tasks/queries";
+import { getUnreadNotificationCount } from "@/lib/notifications/queries";
+import { prisma } from "@/lib/prisma";
 import { formatTenge, formatTodayLabel } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await auth();
-  const isHead = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
   const today = new Date();
   const currentYear = today.getFullYear();
 
@@ -37,24 +44,53 @@ export default async function DashboardPage() {
     </Button>
   ) : undefined;
 
-  if (!isHead) {
-    const [stats, deadlines, projects, activity] = await Promise.all([
-      getDashboardStats(),
-      getUpcomingDeadlines(),
-      getProjectsForCurrentUser(),
-      getRecentActivity(),
+  const roleTier = await getCurrentUserRoleTier(session?.user);
+
+  if (roleTier === "department_manager") {
+    const department = await prisma.department.findFirst({
+      where: { managerId: session!.user.id },
+      select: { id: true, name: true, color: true, icon: true },
+    });
+    if (!department) {
+      notFound();
+    }
+
+    const [stats, workload] = await Promise.all([
+      getDepartmentDashboardStats(department.id),
+      getDepartmentEmployeeWorkload(department.id),
     ]);
+
+    return (
+      <>
+        <PageHeader title="Дашборд" subtitle={formatTodayLabel(today)} action={cabinetButton} />
+        <DepartmentManagerDashboard
+          fullName={session!.user.name ?? "коллега"}
+          department={department}
+          stats={stats}
+          workload={workload}
+        />
+      </>
+    );
+  }
+
+  if (roleTier === "employee") {
+    const [stats, myTasks, unreadNotificationCount] = await Promise.all([
+      getDashboardStats(),
+      getMyTasks(),
+      getUnreadNotificationCount(),
+    ]);
+    const activeTasksCount = myTasks.filter((t) => t.status !== TaskStatus.ВЫПОЛНЕНО).length;
 
     return (
       <>
         <PageHeader title="Дашборд" subtitle={formatTodayLabel(today)} action={cabinetButton} />
         <EmployeeDashboard
           fullName={session?.user.name ?? "коллега"}
+          employeeId={session!.user.id}
           activeProjectsCount={stats.activeProjectsCount}
+          activeTasksCount={activeTasksCount}
+          unreadNotificationCount={unreadNotificationCount}
           completedThisYearCount={stats.completedThisYearCount}
-          deadlines={deadlines}
-          projects={projects}
-          activity={activity}
         />
       </>
     );

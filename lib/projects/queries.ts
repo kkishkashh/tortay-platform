@@ -77,3 +77,20 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
     };
   });
 }
+
+// Задачу можно назначить только участнику ЭТОГО проекта (Task.
+// assigneeMemberId → ProjectMember, не User напрямую) — см. решение D1 в
+// плане: так гарантируется, что исполнитель реально состоит в проекте.
+export async function getProjectMembersForTaskAssignment(projectId: string) {
+  const members = await prisma.projectMember.findMany({
+    where: { projectId },
+    select: { id: true, user: { select: { id: true, fullName: true } } },
+    orderBy: { user: { fullName: "asc" } },
+  });
+
+  return members.map((member) => ({
+    id: member.id,
+    userId: member.user.id,
+    fullName: member.user.fullName,
+  }));
+}
