@@ -12,10 +12,14 @@ import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { ManagerCandidate } from "@/lib/departments/queries";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 type Employee = { id: string; fullName: string; position?: string | null };
@@ -39,7 +43,7 @@ export function EmployeesTab({
   // департамента и НЕ исключает тех, кто уже руководит другим департаментом
   // (один человек может руководить несколькими департаментами одновременно,
   // см. lib/departments/queries.ts::getEmployeesForManagerAssignment).
-  managerCandidates: { id: string; fullName: string }[];
+  managerCandidates: ManagerCandidate[];
   // Назначение руководителя — структурное решение, только администратор.
   canAssignManager: boolean;
   // Добавлять/убирать рядовых сотрудников может и руководитель ЭТОГО
@@ -51,6 +55,18 @@ export function EmployeesTab({
   const [addEmployeeId, setAddEmployeeId] = useState<string>("");
 
   const availableToAdd = allEmployees.filter((e) => e.homeDepartmentId !== departmentId);
+
+  // Чёткое разделение в пикере руководителя — иначе легко перепутать
+  // рядового сотрудника с тем, кто уже руководит другим департаментом
+  // (см. план). Метка второй группы называет департамент(ы) прямо в тексте
+  // пункта, а не только в отдельном заголовке — видно даже без скролла.
+  function managerCandidateLabel(candidate: ManagerCandidate) {
+    return candidate.managedDepartmentNames.length > 0
+      ? `${candidate.fullName} — руководит: ${candidate.managedDepartmentNames.join(", ")}`
+      : candidate.fullName;
+  }
+  const currentManagers = managerCandidates.filter((c) => c.managedDepartmentNames.length > 0);
+  const plainStaff = managerCandidates.filter((c) => c.managedDepartmentNames.length === 0);
 
   function handleAssignManager(value: string | null) {
     setError(null);
@@ -104,6 +120,8 @@ export function EmployeesTab({
             disabled={isPending}
             items={[
               { value: NO_MANAGER, label: "Не назначен" },
+              // Собственное имя выбранного — иначе SelectValue не найдёт его
+              // среди сгруппированных пунктов и покажет пустой триггер.
               ...managerCandidates.map((e) => ({ value: e.id, label: e.fullName })),
             ]}
           >
@@ -112,11 +130,32 @@ export function EmployeesTab({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_MANAGER}>Не назначен</SelectItem>
-              {managerCandidates.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.fullName}
-                </SelectItem>
-              ))}
+              {currentManagers.length > 0 ? (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Уже руководят департаментом</SelectLabel>
+                    {currentManagers.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {managerCandidateLabel(e)}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              ) : null}
+              {plainStaff.length > 0 ? (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Сотрудники</SelectLabel>
+                    {plainStaff.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.fullName}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              ) : null}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">

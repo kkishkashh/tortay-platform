@@ -135,12 +135,31 @@ export async function getEmployeesForDepartmentAssignment() {
 // getEmployeesForDepartmentAssignment() выше — та специально исключает
 // действующих руководителей, потому что используется для другого пикера
 // ("добавить рядового сотрудника"), где это исключение нужно.
-export async function getEmployeesForManagerAssignment() {
-  return prisma.user.findMany({
+export type ManagerCandidate = {
+  id: string;
+  fullName: string;
+  // Названия департаментов, которыми этот человек УЖЕ руководит — пусто у
+  // рядовых сотрудников. Нужно, чтобы в пикере чётко разделить "уже
+  // руководители" и "сотрудники" и не перепутать их (см. план).
+  managedDepartmentNames: string[];
+};
+
+export async function getEmployeesForManagerAssignment(): Promise<ManagerCandidate[]> {
+  const users = await prisma.user.findMany({
     where: { userType: UserType.ШТАТНЫЙ },
-    select: { id: true, fullName: true },
+    select: {
+      id: true,
+      fullName: true,
+      managedDepartments: { select: { name: true }, orderBy: { orderIndex: "asc" } },
+    },
     orderBy: { fullName: "asc" },
   });
+
+  return users.map((user) => ({
+    id: user.id,
+    fullName: user.fullName,
+    managedDepartmentNames: user.managedDepartments.map((d) => d.name),
+  }));
 }
 
 // Все департаменты + их базовый стек задач — источник для пикера при
