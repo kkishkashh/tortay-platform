@@ -53,7 +53,13 @@ export default async function DepartmentDetailPage({
   const [taskStack, allEmployeesRaw, managerCandidates, projects, analyticsStats] = await Promise.all([
     getDepartmentTaskStack(id),
     getEmployeesForDepartmentAssignment(),
-    getEmployeesForManagerAssignment(),
+    // Список кандидатов в руководители — по компании целиком, поэтому
+    // запрашиваем и передаём в клиентский компонент только для админа:
+    // сам селект скрыт от руководителя департамента (canAssignManager), но
+    // если бы пропс всё равно долетал до его браузера в RSC-payload, это
+    // была бы утечка чужих сотрудников — именно то, чего просил избежать
+    // Камила при разделении сотрудников по департаментам.
+    isAdmin ? getEmployeesForManagerAssignment() : Promise.resolve([]),
     getDepartmentProjects(id),
     getDepartmentDashboardStats(id),
   ]);
