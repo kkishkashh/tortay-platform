@@ -8,10 +8,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DepartmentIcon } from "@/components/departments/department-icon";
 import { TaskCard } from "@/components/dashboard/task-card";
-import { getCommentsForTask } from "@/lib/comments/queries";
-import { getDocumentsForTask } from "@/lib/documents/queries";
+import { getCommentsForTasksBatch } from "@/lib/comments/queries";
+import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
-import { getTasksForSection } from "@/lib/tasks/queries";
+import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
 import { canManageOperations } from "@/lib/projects/permissions";
@@ -63,23 +63,35 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const sectionsWithTasks = await Promise.all(
-    sections.map(async (section) => {
-      const tasks = await getTasksForSection(section.id);
-      const tasksWithComments = await Promise.all(
-        tasks.map(async (task) => ({
-          task,
-          comments: await getCommentsForTask(task.id),
-          documents: await getDocumentsForTask(task.id),
-        })),
-      );
-      return {
-        section,
-        tasksWithComments,
-        canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
-      };
-    }),
-  );
+  // Раньше это был Promise.all(sections.map(async section => ... await
+  // Promise.all(tasks.map(async task => ...)))) — запрос комментариев и
+  // документов НА КАЖДУЮ задачу отдельно. При десятках задач это десятки
+  // последовательных round-trip'ов к Neon подряд — именно это тормозило
+  // страницу проекта. Теперь: один пакетный запрос на все разделы + один
+  // пакетный запрос на все комментарии + один на все документы.
+  const sectionIds = sections.map((section) => section.id);
+  const tasksBySectionId = await getTasksForSections(sectionIds);
+  const allTaskIds = Array.from(tasksBySectionId.values())
+    .flat()
+    .map((task) => task.id);
+  const [commentsByTaskId, documentsByTaskId] = await Promise.all([
+    getCommentsForTasksBatch(allTaskIds),
+    getDocumentsForTasksBatch(allTaskIds),
+  ]);
+
+  const sectionsWithTasks = sections.map((section) => {
+    const tasks = tasksBySectionId.get(section.id) ?? [];
+    const tasksWithComments = tasks.map((task) => ({
+      task,
+      comments: commentsByTaskId.get(task.id) ?? [],
+      documents: documentsByTaskId.get(task.id) ?? [],
+    }));
+    return {
+      section,
+      tasksWithComments,
+      canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
+    };
+  });
 
   const canChangeStatus = session?.user ? canManageOperations(session.user) : false;
   const currentUserId = session?.user?.id;

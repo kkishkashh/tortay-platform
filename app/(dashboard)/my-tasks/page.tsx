@@ -1,9 +1,9 @@
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { TaskCard } from "@/components/dashboard/task-card";
-import { getCommentsForTask } from "@/lib/comments/queries";
-import { getDocumentsForTask } from "@/lib/documents/queries";
-import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
+import { getCommentsForTasksBatch } from "@/lib/comments/queries";
+import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
+import { getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getMyTasks } from "@/lib/tasks/queries";
 import { formatTodayLabel } from "@/lib/utils";
@@ -11,15 +11,16 @@ import { formatTodayLabel } from "@/lib/utils";
 export default async function MyTasksPage() {
   const [session, tasks] = await Promise.all([auth(), getMyTasks()]);
 
+  // Пакетные запросы (один на все проекты/задачи), а не по одному на
+  // каждый — раньше N+1 запросов к Neon подряд были причиной долгой
+  // загрузки этой страницы (см. lib/comments/queries.ts::getCommentsForTasksBatch).
   const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
-  const [projectMembersEntries, commentsEntries, documentsEntries] = await Promise.all([
-    Promise.all(projectIds.map(async (id) => [id, await getProjectMembersForTaskAssignment(id)] as const)),
-    Promise.all(tasks.map(async (t) => [t.id, await getCommentsForTask(t.id)] as const)),
-    Promise.all(tasks.map(async (t) => [t.id, await getDocumentsForTask(t.id)] as const)),
+  const taskIds = tasks.map((t) => t.id);
+  const [projectMembersByProject, commentsByTask, documentsByTask] = await Promise.all([
+    getProjectMembersForProjects(projectIds),
+    getCommentsForTasksBatch(taskIds),
+    getDocumentsForTasksBatch(taskIds),
   ]);
-  const projectMembersByProject = new Map(projectMembersEntries);
-  const commentsByTask = new Map(commentsEntries);
-  const documentsByTask = new Map(documentsEntries);
 
   const grouped = new Map<string, { projectName: string; tasks: typeof tasks }>();
   for (const task of tasks) {

@@ -68,6 +68,62 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
   }));
 }
 
+// Пакетная версия getTasksForSection — ОДИН запрос на весь список разделов
+// проекта вместо запроса на каждый (см. тот же приём в
+// lib/comments/queries.ts::getCommentsForTasksBatch). Используется на
+// странице проекта, где разделов может быть по одному на департамент.
+export async function getTasksForSections(sectionIds: string[]): Promise<Map<string, TaskListItem[]>> {
+  const map = new Map<string, TaskListItem[]>();
+  if (sectionIds.length === 0) return map;
+
+  const tasks = await prisma.task.findMany({
+    where: { sectionId: { in: sectionIds } },
+    include: {
+      assigneeMember: {
+        include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
+      },
+      assignedByUser: { select: { id: true, fullName: true } },
+      section: {
+        select: {
+          department: { select: { id: true, name: true, color: true, icon: true } },
+        },
+      },
+      checklistItems: { orderBy: { orderIndex: "asc" } },
+      _count: { select: { comments: true, documents: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const task of tasks) {
+    const item: TaskListItem = {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      priority: task.priority,
+      deadline: task.deadline,
+      createdAt: task.createdAt,
+      assignee: task.assigneeMember
+        ? {
+            id: task.assigneeMember.id,
+            userId: task.assigneeMember.user.id,
+            fullName: task.assigneeMember.user.fullName,
+            avatarUrl: task.assigneeMember.user.avatarUrl,
+          }
+        : null,
+      assignedBy: task.assignedByUser,
+      department: task.section.department,
+      checklistItems: task.checklistItems.map((c) => ({ id: c.id, title: c.title, isDone: c.isDone })),
+      commentsCount: task._count.comments,
+      documentsCount: task._count.documents,
+    };
+    const list = map.get(task.sectionId) ?? [];
+    list.push(item);
+    map.set(task.sectionId, list);
+  }
+  return map;
+}
+
 export type MyTaskItem = TaskListItem & {
   projectId: string;
   projectName: string;

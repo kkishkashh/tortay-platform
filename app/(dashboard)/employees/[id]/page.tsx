@@ -8,10 +8,10 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
-import { getCommentsForAssignee, getCommentsForTask } from "@/lib/comments/queries";
-import { getDocumentsForTask } from "@/lib/documents/queries";
+import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments/queries";
+import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
-import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
+import { getProjectMembersForProjects } from "@/lib/projects/queries";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForUser } from "@/lib/tasks/queries";
@@ -79,15 +79,16 @@ export default async function EmployeeProfilePage({
     getEmployeeTimeline(employee.id),
   ]);
 
+  // Пакетные запросы (один на все проекты/задачи), а не по одному на
+  // каждый — раньше N+1 запросов к Neon подряд были причиной долгой
+  // загрузки этой страницы (см. lib/comments/queries.ts::getCommentsForTasksBatch).
   const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
-  const [projectMembersEntries, commentsEntries, documentsEntries] = await Promise.all([
-    Promise.all(projectIds.map(async (pid) => [pid, await getProjectMembersForTaskAssignment(pid)] as const)),
-    Promise.all(tasks.map(async (t) => [t.id, await getCommentsForTask(t.id)] as const)),
-    Promise.all(tasks.map(async (t) => [t.id, await getDocumentsForTask(t.id)] as const)),
+  const taskIds = tasks.map((t) => t.id);
+  const [projectMembersByProject, commentsByTask, documentsByTask] = await Promise.all([
+    getProjectMembersForProjects(projectIds),
+    getCommentsForTasksBatch(taskIds),
+    getDocumentsForTasksBatch(taskIds),
   ]);
-  const projectMembersByProject = new Map(projectMembersEntries);
-  const commentsByTask = new Map(commentsEntries);
-  const documentsByTask = new Map(documentsEntries);
 
   const canManageByTask = new Map(
     tasks.map((task) => [

@@ -23,6 +23,34 @@ export async function getCommentsForTask(taskId: string): Promise<TaskCommentIte
   }));
 }
 
+// Пакетная версия getCommentsForTask — ОДИН запрос на весь список задач
+// вместо запроса на каждую (та же логика для getDocumentsForTasksBatch,
+// см. lib/documents/queries.ts). Страницы со списком задач (проект,
+// профиль сотрудника, "Мои задачи") раньше делали по 2 запроса НА КАЖДУЮ
+// задачу (комментарии + документы) внутри Promise.all(tasks.map(...)) —
+// при десятках задач это десятки последовательных round-trip'ов к Neon,
+// и именно это было причиной долгой загрузки этих страниц.
+export async function getCommentsForTasksBatch(
+  taskIds: string[],
+): Promise<Map<string, TaskCommentItem[]>> {
+  const map = new Map<string, TaskCommentItem[]>();
+  if (taskIds.length === 0) return map;
+
+  const comments = await prisma.comment.findMany({
+    where: { taskId: { in: taskIds } },
+    include: { author: { select: { id: true, fullName: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const c of comments) {
+    if (!c.taskId) continue;
+    const list = map.get(c.taskId) ?? [];
+    list.push({ id: c.id, text: c.text, createdAt: c.createdAt, author: c.author });
+    map.set(c.taskId, list);
+  }
+  return map;
+}
+
 export type AssigneeCommentItem = TaskCommentItem & {
   taskId: string;
   taskTitle: string;
