@@ -12,6 +12,12 @@ export type TaskListItem = {
   deadline: Date | null;
   createdAt: Date;
   assignee: { id: string; userId: string; fullName: string; avatarUrl: string | null } | null;
+  // Кто поставил задачу — null у задач, созданных до Phase 13 (надёжного
+  // источника для бэкафилла не было, см. план).
+  assignedBy: { id: string; fullName: string } | null;
+  // Департамент раздела, которому принадлежит задача — null у "бездепартаментных"
+  // разделов (см. Section.departmentId). Рендерится как бейдж только когда есть.
+  department: { id: string; name: string; color: string; icon: string } | null;
   commentsCount: number;
   documentsCount: number;
 };
@@ -22,6 +28,12 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
     include: {
       assigneeMember: {
         include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
+      },
+      assignedByUser: { select: { id: true, fullName: true } },
+      section: {
+        select: {
+          department: { select: { id: true, name: true, color: true, icon: true } },
+        },
       },
       _count: { select: { comments: true, documents: true } },
     },
@@ -44,6 +56,8 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
           avatarUrl: task.assigneeMember.user.avatarUrl,
         }
       : null,
+    assignedBy: task.assignedByUser,
+    department: task.section.department,
     commentsCount: task._count.comments,
     documentsCount: task._count.documents,
   }));
@@ -71,10 +85,11 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
       assigneeMember: {
         include: { user: { select: { id: true, fullName: true, avatarUrl: true } } },
       },
+      assignedByUser: { select: { id: true, fullName: true } },
       section: {
         include: {
           project: { select: { id: true, name: true } },
-          department: { select: { managerId: true } },
+          department: { select: { id: true, name: true, color: true, icon: true, managerId: true } },
         },
       },
       _count: { select: { comments: true, documents: true } },
@@ -96,6 +111,15 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
           userId: task.assigneeMember.user.id,
           fullName: task.assigneeMember.user.fullName,
           avatarUrl: task.assigneeMember.user.avatarUrl,
+        }
+      : null,
+    assignedBy: task.assignedByUser,
+    department: task.section.department
+      ? {
+          id: task.section.department.id,
+          name: task.section.department.name,
+          color: task.section.department.color,
+          icon: task.section.department.icon,
         }
       : null,
     commentsCount: task._count.comments,

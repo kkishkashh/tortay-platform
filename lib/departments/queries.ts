@@ -113,6 +113,10 @@ export async function getEmployeesForDepartmentAssignment() {
 // Все департаменты + их базовый стек задач — источник для пикера при
 // создании проекта (см. Phase 3). Доступен любому, кто уже видит форму
 // создания проекта (сама форма admin-only на уровне страницы).
+// employees/manager добавлены в Phase 13 (мастер создания проекта): шаг 3
+// (контакт по департаменту по умолчанию = реальный руководитель) и шаг 5
+// (исполнитель задачи выбирается только из сотрудников ЭТОГО департамента —
+// см. план, D9).
 export async function getDepartmentsWithTaskStackForProjectCreation() {
   return prisma.department.findMany({
     orderBy: { orderIndex: "asc" },
@@ -122,6 +126,11 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
       code: true,
       color: true,
       icon: true,
+      manager: { select: { id: true, fullName: true } },
+      employees: {
+        select: { id: true, fullName: true },
+        orderBy: { fullName: "asc" },
+      },
       taskTemplateItems: {
         select: { id: true, title: true, description: true },
         orderBy: { orderIndex: "asc" },

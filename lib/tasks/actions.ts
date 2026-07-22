@@ -101,6 +101,7 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
         priority: fields.priority,
         deadline: fields.deadline,
         assigneeMemberId: fields.assigneeMemberId,
+        assignedByUserId: session.user.id,
       },
     });
 

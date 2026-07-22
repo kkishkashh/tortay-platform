@@ -2,15 +2,19 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { PaymentType, ProjectRole, ProjectStatus, SectionStatus } from "@prisma/client";
+import { PaymentType, ProjectRole, ProjectStatus, SectionStatus, TaskPriority } from "@prisma/client";
 import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
-import { sendGipAssignedEmail } from "@/lib/email/send";
+import { sendGipAssignedEmail, sendTaskAssignedEmail } from "@/lib/email/send";
+import { notifyTaskAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
+import { ensureProjectMember } from "@/lib/projects/membership";
 import { canManageOperations } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
+
+const TASK_PRIORITY_VALUES = new Set<string>(Object.values(TaskPriority));
 
 // Делим сумму договора на 3 фиксированных транша по стандартной для
 // инженерных договоров схеме 40/40/20 (было 33/33/34) — остаток
@@ -27,38 +31,81 @@ function splitIntoTranches(totalAmount: number): [number, number, number] {
 }
 
 // Данные по одному департаменту, выбранному при создании проекта — какие
-// пункты его базового стека отмечены и какие свои задачи добавлены.
-// Присылаются клиентом как JSON в скрытом поле `deptData_<id>` (обычная
-// FormData не умеет вкладывать структуры), см. new-project-dialog.tsx.
+// пункты его базового стека отмечены, какие свои задачи добавлены, кто
+// контактное лицо департамента на этом проекте (шаг 3 мастера, см. план
+// D7) и кому/когда/с каким приоритетом назначена каждая задача (шаг 5,
+// D8/D9). Присылаются клиентом как JSON в скрытом поле `deptData_<id>`
+// (обычная FormData не умеет вкладывать структуры), см. new-project-dialog.tsx.
 // Заголовок/описание задач из базового стека НИКОГДА не берём из этого
 // JSON — только реальные id, а тексты подтягиваем заново из БД, чтобы
 // клиент не мог подменить содержимое задачи через devtools.
+// taskAssignments ключуется по item.id (пункт стека) или customTask.key
+// (свои задачи — стабильный клиентский ключ, НЕ индекс массива, чтобы
+// удаление одной кастомной задачи не сдвигало назначения у остальных).
+type TaskAssignmentInput = { assigneeUserId?: string; deadline?: string; priority?: string };
+
 type DepartmentTaskSelection = {
   checkedTemplateItemIds: string[];
-  customTaskTitles: string[];
+  customTasks: { key: string; title: string }[];
+  contactManagerId: string | null;
+  taskAssignments: Record<string, TaskAssignmentInput>;
 };
 
 function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelection {
-  if (!raw) {
-    return { checkedTemplateItemIds: [], customTaskTitles: [] };
-  }
+  const empty: DepartmentTaskSelection = {
+    checkedTemplateItemIds: [],
+    customTasks: [],
+    contactManagerId: null,
+    taskAssignments: {},
+  };
+  if (!raw) return empty;
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
     throw new Error("Некорректные данные задач департамента");
   }
-  const obj = parsed as { checkedTemplateItemIds?: unknown; customTaskTitles?: unknown };
+  const obj = parsed as {
+    checkedTemplateItemIds?: unknown;
+    customTasks?: unknown;
+    contactManagerId?: unknown;
+    taskAssignments?: unknown;
+  };
+
   const checkedTemplateItemIds = Array.isArray(obj.checkedTemplateItemIds)
     ? obj.checkedTemplateItemIds.filter((v): v is string => typeof v === "string")
     : [];
-  const customTaskTitles = Array.isArray(obj.customTaskTitles)
-    ? obj.customTaskTitles
-        .filter((v): v is string => typeof v === "string")
-        .map((v) => v.trim())
-        .filter(Boolean)
+
+  const customTasks = Array.isArray(obj.customTasks)
+    ? obj.customTasks
+        .filter(
+          (v): v is { key: unknown; title: unknown } =>
+            typeof v === "object" && v !== null && "key" in v && "title" in v,
+        )
+        .map((v) => ({ key: String(v.key), title: String(v.title).trim() }))
+        .filter((v) => v.title.length > 0)
     : [];
-  return { checkedTemplateItemIds, customTaskTitles };
+
+  const contactManagerId =
+    typeof obj.contactManagerId === "string" && obj.contactManagerId.trim()
+      ? obj.contactManagerId.trim()
+      : null;
+
+  const taskAssignments: Record<string, TaskAssignmentInput> = {};
+  if (obj.taskAssignments && typeof obj.taskAssignments === "object") {
+    for (const [key, value] of Object.entries(obj.taskAssignments as Record<string, unknown>)) {
+      if (!value || typeof value !== "object") continue;
+      const v = value as { assigneeUserId?: unknown; deadline?: unknown; priority?: unknown };
+      taskAssignments[key] = {
+        assigneeUserId: typeof v.assigneeUserId === "string" && v.assigneeUserId ? v.assigneeUserId : undefined,
+        deadline: typeof v.deadline === "string" && v.deadline ? v.deadline : undefined,
+        priority: typeof v.priority === "string" && v.priority ? v.priority : undefined,
+      };
+    }
+  }
+
+  return { checkedTemplateItemIds, customTasks, contactManagerId, taskAssignments };
 }
 
 // Создать проект может только РУКОВОДИТЕЛЬ — операционная часть
@@ -83,6 +130,15 @@ export async function createProjectAction(formData: FormData) {
     throw new Error("Название проекта обязательно");
   }
 
+  // Шаг 1 мастера — все необязательны (см. план, Phase 13).
+  const client = (formData.get("client") as string | null)?.trim() || null;
+  const location = (formData.get("location") as string | null)?.trim() || null;
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  const startDateRaw = formData.get("startDate") as string | null;
+  const endDateRaw = formData.get("endDate") as string | null;
+  const startDate = startDateRaw ? new Date(startDateRaw) : null;
+  const endDate = endDateRaw ? new Date(endDateRaw) : null;
+
   const gipUserId = formData.get("gipUserId") as string | null;
   if (!gipUserId) {
     throw new Error("Нужно выбрать ГИП");
@@ -100,6 +156,9 @@ export async function createProjectAction(formData: FormData) {
 
   // Порядок департаментов — по их orderIndex (canonical), а не по порядку
   // кликов пользователя, чтобы список разделов/Гантт выглядел предсказуемо.
+  // employees нужны для проверки на сервере, что исполнитель задачи (шаг 5)
+  // реально состоит в ЭТОМ департаменте (D9) — клиентский пикер это уже
+  // ограничивает, но это не замена серверной проверке.
   const selectedDepartmentIds = formData.getAll("departmentIds") as string[];
   const selectedDepartments =
     selectedDepartmentIds.length > 0
@@ -110,31 +169,92 @@ export async function createProjectAction(formData: FormData) {
             name: true,
             orderIndex: true,
             taskTemplateItems: { select: { id: true, title: true, description: true } },
+            employees: { select: { id: true } },
           },
           orderBy: { orderIndex: "asc" },
         })
       : [];
+
+  type TaskPlan = {
+    key: string;
+    title: string;
+    description: string | null;
+    assigneeUserId: string | null;
+    deadline: Date | null;
+    priority: TaskPriority;
+  };
+
+  function buildTaskPlan(
+    key: string,
+    title: string,
+    description: string | null,
+    assignment: TaskAssignmentInput | undefined,
+    employeeIds: Set<string>,
+  ): TaskPlan {
+    const assigneeUserId = assignment?.assigneeUserId?.trim() || null;
+    if (assigneeUserId && !employeeIds.has(assigneeUserId)) {
+      throw new Error("Исполнитель задачи должен быть сотрудником выбранного департамента");
+    }
+    const priorityRaw = assignment?.priority || TaskPriority.СРЕДНИЙ;
+    if (!TASK_PRIORITY_VALUES.has(priorityRaw)) {
+      throw new Error("Некорректный приоритет задачи");
+    }
+    const deadlineRaw = assignment?.deadline || null;
+    return {
+      key,
+      title,
+      description,
+      assigneeUserId,
+      deadline: deadlineRaw ? new Date(deadlineRaw) : null,
+      priority: priorityRaw as TaskPriority,
+    };
+  }
 
   const sectionPlans = selectedDepartments.map((department) => {
     const selection = parseDepartmentTaskSelection(
       formData.get(`deptData_${department.id}`) as string | null,
     );
     const checkedIds = new Set(selection.checkedTemplateItemIds);
+    const employeeIds = new Set(department.employees.map((e) => e.id));
 
-    const tasks: { title: string; description: string | null }[] = [];
+    const tasks: TaskPlan[] = [];
     for (const item of department.taskTemplateItems) {
       if (checkedIds.has(item.id)) {
-        tasks.push({ title: item.title, description: item.description });
+        tasks.push(
+          buildTaskPlan(item.id, item.title, item.description, selection.taskAssignments[item.id], employeeIds),
+        );
       }
     }
-    for (const title of selection.customTaskTitles) {
-      tasks.push({ title, description: null });
+    for (const custom of selection.customTasks) {
+      tasks.push(
+        buildTaskPlan(custom.key, custom.title, null, selection.taskAssignments[custom.key], employeeIds),
+      );
     }
 
-    return { departmentId: department.id, name: department.name, tasks };
+    return {
+      departmentId: department.id,
+      name: department.name,
+      contactManagerId: selection.contactManagerId,
+      tasks,
+    };
   });
 
-  const clientName = (formData.get("clientName") as string | null)?.trim() || null;
+  // Кому назначены задачи — нужны email/имя для писем после коммита, и
+  // сами id, чтобы найти-или-создать ProjectMember (см. ensureProjectMember).
+  const distinctAssigneeUserIds = Array.from(
+    new Set(
+      sectionPlans.flatMap((plan) => plan.tasks.map((task) => task.assigneeUserId).filter((id): id is string => id !== null)),
+    ),
+  );
+  const assigneeUsers =
+    distinctAssigneeUserIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: distinctAssigneeUserIds } },
+          select: { id: true, email: true, fullName: true },
+        })
+      : [];
+  const assigneeUserById = new Map(assigneeUsers.map((u) => [u.id, u]));
+
   const binIin = (formData.get("binIin") as string | null)?.trim() || null;
 
   const totalAmountRaw = (formData.get("totalAmount") as string | null)?.trim();
@@ -146,17 +266,27 @@ export async function createProjectAction(formData: FormData) {
     }
   }
 
-  // Заказчик и БИН относятся к договору — без стоимости договора его не
-  // из чего создать (Contract.totalAmount обязателен в схеме), поэтому
-  // без totalAmount эти поля были бы молча потеряны.
-  if ((clientName || binIin) && totalAmount === null) {
-    throw new Error("Чтобы указать заказчика или БИН, укажите и стоимость договора");
+  // БИН относится к договору — без стоимости договора его не из чего
+  // создать (Contract.totalAmount обязателен в схеме), поэтому без
+  // totalAmount это поле было бы молча потеряно. Заказчик (client) — теперь
+  // поле самого проекта (шаг 1), от totalAmount не зависит (см. план, D6).
+  if (binIin && totalAmount === null) {
+    throw new Error("Чтобы указать БИН, укажите и стоимость договора");
   }
 
   const creatorIsGip = gipUserId === session.user.id;
 
+  const assignedTaskEmails: {
+    to: string;
+    employeeName: string;
+    taskTitle: string;
+    deadline: Date | null;
+  }[] = [];
+
   await prisma.$transaction(async (tx) => {
-    const project = await tx.project.create({ data: { name } });
+    const project = await tx.project.create({
+      data: { name, client, location, startDate, endDate, description },
+    });
 
     const gipMember = await tx.projectMember.create({
       data: {
@@ -176,6 +306,20 @@ export async function createProjectAction(formData: FormData) {
           },
         });
 
+    // Шаг 5: каждый отдельно назначенный исполнитель должен стать участником
+    // проекта, чтобы Task.assigneeMemberId на него сослался (см. план, D8).
+    // Роль ИНЖЕНЕР только при реальном создании — если человек уже участник
+    // (например, сам ГИП или создатель), его роль не понижаем.
+    const memberIdByUserId = new Map<string, string>();
+    for (const userId of distinctAssigneeUserIds) {
+      const { member } = await ensureProjectMember(tx, {
+        projectId: project.id,
+        userId,
+        role: ProjectRole.ИНЖЕНЕР,
+      });
+      memberIdByUserId.set(userId, member.id);
+    }
+
     for (const [index, plan] of sectionPlans.entries()) {
       const section = await tx.section.create({
         data: {
@@ -183,17 +327,46 @@ export async function createProjectAction(formData: FormData) {
           departmentId: plan.departmentId,
           name: plan.name,
           orderIndex: index,
+          contactManagerId: plan.contactManagerId,
         },
       });
 
-      if (plan.tasks.length > 0) {
-        await tx.task.createMany({
-          data: plan.tasks.map((task) => ({
+      for (const taskPlan of plan.tasks) {
+        const assigneeMemberId = taskPlan.assigneeUserId
+          ? (memberIdByUserId.get(taskPlan.assigneeUserId) ?? null)
+          : null;
+
+        const task = await tx.task.create({
+          data: {
             sectionId: section.id,
-            title: task.title,
-            description: task.description,
-          })),
+            title: taskPlan.title,
+            description: taskPlan.description,
+            priority: taskPlan.priority,
+            deadline: taskPlan.deadline,
+            assigneeMemberId,
+            assignedByUserId: session.user.id,
+          },
         });
+
+        if (assigneeMemberId && taskPlan.assigneeUserId) {
+          await notifyTaskAssigned(tx, {
+            userId: taskPlan.assigneeUserId,
+            actorId: session.user.id,
+            taskId: task.id,
+            taskTitle: task.title,
+            projectName: name,
+          });
+
+          const assigneeUser = assigneeUserById.get(taskPlan.assigneeUserId);
+          if (assigneeUser) {
+            assignedTaskEmails.push({
+              to: assigneeUser.email,
+              employeeName: assigneeUser.fullName,
+              taskTitle: task.title,
+              deadline: taskPlan.deadline,
+            });
+          }
+        }
       }
     }
 
@@ -210,7 +383,7 @@ export async function createProjectAction(formData: FormData) {
           projectId: project.id,
           createdByMemberId: creatorMember.id,
           number: `ДОГ-${year}-${String(countThisYear + 1).padStart(3, "0")}`,
-          clientName: clientName ?? "Не указан",
+          clientName: client ?? "Не указан",
           totalAmount,
         },
       });
@@ -232,9 +405,20 @@ export async function createProjectAction(formData: FormData) {
     }
   });
 
-  // Письмо — уже после того, как проект реально создан и закоммичен;
-  // если Resend недоступен или упадёт, это не должно откатывать проект,
+  // Письма — уже после того, как проект реально создан и закоммичен;
+  // если почта недоступна или упадёт, это не должно откатывать проект,
   // поэтому не в транзакции и без throw наружу.
+  for (const emailPayload of assignedTaskEmails) {
+    sendTaskAssignedEmail({
+      to: emailPayload.to,
+      employeeName: emailPayload.employeeName,
+      taskTitle: emailPayload.taskTitle,
+      projectName: name,
+      deadline: emailPayload.deadline,
+    }).catch((error) => {
+      console.error("Не удалось отправить уведомление о назначении задачи", error);
+    });
+  }
   sendGipAssignedEmail({
     to: gipUser.email,
     employeeName: gipUser.fullName,

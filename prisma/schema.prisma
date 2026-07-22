@@ -72,6 +72,13 @@ model User {
   notifications           Notification[] @relation("NotificationRecipient")
   notificationsTriggered  Notification[] @relation("NotificationActor")
 
+  // Контактное лицо по департаменту на конкретном проекте (см. Section.contactManagerId) —
+  // отображение/маршрутизация уведомлений, НЕ источник прав (canManageProjectTasks и т.п.
+  // по-прежнему смотрят только на Department.managerId).
+  sectionsAsContactManager Section[] @relation("SectionContactManager")
+  // Кто поставил задачу — заполняется автоматически при создании, никогда не редактируется вручную.
+  tasksAssignedByMe        Task[]    @relation("TaskAssignedBy")
+
   @@map("users")
 }
 
@@ -121,6 +128,14 @@ model Project {
   // проект может быть начат в одном году, а закрыт в другом.
   completedAt DateTime?
 
+  // Поля мастера создания проекта (см. план, Phase 13) — все необязательны,
+  // у проектов, созданных до этой фазы, просто остаются пустыми.
+  client      String?
+  location    String?
+  startDate   DateTime?
+  endDate     DateTime?
+  description String?
+
   members     ProjectMember[]
   sections    Section[]
   contracts   Contract[]
@@ -154,6 +169,13 @@ model Section {
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
 
+  // Контакт по этому департаменту НА ЭТОМ проекте — по умолчанию совпадает
+  // с реальным руководителем департамента, но может быть переопределён при
+  // создании проекта (мастер, шаг 3). Это только контакт для отображения/
+  // уведомлений — Department.managerId (структура компании) не трогает.
+  contactManagerId String?
+  contactManager    User?   @relation("SectionContactManager", fields: [contactManagerId], references: [id])
+
   tasks     Task[]
   documents Document[]
   comments  Comment[]
@@ -184,6 +206,11 @@ model Task {
   description      String?
   assigneeMemberId String?
   assigneeMember   ProjectMember? @relation(fields: [assigneeMemberId], references: [id])
+  // Кто поставил задачу — заполняется автоматически (сессия создателя) при
+  // создании через мастер проекта или вручную в разделе; у задач, созданных
+  // до этой фазы, остаётся NULL (надёжного источника для бэкафилла нет).
+  assignedByUserId String?
+  assignedByUser   User?          @relation("TaskAssignedBy", fields: [assignedByUserId], references: [id])
   status           TaskStatus    @default(НОВАЯ)
   priority         TaskPriority  @default(СРЕДНИЙ)
   startDate        DateTime?     // для диаграммы Ганта

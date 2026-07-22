@@ -4,6 +4,7 @@ import { TaskStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DepartmentIcon } from "@/components/departments/department-icon";
 import { DeleteTaskDialog } from "@/app/(dashboard)/projects/[id]/delete-task-dialog";
 import { TaskCommentsDialog } from "@/app/(dashboard)/projects/[id]/task-comments-dialog";
 import {
@@ -98,25 +99,41 @@ export function TaskCard({
             {TASK_PRIORITY_LABELS[task.priority]}
           </Badge>
           {isOverdue ? <Badge variant="destructive">Просрочена</Badge> : null}
+          {task.department ? (
+            <span
+              className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white"
+              style={{ backgroundColor: task.department.color }}
+            >
+              <DepartmentIcon name={task.department.icon} className="size-3" />
+              {task.department.name}
+            </span>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-1">
-          <div className="flex min-w-0 items-center gap-2">
-            {task.assignee ? (
-              <>
-                <UserAvatar
-                  avatarUrl={task.assignee.avatarUrl}
-                  fullName={task.assignee.fullName}
-                  seed={task.assignee.userId}
-                  size="sm"
-                />
-                <span className="truncate text-xs text-muted-foreground">
-                  {task.assignee.fullName}
-                </span>
-              </>
-            ) : (
-              <span className="text-xs text-muted-foreground">Не назначена</span>
-            )}
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="flex min-w-0 items-center gap-2">
+              {task.assignee ? (
+                <>
+                  <UserAvatar
+                    avatarUrl={task.assignee.avatarUrl}
+                    fullName={task.assignee.fullName}
+                    seed={task.assignee.userId}
+                    size="sm"
+                  />
+                  <span className="truncate text-xs text-muted-foreground">
+                    {task.assignee.fullName}
+                  </span>
+                </>
+              ) : (
+                <span className="text-xs text-muted-foreground">Не назначена</span>
+              )}
+            </div>
+            {task.assignedBy ? (
+              <span className="truncate text-[11px] text-muted-foreground/70">
+                Назначил(а): {task.assignedBy.fullName}
+              </span>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {task.deadline ? (
