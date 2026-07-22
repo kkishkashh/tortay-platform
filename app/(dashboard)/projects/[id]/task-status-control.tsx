@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { Check } from "lucide-react";
 import { TaskStatus } from "@prisma/client";
 
@@ -24,7 +24,10 @@ const ALL_STATUSES = [
 ];
 
 // Менеджер/администратор: полный Select, статус можно двигать в любую
-// сторону (в т.ч. назад — "вернуть на доработку").
+// сторону (в т.ч. назад — "вернуть на доработку"). Оптимистичное
+// обновление (useOptimistic) — Select переключается сразу по клику, не
+// дожидаясь полного круга server action → revalidatePath → ре-рендер (см.
+// тот же приём и причину в components/dashboard/task-checklist.tsx).
 export function ManagerTaskStatusControl({
   taskId,
   status,
@@ -32,20 +35,22 @@ export function ManagerTaskStatusControl({
   taskId: string;
   status: TaskStatus;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
+  const [optimisticStatus, setOptimisticStatus] = useOptimistic(status);
 
   function handleValueChange(value: string | null) {
-    if (!value || value === status) return;
-    startTransition(() => {
-      updateTaskStatusAction(taskId, value as TaskStatus);
+    if (!value || value === optimisticStatus) return;
+    const nextStatus = value as TaskStatus;
+    startTransition(async () => {
+      setOptimisticStatus(nextStatus);
+      await updateTaskStatusAction(taskId, nextStatus);
     });
   }
 
   return (
     <Select
-      value={status}
+      value={optimisticStatus}
       onValueChange={handleValueChange}
-      disabled={isPending}
       items={ALL_STATUSES.map((option) => ({ value: option, label: TASK_STATUS_LABELS[option] }))}
     >
       <SelectTrigger size="sm">
@@ -69,6 +74,9 @@ export function ManagerTaskStatusControl({
 // дальше") — прошлые и будущие этапы не кликабельны, никакого выпадающего
 // списка, чтобы даже в интерфейсе не было возможности "перепрыгнуть" через
 // этап (сервер всё равно перепроверяет это в advanceTaskStatusAction).
+// Оптимистичное обновление — степпер сразу переходит на следующий этап по
+// клику, не дожидаясь полного круга server action → revalidatePath →
+// ре-рендер (см. тот же приём в components/dashboard/task-checklist.tsx).
 export function AssigneeTaskStatusControl({
   taskId,
   status,
@@ -76,15 +84,17 @@ export function AssigneeTaskStatusControl({
   taskId: string;
   status: TaskStatus;
 }) {
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const nextStatus = FORWARD_TRANSITIONS[status];
-  const currentIndex = ALL_STATUSES.indexOf(status);
+  const [optimisticStatus, setOptimisticStatus] = useOptimistic(status);
+  const nextStatus = FORWARD_TRANSITIONS[optimisticStatus];
+  const currentIndex = ALL_STATUSES.indexOf(optimisticStatus);
 
   function handleAdvance() {
     if (!nextStatus) return;
     setError(null);
     startTransition(async () => {
+      setOptimisticStatus(nextStatus);
       try {
         await advanceTaskStatusAction(taskId, nextStatus);
       } catch (submitError) {
@@ -106,7 +116,7 @@ export function AssigneeTaskStatusControl({
             <div key={step} className="flex flex-1 items-center last:flex-none">
               <button
                 type="button"
-                disabled={!isNext || isPending}
+                disabled={!isNext}
                 onClick={isNext ? handleAdvance : undefined}
                 title={isNext ? `Отметить выполненным этап «${TASK_STATUS_LABELS[step]}»` : TASK_STATUS_LABELS[step]}
                 className={cn(
