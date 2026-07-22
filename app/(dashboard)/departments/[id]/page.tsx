@@ -21,6 +21,7 @@ import { DeleteDepartmentDialog } from "./delete-department-dialog";
 import { EditDepartmentDialog } from "./edit-department-dialog";
 import { EmployeesTab } from "./employees-tab";
 import { ProjectsTab } from "./projects-tab";
+import { SettingsTab } from "./settings-tab";
 import { TaskStackTab } from "./task-stack-tab";
 
 export default async function DepartmentDetailPage({
@@ -98,6 +99,7 @@ export default async function DepartmentDetailPage({
             <TabsTrigger value="task-stack">Базовый набор задач</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>
+            {isAdmin ? <TabsTrigger value="settings">Настройки</TabsTrigger> : null}
           </TabsList>
 
           <TabsContent value="employees" className="mt-4">
@@ -122,6 +124,12 @@ export default async function DepartmentDetailPage({
           <TabsContent value="analytics" className="mt-4">
             <AnalyticsTab stats={analyticsStats} />
           </TabsContent>
+
+          {isAdmin ? (
+            <TabsContent value="settings" className="mt-4">
+              <SettingsTab department={department} />
+            </TabsContent>
+          ) : null}
         </Tabs>
       </div>
     </>

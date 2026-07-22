@@ -277,6 +277,50 @@ export async function deleteTaskStackItemAction(itemId: string) {
   revalidatePath(`/departments/${item.departmentId}`);
 }
 
+// Копия вставляется сразу после оригинала: сдвигаем orderIndex всех
+// последующих пунктов на 1 и вставляем копию на освободившееся место —
+// одной транзакцией, чтобы не оставить дыр/дублей при параллельном изменении.
+export async function duplicateTaskStackItemAction(itemId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const item = await prisma.departmentTaskTemplateItem.findUnique({
+    where: { id: itemId },
+    select: {
+      departmentId: true,
+      title: true,
+      description: true,
+      orderIndex: true,
+      department: { select: { id: true, managerId: true } },
+    },
+  });
+  if (!item) {
+    throw new Error("Пункт базового стека не найден");
+  }
+  if (!canManageTaskStack(session.user, item.department)) {
+    throw new Error("Недостаточно прав для редактирования базового стека задач");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.departmentTaskTemplateItem.updateMany({
+      where: { departmentId: item.departmentId, orderIndex: { gt: item.orderIndex } },
+      data: { orderIndex: { increment: 1 } },
+    });
+    await tx.departmentTaskTemplateItem.create({
+      data: {
+        departmentId: item.departmentId,
+        title: item.title,
+        description: item.description,
+        orderIndex: item.orderIndex + 1,
+      },
+    });
+  });
+
+  revalidatePath(`/departments/${item.departmentId}`);
+}
+
 // orderedItemIds — полный новый порядок id пунктов этого департамента;
 // присваиваем orderIndex по позиции в массиве. Пунктов в стеке всегда
 // немного (десятки, не тысячи), поэтому обычный цикл обновлений в одной

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import {
   createTaskStackItemAction,
   deleteTaskStackItemAction,
+  duplicateTaskStackItemAction,
   reorderTaskStackItemsAction,
   updateTaskStackItemAction,
 } from "@/lib/departments/actions";
@@ -49,6 +50,17 @@ function TaskStackRow({
         await deleteTaskStackItemAction(item.id);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Не удалось удалить");
+      }
+    });
+  }
+
+  function handleDuplicate() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await duplicateTaskStackItemAction(item.id);
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Не удалось дублировать");
       }
     });
   }
@@ -106,6 +118,16 @@ function TaskStackRow({
           </Button>
           <Button type="button" variant="ghost" size="icon-sm" onClick={() => setEditing(true)} title="Редактировать">
             <Pencil className="size-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleDuplicate}
+            disabled={isPending}
+            title="Дублировать"
+          >
+            <Copy className="size-3.5" />
           </Button>
           <Button
             type="button"
