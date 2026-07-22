@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { Prisma } from "@prisma/client";
+import { Prisma, TaskStackCategory } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { sendDepartmentAssignedEmail } from "@/lib/email/send";
@@ -232,18 +232,31 @@ export async function createTaskStackItemAction(departmentId: string, formData: 
   if (!title) {
     throw new Error("Название задачи обязательно");
   }
+  const categoryRaw = formData.get("category") as string | null;
+  const category =
+    categoryRaw === TaskStackCategory.НЕСТАНДАРТНЫЙ
+      ? TaskStackCategory.НЕСТАНДАРТНЫЙ
+      : TaskStackCategory.БАЗОВЫЙ;
 
   // parentItemId: null — считаем максимум только среди пунктов ВЕРХНЕГО
   // уровня, иначе высокий orderIndex у чьих-то подпунктов сбил бы порядок
   // top-level пунктов (см. createTaskStackSubItemAction — у подпунктов
-  // отдельное пространство orderIndex, скоуп по parentItemId).
+  // отдельное пространство orderIndex, скоуп по parentItemId). category —
+  // у базового и нестандартного стека тоже своё пространство orderIndex,
+  // иначе добавление в один список сдвигало бы нумерацию другого.
   const maxOrder = await prisma.departmentTaskTemplateItem.aggregate({
-    where: { departmentId, parentItemId: null },
+    where: { departmentId, parentItemId: null, category },
     _max: { orderIndex: true },
   });
 
   await prisma.departmentTaskTemplateItem.create({
-    data: { departmentId, title, description, orderIndex: (maxOrder._max.orderIndex ?? -1) + 1 },
+    data: {
+      departmentId,
+      title,
+      description,
+      category,
+      orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
+    },
   });
 
   revalidatePath(`/departments/${departmentId}`);
@@ -263,6 +276,7 @@ export async function createTaskStackSubItemAction(parentItemId: string, formDat
     select: {
       departmentId: true,
       parentItemId: true,
+      category: true,
       department: { select: { id: true, managerId: true } },
     },
   });
@@ -287,12 +301,15 @@ export async function createTaskStackSubItemAction(parentItemId: string, formDat
     _max: { orderIndex: true },
   });
 
+  // Категория подпункта всегда наследуется от родителя — свой выбор
+  // категории пользователю здесь не нужен.
   await prisma.departmentTaskTemplateItem.create({
     data: {
       departmentId: parentItem.departmentId,
       parentItemId,
       title,
       description,
+      category: parentItem.category,
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
     },
   });
@@ -369,6 +386,7 @@ export async function duplicateTaskStackItemAction(itemId: string) {
       parentItemId: true,
       title: true,
       description: true,
+      category: true,
       orderIndex: true,
       department: { select: { id: true, managerId: true } },
       subItems: {
@@ -385,12 +403,14 @@ export async function duplicateTaskStackItemAction(itemId: string) {
   }
 
   await prisma.$transaction(async (tx) => {
-    // Скоуп по parentItemId, а не только departmentId — иначе дублирование
-    // подпункта сдвинуло бы порядок пунктов верхнего уровня (и наоборот).
+    // Скоуп по parentItemId и category, а не только departmentId — иначе
+    // дублирование подпункта сдвинуло бы порядок пунктов верхнего уровня
+    // (и наоборот), а дублирование в одной категории — порядок другой.
     await tx.departmentTaskTemplateItem.updateMany({
       where: {
         departmentId: item.departmentId,
         parentItemId: item.parentItemId,
+        category: item.category,
         orderIndex: { gt: item.orderIndex },
       },
       data: { orderIndex: { increment: 1 } },
@@ -401,6 +421,7 @@ export async function duplicateTaskStackItemAction(itemId: string) {
         parentItemId: item.parentItemId,
         title: item.title,
         description: item.description,
+        category: item.category,
         orderIndex: item.orderIndex + 1,
       },
     });
@@ -414,6 +435,7 @@ export async function duplicateTaskStackItemAction(itemId: string) {
           parentItemId: duplicate.id,
           title: sub.title,
           description: sub.description,
+          category: item.category,
           orderIndex: index,
         })),
       });

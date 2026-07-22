@@ -1,4 +1,4 @@
-import { ProjectStatus, SystemRole, TaskStatus, UserType } from "@prisma/client";
+import { ProjectStatus, SystemRole, TaskStackCategory, TaskStatus, UserType } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { canManageDepartments } from "@/lib/departments/permissions";
@@ -87,12 +87,16 @@ export type DepartmentTaskStackSubItem = {
 };
 
 export type DepartmentTaskStackItem = DepartmentTaskStackSubItem & {
+  category: TaskStackCategory;
   subItems: DepartmentTaskStackSubItem[];
 };
 
 // Только пункты верхнего уровня (parentItemId: null) — их подпункты
-// вложены в subItems. Глубина ограничена 2 уровнями (см. план), поэтому
-// subItems сами дальше не разворачиваются.
+// вложены в subItems (наследуют category родителя, отдельно не отдаём).
+// Глубина ограничена 2 уровнями (см. план), поэтому subItems сами дальше
+// не разворачиваются. Базовый и нестандартный стек возвращаются вместе,
+// одним списком с полем category — группировка на UI (см.
+// app/(dashboard)/departments/[id]/task-stack-tab.tsx).
 export async function getDepartmentTaskStack(
   departmentId: string,
 ): Promise<DepartmentTaskStackItem[]> {
@@ -102,6 +106,7 @@ export async function getDepartmentTaskStack(
       id: true,
       title: true,
       description: true,
+      category: true,
       orderIndex: true,
       subItems: {
         select: { id: true, title: true, description: true, orderIndex: true },
@@ -191,6 +196,7 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
           id: true,
           title: true,
           description: true,
+          category: true,
           subItems: {
             select: { id: true, title: true, description: true },
             orderBy: { orderIndex: "asc" },

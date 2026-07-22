@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
-import { TaskPriority } from "@prisma/client";
+import { TaskPriority, TaskStackCategory } from "@prisma/client";
 
 import { createProjectAction } from "@/lib/projects/actions";
 import { Button } from "@/components/ui/button";
@@ -51,6 +51,7 @@ type TaskTemplateItem = {
   id: string;
   title: string;
   description: string | null;
+  category: TaskStackCategory;
   subItems: TaskTemplateSubItem[];
 };
 
@@ -126,6 +127,9 @@ function StepDepartmentTaskPicker({
   onChange: (next: DepartmentSelectionState) => void;
 }) {
   const [customTaskDraft, setCustomTaskDraft] = useState("");
+  // Нестандартный стек свёрнут по умолчанию — те же задачи по структуре,
+  // но встречаются реже, не должны загромождать основной список (см. план).
+  const [showNonStandard, setShowNonStandard] = useState(false);
 
   // Отметить пункт — заодно по умолчанию отмечает ВСЕ его подпункты (чек-лист
   // войдёт в задачу целиком); снять пункт — снимает и его подпункты.
@@ -168,6 +172,40 @@ function StepDepartmentTaskPicker({
     });
   }
 
+  function renderItemRow(item: TaskTemplateItem) {
+    return (
+      <div key={item.id}>
+        <label className="flex items-center gap-2 text-sm">
+          <Checkbox
+            checked={selection.itemIds.has(item.id)}
+            onCheckedChange={() => toggleItem(item)}
+          />
+          {item.title}
+        </label>
+        {selection.itemIds.has(item.id) && item.subItems.length > 0 ? (
+          <div className="mt-1 ml-6 space-y-1 border-l pl-3">
+            {item.subItems.map((sub) => (
+              <label key={sub.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Checkbox
+                  checked={selection.subItemIds.has(sub.id)}
+                  onCheckedChange={() => toggleSubItem(sub.id)}
+                />
+                {sub.title}
+              </label>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  const baseItems = department.taskTemplateItems.filter(
+    (item) => item.category === TaskStackCategory.БАЗОВЫЙ,
+  );
+  const nonStandardItems = department.taskTemplateItems.filter(
+    (item) => item.category === TaskStackCategory.НЕСТАНДАРТНЫЙ,
+  );
+
   return (
     <div className="overflow-hidden rounded-lg border">
       <div className="flex items-center gap-3 border-b bg-muted/30 p-3">
@@ -181,38 +219,29 @@ function StepDepartmentTaskPicker({
       </div>
 
       <div className="space-y-3 p-3">
-        {department.taskTemplateItems.length === 0 ? (
+        {baseItems.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             В базовом стеке этого департамента пока нет задач.
           </p>
         ) : (
-          <div className="space-y-1.5">
-            {department.taskTemplateItems.map((item) => (
-              <div key={item.id}>
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={selection.itemIds.has(item.id)}
-                    onCheckedChange={() => toggleItem(item)}
-                  />
-                  {item.title}
-                </label>
-                {selection.itemIds.has(item.id) && item.subItems.length > 0 ? (
-                  <div className="mt-1 ml-6 space-y-1 border-l pl-3">
-                    {item.subItems.map((sub) => (
-                      <label key={sub.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Checkbox
-                          checked={selection.subItemIds.has(sub.id)}
-                          onCheckedChange={() => toggleSubItem(sub.id)}
-                        />
-                        {sub.title}
-                      </label>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
+          <div className="space-y-1.5">{baseItems.map((item) => renderItemRow(item))}</div>
         )}
+
+        {nonStandardItems.length > 0 ? (
+          <div className="border-t pt-2">
+            <button
+              type="button"
+              onClick={() => setShowNonStandard((v) => !v)}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown className={cn("size-3.5 transition-transform", showNonStandard && "rotate-180")} />
+              Нестандартный стек ({nonStandardItems.length})
+            </button>
+            {showNonStandard ? (
+              <div className="mt-2 space-y-1.5">{nonStandardItems.map((item) => renderItemRow(item))}</div>
+            ) : null}
+          </div>
+        ) : null}
 
         {selection.customTasks.length > 0 ? (
           <div className="flex flex-wrap gap-1.5">

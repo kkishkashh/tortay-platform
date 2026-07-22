@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
+import { TaskStackCategory } from "@prisma/client";
 
 import {
   createTaskStackItemAction,
@@ -178,7 +179,9 @@ function TaskStackRow({
 
 // Форма добавления подпункта (чек-листа) под КОНКРЕТНЫМ пунктом верхнего
 // уровня — своё локальное состояние показа/скрытия, отдельное от формы
-// добавления самих пунктов верхнего уровня.
+// добавления самих пунктов верхнего уровня. Категория подпункта наследуется
+// от родителя на сервере (см. createTaskStackSubItemAction) — здесь выбор
+// категории не нужен.
 function AddSubItemForm({ parentItemId }: { parentItemId: string }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -222,32 +225,30 @@ function AddSubItemForm({ parentItemId }: { parentItemId: string }) {
   );
 }
 
-export function TaskStackTab({
+// Один список (базовый ИЛИ нестандартный стек) со своей формой добавления —
+// у каждой категории отдельное пространство orderIndex на сервере (см.
+// lib/departments/actions.ts), поэтому move/reorder внутри этого компонента
+// всегда оперирует только своим (уже отфильтрованным по category) списком.
+function TaskStackList({
   departmentId,
   items,
   canManage,
+  category,
+  expandedIds,
+  onToggleExpand,
+  emptyLabel,
 }: {
   departmentId: string;
   items: DepartmentTaskStackItem[];
   canManage: boolean;
+  category: TaskStackCategory;
+  expandedIds: Set<string>;
+  onToggleExpand: (itemId: string) => void;
+  emptyLabel: string;
 }) {
   const [isPending, startTransition] = useTransition();
   const [addError, setAddError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  // Подпункты скрыты, пока не кликнешь по основному пункту (см. план).
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-
-  function toggleExpand(itemId: string) {
-    setExpandedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(itemId)) {
-        next.delete(itemId);
-      } else {
-        next.add(itemId);
-      }
-      return next;
-    });
-  }
 
   function handleAdd(formData: FormData) {
     setAddError(null);
@@ -291,13 +292,9 @@ export function TaskStackTab({
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Это шаблон — при создании проекта менеджер отмечает галочками, какие пункты стать реальными задачами (вместе с их подпунктами-чек-листом). Изменения здесь не затрагивают уже созданные проекты.
-      </p>
-
+    <div className="space-y-3">
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">В базовом стеке пока нет задач.</p>
+        <p className="text-sm text-muted-foreground">{emptyLabel}</p>
       ) : (
         <div className="space-y-3">
           {items.map((item, index) => {
@@ -312,7 +309,7 @@ export function TaskStackTab({
                   onMove={handleMove}
                   subItemCount={item.subItems.length}
                   expanded={isExpanded}
-                  onToggleExpand={() => toggleExpand(item.id)}
+                  onToggleExpand={() => onToggleExpand(item.id)}
                 />
 
                 {isExpanded ? (
@@ -339,6 +336,7 @@ export function TaskStackTab({
       {canManage ? (
         showAddForm ? (
           <form action={handleAdd} className="space-y-2 rounded-lg border border-dashed p-3">
+            <input type="hidden" name="category" value={category} />
             <Input name="title" placeholder="Название задачи" required autoFocus />
             <Input name="description" placeholder="Описание (необязательно)" />
             {addError ? <p className="text-sm text-destructive">{addError}</p> : null}
@@ -358,6 +356,72 @@ export function TaskStackTab({
           </Button>
         )
       ) : null}
+    </div>
+  );
+}
+
+export function TaskStackTab({
+  departmentId,
+  items,
+  canManage,
+}: {
+  departmentId: string;
+  items: DepartmentTaskStackItem[];
+  canManage: boolean;
+}) {
+  // Подпункты скрыты, пока не кликнешь по основному пункту (см. план) —
+  // одно общее множество id для обеих категорий сразу, id глобально уникальны.
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpand(itemId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }
+
+  const baseItems = items.filter((item) => item.category === TaskStackCategory.БАЗОВЫЙ);
+  const nonStandardItems = items.filter((item) => item.category === TaskStackCategory.НЕСТАНДАРТНЫЙ);
+
+  return (
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Базовый стек — при создании проекта менеджер отмечает галочками, какие пункты стать реальными задачами (вместе с их подпунктами-чек-листом). Изменения здесь не затрагивают уже созданные проекты.
+        </p>
+        <TaskStackList
+          departmentId={departmentId}
+          items={baseItems}
+          canManage={canManage}
+          category={TaskStackCategory.БАЗОВЫЙ}
+          expandedIds={expandedIds}
+          onToggleExpand={toggleExpand}
+          emptyLabel="В базовом стеке пока нет задач."
+        />
+      </div>
+
+      <div className="space-y-4 border-t pt-6">
+        <div>
+          <p className="text-sm font-medium">Нестандартный стек</p>
+          <p className="text-sm text-muted-foreground">
+            Те же задачи по структуре, но встречаются реже — тоже доступны при создании проекта, отдельным списком от базового стека.
+          </p>
+        </div>
+        <TaskStackList
+          departmentId={departmentId}
+          items={nonStandardItems}
+          canManage={canManage}
+          category={TaskStackCategory.НЕСТАНДАРТНЫЙ}
+          expandedIds={expandedIds}
+          onToggleExpand={toggleExpand}
+          emptyLabel="В нестандартном стеке пока нет задач."
+        />
+      </div>
     </div>
   );
 }

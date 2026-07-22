@@ -314,18 +314,28 @@ model Department {
   @@map("departments")
 }
 
-// Базовый стек задач — переиспользуемый шаблон, НЕ привязан ни к одному
-// проекту. При создании проекта менеджер выбирает галочками, какие пункты
-// стать реальными Task в конкретном разделе — сам шаблон при этом не
-// меняется (см. бриф, раздел "Custom Tasks").
+// Базовый стек — стандартные задачи департамента; нестандартный — те же
+// по структуре, но встречаются реже (спецработы, нетипичные случаи).
+// Обе категории живут в одной таблице (одинаковая форма: подпункты,
+// переупорядочивание, дублирование), отличаются только этим полем.
+enum TaskStackCategory {
+  БАЗОВЫЙ
+  НЕСТАНДАРТНЫЙ
+}
+
+// Базовый/нестандартный стек задач — переиспользуемый шаблон, НЕ привязан
+// ни к одному проекту. При создании проекта менеджер выбирает галочками,
+// какие пункты стать реальными Task в конкретном разделе — сам шаблон при
+// этом не меняется (см. бриф, раздел "Custom Tasks").
 model DepartmentTaskTemplateItem {
-  id           String     @id @default(uuid())
+  id           String            @id @default(uuid())
   departmentId String
-  department   Department @relation(fields: [departmentId], references: [id])
+  department   Department        @relation(fields: [departmentId], references: [id])
   title        String
   description  String?
-  orderIndex   Int        @default(0)
-  createdAt    DateTime   @default(now())
+  category     TaskStackCategory @default(БАЗОВЫЙ)
+  orderIndex   Int               @default(0)
+  createdAt    DateTime          @default(now())
 
   // Подпункты пункта стека (напр. "АР Альбом" → его подразделы) — только
   // 2 уровня: у подпункта своих подпунктов не бывает (проверяется в коде,
