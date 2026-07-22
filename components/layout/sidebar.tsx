@@ -36,9 +36,10 @@ type NavItem = {
   icon: typeof LayoutDashboard;
   // "all" — виден всем; "admin_or_manager" — админу и руководителям
   // департаментов (напр. Департаменты — руководителю нужно попасть в свой
-  // же департамент); "admin" — только администратору (финансовая/
-  // операционная зона, см. lib/projects/permissions.ts).
-  visibility?: "all" | "admin_or_manager" | "admin";
+  // же департамент); "admin" — только администратору; "admin_or_finance" —
+  // администратору и руководителю Административного департамента
+  // (аутсорсеры/договоры, см. canManageFinance в lib/projects/permissions.ts).
+  visibility?: "all" | "admin_or_manager" | "admin" | "admin_or_finance";
 };
 
 type NavGroup = {
@@ -63,18 +64,19 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/departments", label: "Департаменты", icon: Building2, visibility: "admin_or_manager" },
       { href: "/employees", label: "Сотрудники", icon: Users },
       { href: "/managers", label: "Руководители", icon: UserCog, visibility: "admin" },
-      { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin" },
+      { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin_or_finance" },
     ],
   },
   {
     label: "Финансы",
-    items: [{ href: "/contracts", label: "Договоры", icon: FileText, visibility: "admin" }],
+    items: [{ href: "/contracts", label: "Договоры", icon: FileText, visibility: "admin_or_finance" }],
   },
 ];
 
-function isNavItemVisible(item: NavItem, roleTier: RoleTier) {
+function isNavItemVisible(item: NavItem, roleTier: RoleTier, canManageFinance: boolean) {
   if (!item.visibility || item.visibility === "all") return true;
   if (item.visibility === "admin") return roleTier === "admin";
+  if (item.visibility === "admin_or_finance") return roleTier === "admin" || canManageFinance;
   return roleTier === "admin" || roleTier === "department_manager";
 }
 
@@ -84,6 +86,7 @@ type SidebarProps = {
   fullName: string;
   systemRoleLabel: string;
   roleTier: RoleTier;
+  canManageFinance: boolean;
   onSignOut: () => Promise<void>;
   notifications: NotificationListItem[];
   unreadNotificationCount: number;
@@ -94,6 +97,7 @@ export function Sidebar({
   fullName,
   systemRoleLabel,
   roleTier,
+  canManageFinance,
   onSignOut,
   notifications,
   unreadNotificationCount,
@@ -125,7 +129,7 @@ export function Sidebar({
 
   const navGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => isNavItemVisible(item, roleTier)),
+    items: group.items.filter((item) => isNavItemVisible(item, roleTier, canManageFinance)),
   })).filter((group) => group.items.length > 0);
 
   return (

@@ -23,9 +23,12 @@ function toDateInputValue(date: Date | null) {
 }
 
 // ФИО/должность/дата рождения — доступны администратору и руководителю
-// департамента этого сотрудника. Оклад и системная роль — ЗАВЕДОМО только
-// администратору (isAdmin=false скрывает эти два поля; сервер тоже их
-// игнорирует для не-админов, см. lib/employees/actions.ts).
+// департамента этого сотрудника. Оклад — администратору и руководителю
+// Административного департамента (canEditSalary, финансово-кадровая зона,
+// см. lib/projects/permissions.ts::canManageFinance). Системная роль — это
+// смена привилегий, ЗАВЕДОМО только администратору (canEditSystemRole),
+// финансовому руководителю НЕ открываем; сервер тоже разделяет эти два
+// поля, см. lib/employees/actions.ts.
 export function DetailsForm({
   userId,
   fullName,
@@ -33,7 +36,8 @@ export function DetailsForm({
   birthDate,
   salary,
   systemRole,
-  isAdmin,
+  canEditSalary,
+  canEditSystemRole,
 }: {
   userId: string;
   fullName: string;
@@ -41,7 +45,8 @@ export function DetailsForm({
   birthDate: Date | null;
   salary: number | null;
   systemRole: SystemRole;
-  isAdmin: boolean;
+  canEditSalary: boolean;
+  canEditSystemRole: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +109,7 @@ export function DetailsForm({
           />
         </div>
 
-        {isAdmin ? (
+        {canEditSalary ? (
           <div className="space-y-1.5">
             <Label htmlFor="details-salary">Оклад, ₸</Label>
             <Input
@@ -118,7 +123,7 @@ export function DetailsForm({
           </div>
         ) : null}
 
-        {isAdmin ? (
+        {canEditSystemRole ? (
           <div className="space-y-1.5">
             <Label htmlFor="details-systemRole">Системная роль</Label>
             <Select

@@ -2,10 +2,11 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { Prisma, SystemRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { canManageFinance } from "@/lib/projects/permissions";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,11 +17,12 @@ function isValidKazakhstanPhone(phone: string) {
   return /^7\d{10}$/.test(digits);
 }
 
-// Добавлять подрядчиков может только РУКОВОДИТЕЛЬ — та же зона
-// ответственности, что и за сотрудников (см. createEmployeeAction).
+// Добавлять подрядчиков может руководитель компании либо руководитель
+// Административного департамента (см. lib/projects/permissions.ts,
+// canManageFinance).
 export async function createOutsourcerAction(formData: FormData) {
   const session = await auth();
-  if (session?.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+  if (!session?.user || !(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав");
   }
 
@@ -61,7 +63,7 @@ export async function createOutsourcerAction(formData: FormData) {
 // таблицы (см. schema.prisma), поэтому удаление простое, без каскада.
 export async function deleteOutsourcerAction(id: string) {
   const session = await auth();
-  if (session?.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+  if (!session?.user || !(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав");
   }
 

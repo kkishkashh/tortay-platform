@@ -9,6 +9,7 @@ import {
   getNotificationsForCurrentUser,
   getUnreadNotificationCount,
 } from "@/lib/notifications/queries";
+import { canManageFinance } from "@/lib/projects/permissions";
 
 export default async function DashboardLayout({
   children,
@@ -23,7 +24,7 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const [notifications, unreadNotificationCount, roleTier, profile] = await Promise.all([
+  const [notifications, unreadNotificationCount, roleTier, profile, hasFinanceAccess] = await Promise.all([
     getNotificationsForCurrentUser(10),
     getUnreadNotificationCount(),
     getCurrentUserRoleTier(session.user),
@@ -31,6 +32,7 @@ export default async function DashboardLayout({
     // например, аватар оставался бы старым до следующего входа
     // (see plan D12: сессия/JWT не обновляются на лету).
     getEmployeeProfile(session.user.id),
+    canManageFinance(session.user),
   ]);
 
   return (
@@ -39,6 +41,7 @@ export default async function DashboardLayout({
         fullName={session.user.name ?? session.user.email ?? ""}
         systemRoleLabel={session.user.systemRole}
         roleTier={roleTier}
+        canManageFinance={hasFinanceAccess}
         onSignOut={signOutAction}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}

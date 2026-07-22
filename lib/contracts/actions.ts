@@ -5,7 +5,7 @@ import { AvrStage, ContractStatus, PaymentStatus, PaymentType, Prisma, ProjectRo
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { canManageOperations } from "@/lib/projects/permissions";
+import { canManageFinance } from "@/lib/projects/permissions";
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
@@ -17,14 +17,15 @@ async function getPayment(paymentId: string) {
   return payment;
 }
 
-// Право на управление платежами/договором — операционная часть, только
-// РУКОВОДИТЕЛЬ (см. lib/projects/permissions.ts).
+// Право на управление платежами/договором — руководитель компании либо
+// руководитель Административного департамента (canManageFinance, см.
+// lib/projects/permissions.ts).
 export async function setPaymentDueDateAction(paymentId: string, dueDate: string) {
   const session = await auth();
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для изменения срока платежа");
   }
 
@@ -51,7 +52,7 @@ export async function updatePaymentAmountAction(paymentId: string, amountRaw: st
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для изменения суммы платежа");
   }
 
@@ -76,7 +77,7 @@ export async function togglePaymentPaidAction(paymentId: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для отметки об оплате");
   }
 
@@ -108,7 +109,7 @@ export async function deleteContractAction(contractId: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для удаления договора");
   }
 
@@ -137,7 +138,7 @@ export async function updateContractStatusAction(contractId: string, status: Con
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для изменения статуса договора");
   }
 
@@ -158,7 +159,7 @@ export async function updateAvrStageAction(contractId: string, avrStage: AvrStag
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для изменения статуса АВР");
   }
 
@@ -201,7 +202,7 @@ export async function createStandaloneContractAction(formData: FormData) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  if (!(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав для создания договора");
   }
 

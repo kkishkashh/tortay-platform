@@ -1,7 +1,8 @@
-import { AvrStage, ContractStatus, PaymentStatus, PaymentType, SystemRole } from "@prisma/client";
+import { AvrStage, ContractStatus, PaymentStatus, PaymentType } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { canManageFinance } from "@/lib/projects/permissions";
 
 export type ContractPayment = {
   id: string;
@@ -31,8 +32,11 @@ export type ContractListItem = {
   } | null;
 };
 
-// Та же зона видимости, что и у списка проектов: РУКОВОДИТЕЛЬ видит все
-// договоры компании, СОТРУДНИК — только по проектам, где сам участник.
+// Договоры — финансово-кадровая зона: руководитель компании и руководитель
+// Административного департамента (canManageFinance) видят все договоры
+// компании, остальные — только по проектам, где сами участники (на случай,
+// если сюда попадёт кто-то за пределами страницы /contracts, которая и так
+// закрыта тем же правом).
 // Реквизиты подтягиваются сразу вместе со списком (не отдельным запросом
 // при открытии карточки) — датасет для внутреннего инструмента небольшой.
 export async function getContractsForCurrentUser(): Promise<ContractListItem[]> {
@@ -41,10 +45,10 @@ export async function getContractsForCurrentUser(): Promise<ContractListItem[]> 
     return [];
   }
 
-  const isHead = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const seesAll = await canManageFinance(session.user);
 
   const contracts = await prisma.contract.findMany({
-    where: isHead
+    where: seesAll
       ? undefined
       : { project: { members: { some: { userId: session.user.id } } } },
     include: {
@@ -95,10 +99,10 @@ export async function getProjectsForContractSelect() {
   const session = await auth();
   if (!session?.user) return [];
 
-  const isHead = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const seesAll = await canManageFinance(session.user);
 
   return prisma.project.findMany({
-    where: isHead ? undefined : { members: { some: { userId: session.user.id } } },
+    where: seesAll ? undefined : { members: { some: { userId: session.user.id } } },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

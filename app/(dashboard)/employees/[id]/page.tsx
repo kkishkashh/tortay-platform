@@ -12,6 +12,7 @@ import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getProjectMembersForProjects } from "@/lib/projects/queries";
+import { canManageFinance } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForUser } from "@/lib/tasks/queries";
@@ -50,8 +51,7 @@ export default async function EmployeeProfilePage({
 
   // Руководитель департамента получает те же права здесь, что и
   // администратор, но только для сотрудников СВОЕГО департамента (см.
-  // план: "полный контроль над своим департаментом"). Оклад и системная
-  // роль (DetailsForm's isAdmin prop) остаются заведомо только у admin.
+  // план: "полный контроль над своим департаментом").
   let isDeptManagerOfEmployee = false;
   if (!isSelf && !isHead && session?.user && employee.homeDepartmentId) {
     const managed = await prisma.department.findFirst({
@@ -61,15 +61,28 @@ export default async function EmployeeProfilePage({
     isDeptManagerOfEmployee = !!managed;
   }
 
+  // Руководитель Административного департамента — финансово-кадровая зона
+  // компании целиком (см. canManageFinance): ему нужен доступ к кадровым
+  // данным ЛЮБОГО сотрудника, а не только своего департамента, отсюда
+  // отдельная (не через isDeptManagerOfEmployee) проверка.
+  const isFinanceManager = !isSelf && !isHead && session?.user
+    ? await canManageFinance(session.user)
+    : false;
+
   // Личный кабинет — только свой, или (для админа/руководителя его
-  // департамента) чужой.
-  if (!isSelf && !isHead && !isDeptManagerOfEmployee) {
+  // департамента/финансового руководителя) чужой.
+  if (!isSelf && !isHead && !isDeptManagerOfEmployee && !isFinanceManager) {
     redirect("/employees");
   }
 
   const canManage = isHead || isDeptManagerOfEmployee;
   const canEditContact = isSelf || canManage;
-  const canEditDetails = canManage;
+  // Оклад и системная роль — отдельные, более узкие права (см.
+  // DetailsForm): canEditSalary открыт ещё и финансовому руководителю,
+  // canEditSystemRole — смена привилегий, заведомо только у isHead.
+  const canEditDetails = canManage || isFinanceManager;
+  const canEditSalary = isHead || isFinanceManager;
+  const canEditSystemRole = isHead;
   const workloadMeta = WORKLOAD_META[employee.workload];
   const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
 
@@ -232,7 +245,8 @@ export default async function EmployeeProfilePage({
                     birthDate={employee.birthDate}
                     salary={employee.salary}
                     systemRole={employee.systemRole}
-                    isAdmin={isHead}
+                    canEditSalary={canEditSalary}
+                    canEditSystemRole={canEditSystemRole}
                   />
                 </CardContent>
               </Card>

@@ -8,17 +8,19 @@ import {
   getProjectsForContractSelect,
   suggestContractNumber,
 } from "@/lib/contracts/queries";
-import { canManageOperations } from "@/lib/projects/permissions";
+import { canManageFinance } from "@/lib/projects/permissions";
 import { formatTodayLabel } from "@/lib/utils";
 
 import { ContractsTable } from "./contracts-table";
 import { NewContractDialog } from "./new-contract-dialog";
 
-// Финансовая операционка — видна только руководителю (сайдбар пункт
-// тоже скрывает, это подстраховка на случай прямого перехода по ссылке).
+// Финансово-кадровая зона — видна руководителю компании и руководителю
+// Административного департамента (см. lib/projects/permissions.ts,
+// canManageFinance). Сайдбар пункт тоже скрывает для остальных, это
+// подстраховка на случай прямого перехода по ссылке.
 export default async function ContractsPage() {
   const session = await auth();
-  if (!session?.user || !canManageOperations(session.user)) {
+  if (!session?.user || !(await canManageFinance(session.user))) {
     redirect("/");
   }
 

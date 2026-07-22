@@ -10,6 +10,7 @@ import { auth } from "@/auth";
 import { sendEmployeeCreatedEmail, sendPasswordResetEmail } from "@/lib/email/send";
 import { notifyEmployeeCreated, notifyPasswordReset } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
+import { canManageFinance } from "@/lib/projects/permissions";
 
 // Полный контроль над своим департаментом (см. план): руководитель
 // департамента может создавать сотрудников, но только в СВОЁМ департаменте,
@@ -257,11 +258,13 @@ export async function updateEmployeeContactAction(formData: FormData) {
   revalidatePath("/employees");
 }
 
-// ФИО/должность/дата рождения — редактирует администратор или руководитель
-// департамента этого сотрудника (даже в собственном кабинете сотрудник их
-// не трогает). Оклад и системная роль — ЗАВЕДОМО только администратор:
-// руководитель департамента не должен ни видеть чужую зарплату через эту
-// форму, ни тем более выдать кому-то полный админский доступ.
+// ФИО/должность/дата рождения — редактирует администратор, руководитель
+// департамента этого сотрудника, или руководитель Административного
+// департамента (canManageFinance — финансово-кадровая зона компании
+// целиком, см. lib/projects/permissions.ts). Системная роль — смена
+// привилегий, ЗАВЕДОМО только администратор. Оклад — администратор и
+// финансовый руководитель (canEditSalary), но не обычный руководитель
+// департамента — он чужую зарплату через эту форму не видит.
 export async function updateEmployeeDetailsAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) {
@@ -272,11 +275,13 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
   if (!userId) {
     throw new Error("Не указан сотрудник");
   }
-  if (!(await canActOnEmployee(session.user, userId))) {
-    throw new Error("Недостаточно прав");
-  }
 
   const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isFinanceManager = await canManageFinance(session.user);
+
+  if (!(await canActOnEmployee(session.user, userId)) && !isFinanceManager) {
+    throw new Error("Недостаточно прав");
+  }
 
   const fullName = (formData.get("fullName") as string | null)?.trim();
   const position = (formData.get("position") as string | null)?.trim() || null;
@@ -289,7 +294,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
 
   let salary: number | null | undefined = undefined;
   let systemRole: SystemRole | undefined = undefined;
-  if (isAdmin) {
+  if (isAdmin || isFinanceManager) {
     const salaryRaw = (formData.get("salary") as string | null)?.trim();
     salary = null;
     if (salaryRaw) {
@@ -298,6 +303,8 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
         throw new Error("Оклад должен быть положительным числом");
       }
     }
+  }
+  if (isAdmin) {
     systemRole = (formData.get("systemRole") as SystemRole | null) ?? undefined;
   }
 

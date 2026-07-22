@@ -56,7 +56,8 @@ export function AccountPortal({
                 birthDate={profile.birthDate}
                 salary={profile.salary}
                 systemRole={profile.systemRole}
-                isAdmin={isHead}
+                canEditSalary={isHead}
+                canEditSystemRole={isHead}
               />
             ) : null}
             <PasswordForm userId={profile.id} isSelf />

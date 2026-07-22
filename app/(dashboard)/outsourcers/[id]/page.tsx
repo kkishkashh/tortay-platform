@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { getOutsourcerById } from "@/lib/outsourcers/queries";
-import { canManageOperations } from "@/lib/projects/permissions";
+import { canManageFinance } from "@/lib/projects/permissions";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 import { DeleteOutsourcerDialog } from "./delete-outsourcer-dialog";
@@ -15,7 +15,7 @@ export default async function OutsourcerProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const session = await auth();
-  if (!session?.user || !canManageOperations(session.user)) {
+  if (!session?.user || !(await canManageFinance(session.user))) {
     redirect("/");
   }
 
