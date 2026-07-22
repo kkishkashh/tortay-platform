@@ -33,6 +33,16 @@ export type AssigneeCommentItem = TaskCommentItem & {
 // Комментарии ко ВСЕМ задачам, назначенным конкретному сотруднику —
 // источник для вкладки "Комментарии" в профиле сотрудника (см. финальные
 // фазы плана). Строится сейчас, чтобы там просто вызвать готовую функцию.
+// Лёгкий count (не полные объекты) для подписи "N новых комментариев за
+// неделю" под приветствием на дашборде сотрудника (см. план, Phase 16, D14) —
+// та же выборка задач, что и getCommentsForAssignee, но без загрузки текста.
+export async function getWeeklyCommentsCountForAssignee(userId: string): Promise<number> {
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  return prisma.comment.count({
+    where: { task: { assigneeMember: { userId } }, createdAt: { gte: weekAgo } },
+  });
+}
+
 export async function getCommentsForAssignee(userId: string): Promise<AssigneeCommentItem[]> {
   const session = await auth();
   if (!session?.user) return [];

@@ -37,6 +37,7 @@ import {
   getCurrentUserRoleTier,
   getDepartmentDashboardStats,
 } from "@/lib/departments/queries";
+import { getWeeklyCommentsCountForAssignee } from "@/lib/comments/queries";
 import { getMyTasks } from "@/lib/tasks/queries";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
 import { prisma } from "@/lib/prisma";
@@ -84,10 +85,11 @@ export default async function DashboardPage() {
   }
 
   if (roleTier === "employee") {
-    const [stats, myTasks, unreadNotificationCount] = await Promise.all([
+    const [stats, myTasks, unreadNotificationCount, weeklyCommentsCount] = await Promise.all([
       getDashboardStats(),
       getMyTasks(),
       getUnreadNotificationCount(),
+      getWeeklyCommentsCountForAssignee(session!.user.id),
     ]);
     const activeTasksCount = myTasks.filter((t) => t.status !== TaskStatus.ВЫПОЛНЕНО).length;
 
@@ -99,8 +101,10 @@ export default async function DashboardPage() {
           employeeId={session!.user.id}
           activeProjectsCount={stats.activeProjectsCount}
           activeTasksCount={activeTasksCount}
+          totalTasksCount={myTasks.length}
           unreadNotificationCount={unreadNotificationCount}
           completedThisYearCount={stats.completedThisYearCount}
+          weeklyCommentsCount={weeklyCommentsCount}
         />
       </>
     );

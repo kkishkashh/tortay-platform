@@ -5,8 +5,11 @@ import {
   CheckCircle2,
   FolderKanban,
   ListTodo,
+  MessageSquare,
   User,
 } from "lucide-react";
+
+import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
 
 function greetingForHour(hour: number) {
   if (hour < 5) return "Доброй ночи";
@@ -21,29 +24,40 @@ type Tile = {
   icon: typeof FolderKanban;
   badge?: number;
   gradient: string;
+  // Только у плитки "Мои задачи" — доля выполненных среди всех назначенных
+  // (см. план, Phase 16, D14). undefined, если задач ещё нет вовсе.
+  completionPercent?: number;
 };
 
 // Ровно 5 плиток по брифу: My Projects / My Tasks / Notifications /
 // Calendar / Profile — никакой финансовой или административной
 // информации сотруднику здесь не показываем (см. бриф, "Employee
-// Dashboard").
+// Dashboard"). Прогресс-бар на "Мои задачи" и подпись про комментарии —
+// единственные добавления Phase 16, число плиток не меняется.
 export function EmployeeDashboard({
   fullName,
   employeeId,
   activeProjectsCount,
   activeTasksCount,
+  totalTasksCount,
   unreadNotificationCount,
   completedThisYearCount,
+  weeklyCommentsCount,
 }: {
   fullName: string;
   employeeId: string;
   activeProjectsCount: number;
   activeTasksCount: number;
+  totalTasksCount: number;
   unreadNotificationCount: number;
   completedThisYearCount: number;
+  weeklyCommentsCount: number;
 }) {
   const firstName = fullName.split(" ")[0] ?? fullName;
   const greeting = `${greetingForHour(new Date().getHours())}, ${firstName}!`;
+  const completedTasksCount = totalTasksCount - activeTasksCount;
+  const taskCompletionPercent =
+    totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : undefined;
 
   const tiles: Tile[] = [
     {
@@ -59,6 +73,7 @@ export function EmployeeDashboard({
       icon: ListTodo,
       badge: activeTasksCount,
       gradient: "from-[#f0ac3d] to-[#c47a12]",
+      completionPercent: taskCompletionPercent,
     },
     {
       href: "/notifications",
@@ -91,6 +106,12 @@ export function EmployeeDashboard({
             {completedThisYearCount} завершено в {new Date().getFullYear()} году
           </p>
         ) : null}
+        {weeklyCommentsCount > 0 ? (
+          <p className="mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <MessageSquare className="size-4" />
+            {weeklyCommentsCount} новых комментари{weeklyCommentsCount === 1 ? "й" : "ев"} за неделю
+          </p>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -115,6 +136,16 @@ export function EmployeeDashboard({
               ) : null}
             </div>
             <p className="relative mt-4 text-lg font-semibold tracking-tight">{tile.label}</p>
+            {tile.completionPercent !== undefined ? (
+              <div className="relative mt-3">
+                <Progress value={tile.completionPercent}>
+                  <ProgressTrack className="bg-white/20">
+                    <ProgressIndicator className="bg-white" />
+                  </ProgressTrack>
+                </Progress>
+                <p className="mt-1 text-xs text-white/80">{tile.completionPercent}% выполнено</p>
+              </div>
+            ) : null}
           </Link>
         ))}
       </div>

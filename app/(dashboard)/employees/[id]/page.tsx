@@ -10,14 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { getCommentsForAssignee, getCommentsForTask } from "@/lib/comments/queries";
 import { getDocumentsForTask } from "@/lib/documents/queries";
-import { getEmployeeProfile } from "@/lib/employees/queries";
+import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForUser } from "@/lib/tasks/queries";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { WORKLOAD_META } from "@/lib/workload";
-import { FolderKanban, ListChecks, Percent, Gauge } from "lucide-react";
+import { AlertTriangle, FolderKanban, Gauge, ListChecks, ListTodo, Percent } from "lucide-react";
 
 import { ContactForm } from "@/components/employees/contact-form";
 import { DetailsForm } from "@/components/employees/details-form";
@@ -26,6 +26,7 @@ import { PasswordForm } from "@/components/employees/password-form";
 import { CommentsTab } from "./comments-tab";
 import { DeleteEmployeeDialog } from "./delete-employee-dialog";
 import { TasksTab } from "./tasks-tab";
+import { TimelineTab } from "./timeline-tab";
 
 const SYSTEM_ROLE_LABELS = {
   РУКОВОДИТЕЛЬ: "Руководитель",
@@ -70,10 +71,12 @@ export default async function EmployeeProfilePage({
   const canEditContact = isSelf || canManage;
   const canEditDetails = canManage;
   const workloadMeta = WORKLOAD_META[employee.workload];
+  const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
 
-  const [tasks, comments] = await Promise.all([
+  const [tasks, comments, timeline] = await Promise.all([
     getTasksForUser(employee.id),
     getCommentsForAssignee(employee.id),
+    getEmployeeTimeline(employee.id),
   ]);
 
   const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
@@ -127,6 +130,7 @@ export default async function EmployeeProfilePage({
             <TabsTrigger value="overview">Обзор</TabsTrigger>
             <TabsTrigger value="tasks">Проекты и задачи</TabsTrigger>
             <TabsTrigger value="comments">Комментарии</TabsTrigger>
+            <TabsTrigger value="timeline">Таймлайн</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-6">
@@ -146,7 +150,17 @@ export default async function EmployeeProfilePage({
                 value={`${employee.completionRate}%`}
                 icon={Percent}
               />
-              <StatCard label="Загруженность" value={workloadMeta.label} icon={Gauge} />
+              <StatCard label="Загрузка по проектам" value={workloadMeta.label} icon={Gauge} />
+              <StatCard
+                label="Загрузка по задачам"
+                value={taskWorkloadMeta.label}
+                icon={ListTodo}
+              />
+              <StatCard
+                label="Просроченных задач"
+                value={String(employee.lateTaskCount)}
+                icon={AlertTriangle}
+              />
             </div>
 
             <Card>
@@ -274,6 +288,10 @@ export default async function EmployeeProfilePage({
 
           <TabsContent value="comments" className="mt-4">
             <CommentsTab comments={comments} />
+          </TabsContent>
+
+          <TabsContent value="timeline" className="mt-4">
+            <TimelineTab items={timeline} />
           </TabsContent>
         </Tabs>
       </div>

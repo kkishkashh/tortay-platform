@@ -23,3 +23,18 @@ export const WORKLOAD_META: Record<WorkloadLevel, { label: string; color: string
 };
 
 export const WORKLOAD_NONE_COLOR = "#c3c2b7";
+
+// Задачная загруженность (Phase 16, D15) — отдельная мера от
+// workloadLevel выше: считает АКТИВНЫЕ (не ВЫПОЛНЕНО) задачи конкретного
+// сотрудника, а не количество проектов. Используется ТОЛЬКО в профиле
+// сотрудника (карточка "Загрузка по задачам", рядом с существующей
+// "Загрузка по проектам") — WorkloadBoard на дашбордах админа/руководителя
+// департамента продолжает использовать project-based workloadLevel, чтобы
+// не поменять там смысл незаметно. Пороги условные, поправить легко.
+const TASK_WORKLOAD_THRESHOLDS = { medium: 3, high: 6 } as const;
+
+export function taskWorkloadLevel(activeTaskCount: number): WorkloadLevel {
+  if (activeTaskCount >= TASK_WORKLOAD_THRESHOLDS.high) return "high";
+  if (activeTaskCount >= TASK_WORKLOAD_THRESHOLDS.medium) return "medium";
+  return "low";
+}

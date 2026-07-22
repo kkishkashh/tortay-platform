@@ -1,9 +1,9 @@
-import { ProjectStatus, SystemRole, UserType } from "@prisma/client";
+import { ProjectStatus, SystemRole, TaskStatus, UserType } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { getCurrentUserRoleTier, getManagedDepartment } from "@/lib/departments/queries";
 import { prisma } from "@/lib/prisma";
-import { workloadLevel, type WorkloadLevel } from "@/lib/workload";
+import { taskWorkloadLevel, workloadLevel, type WorkloadLevel } from "@/lib/workload";
 
 // ГИП — руководящая роль внутри компании, поэтому выбираем только
 // штатных сотрудников (аутсорсеров сюда не включаем). Руководители
@@ -122,6 +122,12 @@ export type EmployeeProfile = {
   totalProjectsCount: number;
   completionRate: number;
   workload: WorkloadLevel;
+  // Задачная сторона (Phase 16, D15) — отдельная от проектной workload выше,
+  // подписана отдельной карточкой в профиле, не подменяет существующую.
+  activeTaskCount: number;
+  lateTaskCount: number;
+  taskWorkload: WorkloadLevel;
+  taskCompletionRate: number;
 };
 
 // Порядок реальных статусов проекта — "запланировано" отдельным статусом
@@ -152,13 +158,29 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       createdAt: true,
       homeDepartmentId: true,
       projectMemberships: {
-        select: { project: { select: { id: true, name: true, status: true } } },
+        select: {
+          project: { select: { id: true, name: true, status: true } },
+          // Через существующую обратную связь ProjectMember.tasksAssigned —
+          // без отдельного запроса к Task (см. план, "reusing already-fetched
+          // task data, not re-querying").
+          tasksAssigned: { select: { status: true, deadline: true } },
+        },
       },
     },
   });
   if (!user) return null;
 
   const projects = user.projectMemberships.map((m) => m.project);
+  const allTasks = user.projectMemberships.flatMap((m) => m.tasksAssigned);
+  const now = new Date();
+  const activeTaskCount = allTasks.filter((t) => t.status !== TaskStatus.ВЫПОЛНЕНО).length;
+  const lateTaskCount = allTasks.filter(
+    (t) => t.deadline !== null && t.deadline < now && t.status !== TaskStatus.ВЫПОЛНЕНО,
+  ).length;
+  const taskCompletionRate =
+    allTasks.length === 0
+      ? 0
+      : Math.round(((allTasks.length - activeTaskCount) / allTasks.length) * 100);
   const projectsByStatus = PROFILE_STATUS_ORDER.map((status) => ({
     status,
     projects: projects
@@ -197,5 +219,49 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
         ? 0
         : Math.round((completedProjectsCount / totalProjectsCount) * 100),
     workload: workloadLevel(activeProjectsCount),
+    activeTaskCount,
+    lateTaskCount,
+    taskWorkload: taskWorkloadLevel(activeTaskCount),
+    taskCompletionRate,
   };
+}
+
+export type TimelineItem =
+  | { kind: "activity"; id: string; message: string; createdAt: Date }
+  | {
+      kind: "notification";
+      id: string;
+      title: string;
+      body: string;
+      isRead: boolean;
+      createdAt: Date;
+    };
+
+// Вкладка "Таймлайн" в профиле сотрудника (см. план, Phase 16, D16) —
+// объединяет ActivityLog (что сотрудник СДЕЛАЛ, actorId = он) и
+// Notification (что ПРОИЗОШЛО с ним, userId = он), без парсинга свободного
+// текста ActivityLog.message (там нет taskId, чтобы фильтровать надёжно
+// по-другому).
+export async function getEmployeeTimeline(userId: string, limit = 30): Promise<TimelineItem[]> {
+  const [activity, notifications] = await Promise.all([
+    prisma.activityLog.findMany({
+      where: { actorId: userId },
+      select: { id: true, message: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    prisma.notification.findMany({
+      where: { userId },
+      select: { id: true, title: true, body: true, isRead: true, createdAt: true },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+  ]);
+
+  const merged: TimelineItem[] = [
+    ...activity.map((a): TimelineItem => ({ kind: "activity", ...a })),
+    ...notifications.map((n): TimelineItem => ({ kind: "notification", ...n })),
+  ];
+
+  return merged.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, limit);
 }
