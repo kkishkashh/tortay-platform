@@ -14,6 +14,7 @@ import {
   getDepartmentProjects,
   getDepartmentTaskStack,
   getEmployeesForDepartmentAssignment,
+  getEmployeesForManagerAssignment,
 } from "@/lib/departments/queries";
 
 import { AnalyticsTab } from "./analytics-tab";
@@ -49,9 +50,10 @@ export default async function DepartmentDetailPage({
     redirect("/");
   }
 
-  const [taskStack, allEmployeesRaw, projects, analyticsStats] = await Promise.all([
+  const [taskStack, allEmployeesRaw, managerCandidates, projects, analyticsStats] = await Promise.all([
     getDepartmentTaskStack(id),
     getEmployeesForDepartmentAssignment(),
+    getEmployeesForManagerAssignment(),
     getDepartmentProjects(id),
     getDepartmentDashboardStats(id),
   ]);
@@ -108,6 +110,7 @@ export default async function DepartmentDetailPage({
               managerId={department.managerId}
               employees={department.employees}
               allEmployees={allEmployees}
+              managerCandidates={managerCandidates}
               canAssignManager={isAdmin}
               canManageEmployees={canManageDept}
             />

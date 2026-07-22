@@ -27,6 +27,7 @@ export function EmployeesTab({
   managerId,
   employees,
   allEmployees,
+  managerCandidates,
   canAssignManager,
   canManageEmployees,
 }: {
@@ -34,6 +35,11 @@ export function EmployeesTab({
   managerId: string | null;
   employees: Employee[];
   allEmployees: { id: string; fullName: string; homeDepartmentId: string | null }[];
+  // Все штатные сотрудники компании — НЕ ограничено сотрудниками этого
+  // департамента и НЕ исключает тех, кто уже руководит другим департаментом
+  // (один человек может руководить несколькими департаментами одновременно,
+  // см. lib/departments/queries.ts::getEmployeesForManagerAssignment).
+  managerCandidates: { id: string; fullName: string }[];
   // Назначение руководителя — структурное решение, только администратор.
   canAssignManager: boolean;
   // Добавлять/убирать рядовых сотрудников может и руководитель ЭТОГО
@@ -98,7 +104,7 @@ export function EmployeesTab({
             disabled={isPending}
             items={[
               { value: NO_MANAGER, label: "Не назначен" },
-              ...employees.map((e) => ({ value: e.id, label: e.fullName })),
+              ...managerCandidates.map((e) => ({ value: e.id, label: e.fullName })),
             ]}
           >
             <SelectTrigger className="w-full sm:w-80">
@@ -106,7 +112,7 @@ export function EmployeesTab({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NO_MANAGER}>Не назначен</SelectItem>
-              {employees.map((e) => (
+              {managerCandidates.map((e) => (
                 <SelectItem key={e.id} value={e.id}>
                   {e.fullName}
                 </SelectItem>
