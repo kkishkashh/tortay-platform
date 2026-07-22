@@ -79,19 +79,35 @@ export async function getDepartmentById(id: string): Promise<DepartmentDetail | 
   };
 }
 
-export type DepartmentTaskStackItem = {
+export type DepartmentTaskStackSubItem = {
   id: string;
   title: string;
   description: string | null;
   orderIndex: number;
 };
 
+export type DepartmentTaskStackItem = DepartmentTaskStackSubItem & {
+  subItems: DepartmentTaskStackSubItem[];
+};
+
+// Только пункты верхнего уровня (parentItemId: null) — их подпункты
+// вложены в subItems. Глубина ограничена 2 уровнями (см. план), поэтому
+// subItems сами дальше не разворачиваются.
 export async function getDepartmentTaskStack(
   departmentId: string,
 ): Promise<DepartmentTaskStackItem[]> {
   return prisma.departmentTaskTemplateItem.findMany({
-    where: { departmentId },
-    select: { id: true, title: true, description: true, orderIndex: true },
+    where: { departmentId, parentItemId: null },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      orderIndex: true,
+      subItems: {
+        select: { id: true, title: true, description: true, orderIndex: true },
+        orderBy: { orderIndex: "asc" },
+      },
+    },
     orderBy: { orderIndex: "asc" },
   });
 }
@@ -131,8 +147,19 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
         select: { id: true, fullName: true },
         orderBy: { fullName: "asc" },
       },
+      // Только верхнего уровня — их подпункты (чек-лист) вложены в subItems,
+      // сами дальше не разворачиваются (см. план, 2 уровня максимум).
       taskTemplateItems: {
-        select: { id: true, title: true, description: true },
+        where: { parentItemId: null },
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          subItems: {
+            select: { id: true, title: true, description: true },
+            orderBy: { orderIndex: "asc" },
+          },
+        },
         orderBy: { orderIndex: "asc" },
       },
     },

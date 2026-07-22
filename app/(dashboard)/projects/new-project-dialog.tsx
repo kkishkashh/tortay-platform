@@ -42,10 +42,16 @@ type Employee = {
   fullName: string;
 };
 
+type TaskTemplateSubItem = {
+  id: string;
+  title: string;
+};
+
 type TaskTemplateItem = {
   id: string;
   title: string;
   description: string | null;
+  subItems: TaskTemplateSubItem[];
 };
 
 type DepartmentOption = {
@@ -73,6 +79,9 @@ type TaskAssignment = { assigneeUserId: string; deadline: string; priority: stri
 type DepartmentSelectionState = {
   checked: boolean;
   itemIds: Set<string>;
+  // Подпункты (чек-лист) отмеченных пунктов — плоский набор id, id
+  // подпунктов глобально уникальны, привязка к родителю не нужна.
+  subItemIds: Set<string>;
   customTasks: CustomTask[];
   // "" означает "не переопределено" — сервер получит null и вкладка раздела
   // будет показывать реального руководителя департамента как контакт.
@@ -84,6 +93,7 @@ function emptySelection(defaultContactManagerId: string): DepartmentSelectionSta
   return {
     checked: false,
     itemIds: new Set(),
+    subItemIds: new Set(),
     customTasks: [],
     contactManagerId: defaultContactManagerId,
     taskAssignments: {},
@@ -117,14 +127,30 @@ function StepDepartmentTaskPicker({
 }) {
   const [customTaskDraft, setCustomTaskDraft] = useState("");
 
-  function toggleItem(itemId: string) {
+  // Отметить пункт — заодно по умолчанию отмечает ВСЕ его подпункты (чек-лист
+  // войдёт в задачу целиком); снять пункт — снимает и его подпункты.
+  // Отдельные подпункты можно потом донастроить галочками ниже.
+  function toggleItem(item: TaskTemplateItem) {
     const nextIds = new Set(selection.itemIds);
-    if (nextIds.has(itemId)) {
-      nextIds.delete(itemId);
+    const nextSubIds = new Set(selection.subItemIds);
+    if (nextIds.has(item.id)) {
+      nextIds.delete(item.id);
+      for (const sub of item.subItems) nextSubIds.delete(sub.id);
     } else {
-      nextIds.add(itemId);
+      nextIds.add(item.id);
+      for (const sub of item.subItems) nextSubIds.add(sub.id);
     }
-    onChange({ ...selection, itemIds: nextIds });
+    onChange({ ...selection, itemIds: nextIds, subItemIds: nextSubIds });
+  }
+
+  function toggleSubItem(subItemId: string) {
+    const nextSubIds = new Set(selection.subItemIds);
+    if (nextSubIds.has(subItemId)) {
+      nextSubIds.delete(subItemId);
+    } else {
+      nextSubIds.add(subItemId);
+    }
+    onChange({ ...selection, subItemIds: nextSubIds });
   }
 
   function addCustomTask() {
@@ -162,13 +188,28 @@ function StepDepartmentTaskPicker({
         ) : (
           <div className="space-y-1.5">
             {department.taskTemplateItems.map((item) => (
-              <label key={item.id} className="flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={selection.itemIds.has(item.id)}
-                  onCheckedChange={() => toggleItem(item.id)}
-                />
-                {item.title}
-              </label>
+              <div key={item.id}>
+                <label className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selection.itemIds.has(item.id)}
+                    onCheckedChange={() => toggleItem(item)}
+                  />
+                  {item.title}
+                </label>
+                {selection.itemIds.has(item.id) && item.subItems.length > 0 ? (
+                  <div className="mt-1 ml-6 space-y-1 border-l pl-3">
+                    {item.subItems.map((sub) => (
+                      <label key={sub.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={selection.subItemIds.has(sub.id)}
+                          onCheckedChange={() => toggleSubItem(sub.id)}
+                        />
+                        {sub.title}
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
           </div>
         )}
@@ -612,6 +653,7 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
             const selection = getSelection(department);
             const payload = JSON.stringify({
               checkedTemplateItemIds: Array.from(selection.itemIds),
+              checkedSubItemIds: Array.from(selection.subItemIds),
               customTasks: selection.customTasks,
               contactManagerId: selection.contactManagerId || null,
               taskAssignments: selection.taskAssignments,

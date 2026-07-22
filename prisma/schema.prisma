@@ -217,11 +217,29 @@ model Task {
   deadline         DateTime?
   createdAt        DateTime      @default(now())
 
-  comments      Comment[]
-  notifications Notification[]
-  documents     Document[]
+  comments       Comment[]
+  notifications  Notification[]
+  documents      Document[]
+  checklistItems TaskChecklistItem[]
 
   @@map("tasks")
+}
+
+// Лёгкий чек-лист внутри задачи (см. план "Task checklist sub-items") —
+// просто заголовок + галочка "сделано/не сделано", без своего исполнителя/
+// срока/статуса/комментариев. Заполняется при создании задачи из подпунктов
+// выбранного пункта базового стека (см. createProjectAction), либо остаётся
+// пустым у задач без подпунктов.
+model TaskChecklistItem {
+  id         String   @id @default(uuid())
+  taskId     String
+  task       Task     @relation(fields: [taskId], references: [id])
+  title      String
+  isDone     Boolean  @default(false)
+  orderIndex Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@map("task_checklist_items")
 }
 
 // ============================================================
@@ -308,6 +326,16 @@ model DepartmentTaskTemplateItem {
   description  String?
   orderIndex   Int        @default(0)
   createdAt    DateTime   @default(now())
+
+  // Подпункты пункта стека (напр. "АР Альбом" → его подразделы) — только
+  // 2 уровня: у подпункта своих подпунктов не бывает (проверяется в коде,
+  // см. createTaskStackSubItemAction). onDelete: Cascade — иначе Prisma по
+  // умолчанию для опциональной само-связи сделал бы SetNull, "осиротив"
+  // подпункты в отдельные пункты верхнего уровня вместо удаления вместе с
+  // родителем.
+  parentItemId String?
+  parentItem   DepartmentTaskTemplateItem?  @relation("TemplateSubItems", fields: [parentItemId], references: [id], onDelete: Cascade)
+  subItems     DepartmentTaskTemplateItem[] @relation("TemplateSubItems")
 
   @@map("department_task_template_items")
 }

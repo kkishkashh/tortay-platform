@@ -374,6 +374,7 @@ export async function deleteTaskAction(taskId: string) {
     await tx.notification.deleteMany({ where: { taskId } });
     await tx.document.deleteMany({ where: { taskId } });
     await tx.comment.deleteMany({ where: { taskId } });
+    await tx.taskChecklistItem.deleteMany({ where: { taskId } });
     await tx.task.delete({ where: { id: taskId } });
 
     await logActivity(tx, {
@@ -477,4 +478,46 @@ export async function advanceTaskStatusAction(taskId: string, nextStatus: TaskSt
   }
 
   revalidatePath(`/projects/${task.section.projectId}`);
+}
+
+// Галочка чек-листа внутри задачи — доступна исполнителю (сам отмечает свой
+// прогресс) или руководителю/администратору этого департамента, та же
+// аудитория, что и у остальных действий над статусом задачи. Никакого
+// отдельного лога/уведомления — это лёгкий чек-лист, не событие.
+export async function toggleTaskChecklistItemAction(itemId: string, isDone: boolean) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const item = await prisma.taskChecklistItem.findUnique({
+    where: { id: itemId },
+    select: {
+      taskId: true,
+      task: {
+        select: {
+          section: {
+            select: {
+              projectId: true,
+              department: { select: { id: true, managerId: true } },
+            },
+          },
+          assigneeMember: { select: { userId: true } },
+        },
+      },
+    },
+  });
+  if (!item) {
+    throw new Error("Пункт чек-листа не найден");
+  }
+
+  const isAssignee = item.task.assigneeMember?.userId === session.user.id;
+  const isManager = canManageProjectTasks(session.user, item.task.section);
+  if (!isAssignee && !isManager) {
+    throw new Error("Недостаточно прав для изменения этого пункта чек-листа");
+  }
+
+  await prisma.taskChecklistItem.update({ where: { id: itemId }, data: { isDone } });
+
+  revalidatePath(`/projects/${item.task.section.projectId}`);
 }

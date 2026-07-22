@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Trash2, X } from "lucide
 
 import {
   createTaskStackItemAction,
+  createTaskStackSubItemAction,
   deleteTaskStackItemAction,
   duplicateTaskStackItemAction,
   reorderTaskStackItemsAction,
@@ -12,7 +13,7 @@ import {
 } from "@/lib/departments/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { DepartmentTaskStackItem } from "@/lib/departments/queries";
+import type { DepartmentTaskStackItem, DepartmentTaskStackSubItem } from "@/lib/departments/queries";
 
 function TaskStackRow({
   item,
@@ -21,7 +22,7 @@ function TaskStackRow({
   canManage,
   onMove,
 }: {
-  item: DepartmentTaskStackItem;
+  item: DepartmentTaskStackSubItem;
   isFirst: boolean;
   isLast: boolean;
   canManage: boolean;
@@ -145,6 +146,52 @@ function TaskStackRow({
   );
 }
 
+// Форма добавления подпункта (чек-листа) под КОНКРЕТНЫМ пунктом верхнего
+// уровня — своё локальное состояние показа/скрытия, отдельное от формы
+// добавления самих пунктов верхнего уровня.
+function AddSubItemForm({ parentItemId }: { parentItemId: string }) {
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  function handleAdd(formData: FormData) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await createTaskStackSubItemAction(parentItemId, formData);
+        setShowForm(false);
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : "Не удалось добавить подпункт");
+      }
+    });
+  }
+
+  if (!showForm) {
+    return (
+      <Button type="button" variant="ghost" size="sm" onClick={() => setShowForm(true)}>
+        <Plus className="size-3.5" />
+        Добавить подпункт
+      </Button>
+    );
+  }
+
+  return (
+    <form action={handleAdd} className="space-y-2 rounded-lg border border-dashed p-3">
+      <Input name="title" placeholder="Название подпункта" required autoFocus />
+      <Input name="description" placeholder="Описание (необязательно)" />
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" size="sm" onClick={() => setShowForm(false)} disabled={isPending}>
+          Отмена
+        </Button>
+        <Button type="submit" size="sm" disabled={isPending}>
+          {isPending ? "Добавляем…" : "Добавить"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 export function TaskStackTab({
   departmentId,
   items,
@@ -183,25 +230,58 @@ export function TaskStackTab({
     });
   }
 
+  // Подпункты переставляются только внутри своего родителя — отдельный
+  // обработчик, не смешивается с порядком пунктов верхнего уровня.
+  function handleMoveSubItem(parentItem: DepartmentTaskStackItem, subItemId: string, direction: "up" | "down") {
+    const subItems = parentItem.subItems;
+    const index = subItems.findIndex((sub) => sub.id === subItemId);
+    const swapWith = direction === "up" ? index - 1 : index + 1;
+    if (index === -1 || swapWith < 0 || swapWith >= subItems.length) return;
+
+    const next = [...subItems];
+    [next[index], next[swapWith]] = [next[swapWith], next[index]];
+
+    startTransition(async () => {
+      await reorderTaskStackItemsAction(departmentId, next.map((sub) => sub.id));
+    });
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Это шаблон — при создании проекта менеджер отмечает галочками, какие пункты стать реальными задачами. Изменения здесь не затрагивают уже созданные проекты.
+        Это шаблон — при создании проекта менеджер отмечает галочками, какие пункты стать реальными задачами (вместе с их подпунктами-чек-листом). Изменения здесь не затрагивают уже созданные проекты.
       </p>
 
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">В базовом стеке пока нет задач.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {items.map((item, index) => (
-            <TaskStackRow
-              key={item.id}
-              item={item}
-              isFirst={index === 0}
-              isLast={index === items.length - 1}
-              canManage={canManage}
-              onMove={handleMove}
-            />
+            <div key={item.id} className="space-y-2">
+              <TaskStackRow
+                item={item}
+                isFirst={index === 0}
+                isLast={index === items.length - 1}
+                canManage={canManage}
+                onMove={handleMove}
+              />
+
+              {item.subItems.length > 0 || canManage ? (
+                <div className="ml-6 space-y-2 border-l pl-3">
+                  {item.subItems.map((sub, subIndex) => (
+                    <TaskStackRow
+                      key={sub.id}
+                      item={sub}
+                      isFirst={subIndex === 0}
+                      isLast={subIndex === item.subItems.length - 1}
+                      canManage={canManage}
+                      onMove={(subItemId, direction) => handleMoveSubItem(item, subItemId, direction)}
+                    />
+                  ))}
+                  {canManage ? <AddSubItemForm parentItemId={item.id} /> : null}
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
       )}

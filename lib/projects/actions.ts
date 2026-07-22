@@ -46,6 +46,10 @@ type TaskAssignmentInput = { assigneeUserId?: string; deadline?: string; priorit
 
 type DepartmentTaskSelection = {
   checkedTemplateItemIds: string[];
+  // Подпункты (чек-лист) отмеченных пунктов стека — плоский набор id-шников,
+  // без привязки к конкретному родителю (id подпунктов глобально уникальны),
+  // см. new-project-dialog.tsx StepDepartmentTaskPicker.
+  checkedSubItemIds: string[];
   customTasks: { key: string; title: string }[];
   contactManagerId: string | null;
   taskAssignments: Record<string, TaskAssignmentInput>;
@@ -54,6 +58,7 @@ type DepartmentTaskSelection = {
 function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelection {
   const empty: DepartmentTaskSelection = {
     checkedTemplateItemIds: [],
+    checkedSubItemIds: [],
     customTasks: [],
     contactManagerId: null,
     taskAssignments: {},
@@ -68,6 +73,7 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
   }
   const obj = parsed as {
     checkedTemplateItemIds?: unknown;
+    checkedSubItemIds?: unknown;
     customTasks?: unknown;
     contactManagerId?: unknown;
     taskAssignments?: unknown;
@@ -75,6 +81,10 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
 
   const checkedTemplateItemIds = Array.isArray(obj.checkedTemplateItemIds)
     ? obj.checkedTemplateItemIds.filter((v): v is string => typeof v === "string")
+    : [];
+
+  const checkedSubItemIds = Array.isArray(obj.checkedSubItemIds)
+    ? obj.checkedSubItemIds.filter((v): v is string => typeof v === "string")
     : [];
 
   const customTasks = Array.isArray(obj.customTasks)
@@ -105,7 +115,7 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
     }
   }
 
-  return { checkedTemplateItemIds, customTasks, contactManagerId, taskAssignments };
+  return { checkedTemplateItemIds, checkedSubItemIds, customTasks, contactManagerId, taskAssignments };
 }
 
 // Создать проект может только РУКОВОДИТЕЛЬ — операционная часть
@@ -168,7 +178,17 @@ export async function createProjectAction(formData: FormData) {
             id: true,
             name: true,
             orderIndex: true,
-            taskTemplateItems: { select: { id: true, title: true, description: true } },
+            // Только верхнего уровня — их подпункты (чек-лист) вложены в
+            // subItems, дальше не разворачиваются (2 уровня максимум).
+            taskTemplateItems: {
+              where: { parentItemId: null },
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                subItems: { select: { id: true, title: true }, orderBy: { orderIndex: "asc" } },
+              },
+            },
             employees: { select: { id: true } },
           },
           orderBy: { orderIndex: "asc" },
@@ -182,6 +202,7 @@ export async function createProjectAction(formData: FormData) {
     assigneeUserId: string | null;
     deadline: Date | null;
     priority: TaskPriority;
+    checklistTitles: string[];
   };
 
   function buildTaskPlan(
@@ -190,6 +211,7 @@ export async function createProjectAction(formData: FormData) {
     description: string | null,
     assignment: TaskAssignmentInput | undefined,
     employeeIds: Set<string>,
+    checklistTitles: string[] = [],
   ): TaskPlan {
     const assigneeUserId = assignment?.assigneeUserId?.trim() || null;
     if (assigneeUserId && !employeeIds.has(assigneeUserId)) {
@@ -207,6 +229,7 @@ export async function createProjectAction(formData: FormData) {
       assigneeUserId,
       deadline: deadlineRaw ? new Date(deadlineRaw) : null,
       priority: priorityRaw as TaskPriority,
+      checklistTitles,
     };
   }
 
@@ -215,13 +238,24 @@ export async function createProjectAction(formData: FormData) {
       formData.get(`deptData_${department.id}`) as string | null,
     );
     const checkedIds = new Set(selection.checkedTemplateItemIds);
+    const checkedSubItemIds = new Set(selection.checkedSubItemIds);
     const employeeIds = new Set(department.employees.map((e) => e.id));
 
     const tasks: TaskPlan[] = [];
     for (const item of department.taskTemplateItems) {
       if (checkedIds.has(item.id)) {
+        const checklistTitles = item.subItems
+          .filter((sub) => checkedSubItemIds.has(sub.id))
+          .map((sub) => sub.title);
         tasks.push(
-          buildTaskPlan(item.id, item.title, item.description, selection.taskAssignments[item.id], employeeIds),
+          buildTaskPlan(
+            item.id,
+            item.title,
+            item.description,
+            selection.taskAssignments[item.id],
+            employeeIds,
+            checklistTitles,
+          ),
         );
       }
     }
@@ -350,6 +384,16 @@ export async function createProjectAction(formData: FormData) {
             assignedByUserId: session.user.id,
           },
         });
+
+        if (taskPlan.checklistTitles.length > 0) {
+          await tx.taskChecklistItem.createMany({
+            data: taskPlan.checklistTitles.map((title, index) => ({
+              taskId: task.id,
+              title,
+              orderIndex: index,
+            })),
+          });
+        }
 
         if (assigneeMemberId && taskPlan.assigneeUserId) {
           await notifyTaskAssigned(tx, {
@@ -580,6 +624,7 @@ export async function deleteProjectAction(projectId: string) {
     await tx.document.deleteMany({
       where: { OR: [{ section: { projectId } }, { task: { section: { projectId } } }] },
     });
+    await tx.taskChecklistItem.deleteMany({ where: { task: { section: { projectId } } } });
     await tx.task.deleteMany({ where: { section: { projectId } } });
     await tx.section.deleteMany({ where: { projectId } });
 

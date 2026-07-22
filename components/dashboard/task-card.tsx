@@ -13,6 +13,7 @@ import {
 } from "@/app/(dashboard)/projects/[id]/task-status-control";
 import { TaskDialog } from "@/app/(dashboard)/projects/[id]/task-dialog";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { TaskChecklist } from "@/components/dashboard/task-checklist";
 import type { TaskCommentItem } from "@/lib/comments/queries";
 import type { TaskAttachmentItem } from "@/lib/documents/queries";
 import type { TaskListItem } from "@/lib/tasks/queries";
@@ -90,6 +91,8 @@ export function TaskCard({
         {task.description ? (
           <p className="line-clamp-2 text-xs text-muted-foreground">{task.description}</p>
         ) : null}
+
+        <TaskChecklist items={task.checklistItems} canToggle={canManage || isAssignee} />
 
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge variant={TASK_STATUS_BADGE_VARIANT[task.status]}>

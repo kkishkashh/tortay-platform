@@ -233,8 +233,12 @@ export async function createTaskStackItemAction(departmentId: string, formData: 
     throw new Error("Название задачи обязательно");
   }
 
+  // parentItemId: null — считаем максимум только среди пунктов ВЕРХНЕГО
+  // уровня, иначе высокий orderIndex у чьих-то подпунктов сбил бы порядок
+  // top-level пунктов (см. createTaskStackSubItemAction — у подпунктов
+  // отдельное пространство orderIndex, скоуп по parentItemId).
   const maxOrder = await prisma.departmentTaskTemplateItem.aggregate({
-    where: { departmentId },
+    where: { departmentId, parentItemId: null },
     _max: { orderIndex: true },
   });
 
@@ -243,6 +247,57 @@ export async function createTaskStackItemAction(departmentId: string, formData: 
   });
 
   revalidatePath(`/departments/${departmentId}`);
+}
+
+// Подпункт (чек-лист внутри пункта верхнего уровня, напр. "АР Альбом" →
+// "Блокировочная схема") — глубина ограничена 2 уровнями: подпункт нельзя
+// создать под другим подпунктом (см. план).
+export async function createTaskStackSubItemAction(parentItemId: string, formData: FormData) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const parentItem = await prisma.departmentTaskTemplateItem.findUnique({
+    where: { id: parentItemId },
+    select: {
+      departmentId: true,
+      parentItemId: true,
+      department: { select: { id: true, managerId: true } },
+    },
+  });
+  if (!parentItem) {
+    throw new Error("Пункт базового стека не найден");
+  }
+  if (parentItem.parentItemId !== null) {
+    throw new Error("Нельзя добавить подпункт к подпункту — только 2 уровня вложенности");
+  }
+  if (!canManageTaskStack(session.user, parentItem.department)) {
+    throw new Error("Недостаточно прав для редактирования базового стека задач");
+  }
+
+  const title = (formData.get("title") as string | null)?.trim();
+  const description = (formData.get("description") as string | null)?.trim() || null;
+  if (!title) {
+    throw new Error("Название подпункта обязательно");
+  }
+
+  const maxOrder = await prisma.departmentTaskTemplateItem.aggregate({
+    where: { parentItemId },
+    _max: { orderIndex: true },
+  });
+
+  await prisma.departmentTaskTemplateItem.create({
+    data: {
+      departmentId: parentItem.departmentId,
+      parentItemId,
+      title,
+      description,
+      orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
+    },
+  });
+
+  revalidatePath(`/departments/${parentItem.departmentId}`);
 }
 
 export async function updateTaskStackItemAction(itemId: string, formData: FormData) {
@@ -311,10 +366,15 @@ export async function duplicateTaskStackItemAction(itemId: string) {
     where: { id: itemId },
     select: {
       departmentId: true,
+      parentItemId: true,
       title: true,
       description: true,
       orderIndex: true,
       department: { select: { id: true, managerId: true } },
+      subItems: {
+        select: { title: true, description: true },
+        orderBy: { orderIndex: "asc" },
+      },
     },
   });
   if (!item) {
@@ -325,18 +385,39 @@ export async function duplicateTaskStackItemAction(itemId: string) {
   }
 
   await prisma.$transaction(async (tx) => {
+    // Скоуп по parentItemId, а не только departmentId — иначе дублирование
+    // подпункта сдвинуло бы порядок пунктов верхнего уровня (и наоборот).
     await tx.departmentTaskTemplateItem.updateMany({
-      where: { departmentId: item.departmentId, orderIndex: { gt: item.orderIndex } },
+      where: {
+        departmentId: item.departmentId,
+        parentItemId: item.parentItemId,
+        orderIndex: { gt: item.orderIndex },
+      },
       data: { orderIndex: { increment: 1 } },
     });
-    await tx.departmentTaskTemplateItem.create({
+    const duplicate = await tx.departmentTaskTemplateItem.create({
       data: {
         departmentId: item.departmentId,
+        parentItemId: item.parentItemId,
         title: item.title,
         description: item.description,
         orderIndex: item.orderIndex + 1,
       },
     });
+
+    // Пункт верхнего уровня со своим чек-листом — клонируем и подпункты,
+    // иначе "Дублировать" оставляло бы копию без её чек-листа.
+    if (item.subItems.length > 0) {
+      await tx.departmentTaskTemplateItem.createMany({
+        data: item.subItems.map((sub, index) => ({
+          departmentId: item.departmentId,
+          parentItemId: duplicate.id,
+          title: sub.title,
+          description: sub.description,
+          orderIndex: index,
+        })),
+      });
+    }
   });
 
   revalidatePath(`/departments/${item.departmentId}`);

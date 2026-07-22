@@ -18,6 +18,9 @@ export type TaskListItem = {
   // Департамент раздела, которому принадлежит задача — null у "бездепартаментных"
   // разделов (см. Section.departmentId). Рендерится как бейдж только когда есть.
   department: { id: string; name: string; color: string; icon: string } | null;
+  // Лёгкий чек-лист внутри задачи (см. план "Task checklist sub-items") —
+  // заполняется из подпунктов пункта базового стека при создании проекта.
+  checklistItems: { id: string; title: string; isDone: boolean }[];
   commentsCount: number;
   documentsCount: number;
 };
@@ -35,6 +38,7 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
           department: { select: { id: true, name: true, color: true, icon: true } },
         },
       },
+      checklistItems: { orderBy: { orderIndex: "asc" } },
       _count: { select: { comments: true, documents: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -58,6 +62,7 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
       : null,
     assignedBy: task.assignedByUser,
     department: task.section.department,
+    checklistItems: task.checklistItems.map((c) => ({ id: c.id, title: c.title, isDone: c.isDone })),
     commentsCount: task._count.comments,
     documentsCount: task._count.documents,
   }));
@@ -92,6 +97,7 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
           department: { select: { id: true, name: true, color: true, icon: true, managerId: true } },
         },
       },
+      checklistItems: { orderBy: { orderIndex: "asc" } },
       _count: { select: { comments: true, documents: true } },
     },
     orderBy: [{ deadline: "asc" }, { createdAt: "asc" }],
@@ -122,6 +128,7 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
           icon: task.section.department.icon,
         }
       : null,
+    checklistItems: task.checklistItems.map((c) => ({ id: c.id, title: c.title, isDone: c.isDone })),
     commentsCount: task._count.comments,
     documentsCount: task._count.documents,
     projectId: task.section.project.id,
