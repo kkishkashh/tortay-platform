@@ -78,6 +78,7 @@ model User {
   sectionsAsContactManager Section[] @relation("SectionContactManager")
   // Кто поставил задачу — заполняется автоматически при создании, никогда не редактируется вручную.
   tasksAssignedByMe        Task[]    @relation("TaskAssignedBy")
+  personalTasks             PersonalTask[]
 
   @@map("users")
 }
@@ -223,6 +224,25 @@ model Task {
   checklistItems TaskChecklistItem[]
 
   @@map("tasks")
+}
+
+// Личная задача — не привязана ни к проекту, ни к разделу, ни к
+// департаменту: и сотрудник, и руководитель может завести себе напоминание
+// прямо в "Мои задачи" (см. кнопку "+ Новая задача"). Владелец — единственный,
+// кто её видит/меняет/удаляет, никакого согласования/проверки руководителем
+// не требуется — это личный список дел, а не рабочая задача по проекту.
+model PersonalTask {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+  title       String
+  description String?
+  status      TaskStatus   @default(НОВАЯ)
+  priority    TaskPriority @default(СРЕДНИЙ)
+  deadline    DateTime?
+  createdAt   DateTime     @default(now())
+
+  @@map("personal_tasks")
 }
 
 // Лёгкий чек-лист внутри задачи (см. план "Task checklist sub-items") —

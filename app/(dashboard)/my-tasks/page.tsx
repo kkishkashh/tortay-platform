@@ -3,13 +3,21 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
+import { getMyPersonalTasks } from "@/lib/personal-tasks/queries";
 import { getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getMyTasks } from "@/lib/tasks/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
+import { NewPersonalTaskDialog } from "./new-personal-task-dialog";
+import { PersonalTaskCard } from "./personal-task-card";
+
 export default async function MyTasksPage() {
-  const [session, tasks] = await Promise.all([auth(), getMyTasks()]);
+  const [session, tasks, personalTasks] = await Promise.all([
+    auth(),
+    getMyTasks(),
+    getMyPersonalTasks(),
+  ]);
 
   // Пакетные запросы (один на все проекты/задачи), а не по одному на
   // каждый — раньше N+1 запросов к Neon подряд были причиной долгой
@@ -31,11 +39,28 @@ export default async function MyTasksPage() {
 
   return (
     <>
-      <PageHeader title="Мои задачи" subtitle={formatTodayLabel(new Date())} />
+      <PageHeader
+        title="Мои задачи"
+        subtitle={formatTodayLabel(new Date())}
+        action={<NewPersonalTaskDialog />}
+      />
       <div className="space-y-8 p-8">
-        {tasks.length === 0 ? (
+        {personalTasks.length > 0 ? (
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
+              Личные задачи
+            </h3>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {personalTasks.map((task) => (
+                <PersonalTaskCard key={task.id} task={task} />
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {tasks.length === 0 && personalTasks.length === 0 ? (
           <p className="text-sm text-muted-foreground">Вам пока не назначено ни одной задачи.</p>
-        ) : (
+        ) : tasks.length === 0 ? null : (
           Array.from(grouped.entries()).map(([projectId, group]) => (
             <div key={projectId} className="space-y-3">
               <h3 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
