@@ -7,6 +7,8 @@ import { SystemRole, UserType } from "@prisma/client";
 import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
+import { sendEmployeeCreatedEmail, sendPasswordResetEmail } from "@/lib/email/send";
+import { notifyEmployeeCreated, notifyPasswordReset } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 
 // Полный контроль над своим департаментом (см. план): руководитель
@@ -22,15 +24,17 @@ export async function createEmployeeAction(formData: FormData) {
 
   const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
   let scopedDepartmentId: string | null = null;
+  let scopedDepartmentName: string | null = null;
   if (!isAdmin) {
     const managed = await prisma.department.findFirst({
       where: { managerId: session.user.id },
-      select: { id: true },
+      select: { id: true, name: true },
     });
     if (!managed) {
       throw new Error("Недостаточно прав");
     }
     scopedDepartmentId = managed.id;
+    scopedDepartmentName = managed.name;
   }
 
   const fullName = (formData.get("fullName") as string | null)?.trim();
@@ -64,19 +68,40 @@ export async function createEmployeeAction(formData: FormData) {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  await prisma.user.create({
-    data: {
-      fullName,
-      email,
-      passwordHash,
-      systemRole,
-      userType: UserType.ШТАТНЫЙ,
-      phone,
-      position,
-      birthDate,
-      salary,
-      homeDepartmentId: scopedDepartmentId,
-    },
+  const user = await prisma.$transaction(async (tx) => {
+    const created = await tx.user.create({
+      data: {
+        fullName,
+        email,
+        passwordHash,
+        systemRole,
+        userType: UserType.ШТАТНЫЙ,
+        phone,
+        position,
+        birthDate,
+        salary,
+        homeDepartmentId: scopedDepartmentId,
+      },
+    });
+
+    await notifyEmployeeCreated(tx, {
+      userId: created.id,
+      actorId: session.user.id,
+      departmentName: scopedDepartmentName,
+    });
+
+    return created;
+  });
+
+  // Пароль в письмо НЕ попадает — в отличие от менеджерского флоу, здесь
+  // администратор/руководитель департамента сам вводит реальный пароль в
+  // форме и сообщает его сотруднику лично (см. план, Phase 14).
+  sendEmployeeCreatedEmail({
+    to: user.email,
+    employeeName: user.fullName,
+    departmentName: scopedDepartmentName,
+  }).catch((error) => {
+    console.error("Не удалось отправить приветственное письмо", error);
   });
 
   revalidatePath("/employees");
@@ -330,7 +355,28 @@ export async function changePasswordAction(formData: FormData) {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+    // Только административный сброс ЧУЖОГО пароля — самостоятельная смена
+    // пароля никого не уведомляет (см. lib/notifications/notify.ts).
+    if (!isSelf) {
+      await notifyPasswordReset(tx, { userId, actorId: session.user.id });
+    }
+  });
+
+  if (!isSelf) {
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, fullName: true } });
+    if (target) {
+      sendPasswordResetEmail({
+        to: target.email,
+        employeeName: target.fullName,
+        temporaryPassword: newPassword,
+      }).catch((error) => {
+        console.error("Не удалось отправить письмо о сбросе пароля", error);
+      });
+    }
+  }
 
   revalidatePath(`/employees/${userId}`);
 }

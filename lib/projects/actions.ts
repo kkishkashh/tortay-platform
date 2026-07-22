@@ -8,7 +8,7 @@ import { del } from "@vercel/blob";
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
 import { sendGipAssignedEmail, sendTaskAssignedEmail } from "@/lib/email/send";
-import { notifyTaskAssigned } from "@/lib/notifications/notify";
+import { notifyGipAssigned, notifyTaskAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { ensureProjectMember } from "@/lib/projects/membership";
 import { canManageOperations } from "@/lib/projects/permissions";
@@ -295,6 +295,7 @@ export async function createProjectAction(formData: FormData) {
         projectRole: ProjectRole.ГИП,
       },
     });
+    await notifyGipAssigned(tx, { userId: gipUserId, actorId: session.user.id, projectName: name });
 
     const creatorMember = creatorIsGip
       ? gipMember
@@ -316,6 +317,8 @@ export async function createProjectAction(formData: FormData) {
         projectId: project.id,
         userId,
         role: ProjectRole.ИНЖЕНЕР,
+        actorId: session.user.id,
+        projectName: name,
       });
       memberIdByUserId.set(userId, member.id);
     }
@@ -519,6 +522,8 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
         data: { projectId, userId: gipUserId, projectRole: ProjectRole.ГИП },
       });
     }
+
+    await notifyGipAssigned(tx, { userId: gipUserId, actorId: session.user.id, projectName: project.name });
 
     await logActivity(tx, {
       projectId,

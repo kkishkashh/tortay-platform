@@ -167,6 +167,162 @@ export async function sendManagerCreatedEmail({
   });
 }
 
+// ============================================================
+// Phase 14 — расширение уведомлений/писем (см. план).
+// ============================================================
+
+export async function sendEmployeeCreatedEmail({
+  to,
+  employeeName,
+  departmentName,
+}: {
+  to: string;
+  employeeName: string;
+  departmentName: string | null;
+}) {
+  if (!transporter) {
+    console.warn(`[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — приветственное письмо (${to}) не отправлено`);
+    return;
+  }
+
+  const departmentLine = departmentName
+    ? `<p>Вам назначен департамент «${departmentName}».</p>`
+    : "";
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: "Добро пожаловать в Tortay Engineering",
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Для вас создан аккаунт сотрудника в Tortay Engineering.</p>
+      ${departmentLine}
+      <p><a href="${APP_URL}/login">Войти в платформу</a></p>
+    `,
+  });
+}
+
+export async function sendDepartmentAssignedEmail({
+  to,
+  employeeName,
+  departmentName,
+}: {
+  to: string;
+  employeeName: string;
+  departmentName: string;
+}) {
+  if (!transporter) {
+    console.warn(
+      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о назначении в департамент (${to}) не отправлено`,
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `Вас добавили в департамент «${departmentName}»`,
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Вы теперь состоите в департаменте «${departmentName}» в Tortay Engineering.</p>
+    `,
+  });
+}
+
+export async function sendDeadlineChangedEmail({
+  to,
+  employeeName,
+  taskTitle,
+  projectName,
+  deadline,
+}: {
+  to: string;
+  employeeName: string;
+  taskTitle: string;
+  projectName: string;
+  deadline: Date | null;
+}) {
+  if (!transporter) {
+    console.warn(
+      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо об изменении срока (${to}, «${taskTitle}») не отправлено`,
+    );
+    return;
+  }
+
+  const deadlineLine = deadline
+    ? `<p>Новый срок: ${deadline.toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" })}</p>`
+    : "<p>Срок снят.</p>";
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `Изменён срок задачи «${taskTitle}»`,
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Срок задачи «${taskTitle}» в проекте «${projectName}» был изменён.</p>
+      ${deadlineLine}
+    `,
+  });
+}
+
+export async function sendTaskReturnedEmail({
+  to,
+  employeeName,
+  taskTitle,
+  projectName,
+}: {
+  to: string;
+  employeeName: string;
+  taskTitle: string;
+  projectName: string;
+}) {
+  if (!transporter) {
+    console.warn(
+      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о возврате задачи (${to}, «${taskTitle}») не отправлено`,
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `Задача «${taskTitle}» возвращена на доработку`,
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Задача «${taskTitle}» в проекте «${projectName}» возвращена вам на доработку.</p>
+    `,
+  });
+}
+
+export async function sendTaskApprovedEmail({
+  to,
+  employeeName,
+  taskTitle,
+  projectName,
+}: {
+  to: string;
+  employeeName: string;
+  taskTitle: string;
+  projectName: string;
+}) {
+  if (!transporter) {
+    console.warn(
+      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо об одобрении задачи (${to}, «${taskTitle}») не отправлено`,
+    );
+    return;
+  }
+
+  await transporter.sendMail({
+    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+    to,
+    subject: `Задача «${taskTitle}» одобрена`,
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Ваша задача «${taskTitle}» в проекте «${projectName}» принята выполненной.</p>
+    `,
+  });
+}
+
 export async function sendPasswordResetEmail({
   to,
   employeeName,

@@ -89,3 +89,121 @@ export async function notifyPasswordReset(
     },
   });
 }
+
+// ============================================================
+// Phase 14 — расширение уведомлений (см. план).
+// ============================================================
+
+export async function notifyEmployeeCreated(
+  db: Db,
+  data: { userId: string; actorId: string; departmentName: string | null },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.СОТРУДНИК_СОЗДАН,
+      title: "Добро пожаловать в Tortay Engineering",
+      body: data.departmentName
+        ? `Для вас создан аккаунт сотрудника в департаменте «${data.departmentName}»`
+        : "Для вас создан аккаунт сотрудника",
+    },
+  });
+}
+
+export async function notifyDepartmentAssigned(
+  db: Db,
+  data: { userId: string; actorId: string; departmentName: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ДЕПАРТАМЕНТ_НАЗНАЧЕН,
+      title: "Вас добавили в департамент",
+      body: `Вы теперь состоите в департаменте «${data.departmentName}»`,
+    },
+  });
+}
+
+// Срабатывает только при РЕАЛЬНОМ создании новой записи ProjectMember —
+// см. lib/projects/membership.ts::ensureProjectMember и
+// lib/projects/actions.ts::assignGipAction — не при обновлении роли уже
+// существующего участника.
+export async function notifyProjectAssigned(
+  db: Db,
+  data: { userId: string; actorId: string; projectName: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.УЧАСТНИК_ПРОЕКТА_ДОБАВЛЕН,
+      title: "Вас добавили в проект",
+      body: `Вы стали участником проекта «${data.projectName}»`,
+    },
+  });
+}
+
+export async function notifyGipAssigned(
+  db: Db,
+  data: { userId: string; actorId: string; projectName: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ГИП_НАЗНАЧЕН,
+      title: "Вас назначили ГИП",
+      body: `Вы назначены главным инженером проекта «${data.projectName}»`,
+    },
+  });
+}
+
+export async function notifyDeadlineChanged(
+  db: Db,
+  data: { userId: string; actorId: string; taskId: string; taskTitle: string; projectName: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.СРОК_ИЗМЕНЁН,
+      title: "Изменён срок задачи",
+      body: `Срок задачи «${data.taskTitle}» в проекте «${data.projectName}» изменён`,
+      taskId: data.taskId,
+    },
+  });
+}
+
+export async function notifyTaskReturned(
+  db: Db,
+  data: { userId: string; actorId: string; taskId: string; taskTitle: string; projectName: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ЗАДАЧА_ВОЗВРАЩЕНА,
+      title: "Задача возвращена на доработку",
+      body: `Задача «${data.taskTitle}» в проекте «${data.projectName}» возвращена на доработку`,
+      taskId: data.taskId,
+    },
+  });
+}
+
+export async function notifyTaskApproved(
+  db: Db,
+  data: { userId: string; actorId: string; taskId: string; taskTitle: string; projectName: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ЗАДАЧА_ОДОБРЕНА,
+      title: "Задача одобрена",
+      body: `Задача «${data.taskTitle}» в проекте «${data.projectName}» принята выполненной`,
+      taskId: data.taskId,
+    },
+  });
+}

@@ -6,8 +6,20 @@ import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
-import { sendTaskAssignedEmail, sendTaskReadyForReviewEmail } from "@/lib/email/send";
-import { notifyTaskAssigned, notifyTaskReadyForReview } from "@/lib/notifications/notify";
+import {
+  sendDeadlineChangedEmail,
+  sendTaskApprovedEmail,
+  sendTaskAssignedEmail,
+  sendTaskReadyForReviewEmail,
+  sendTaskReturnedEmail,
+} from "@/lib/email/send";
+import {
+  notifyDeadlineChanged,
+  notifyTaskApproved,
+  notifyTaskAssigned,
+  notifyTaskReadyForReview,
+  notifyTaskReturned,
+} from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { TASK_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canAdvanceTaskStatus, canManageProjectTasks, FORWARD_TRANSITIONS } from "@/lib/tasks/permissions";
@@ -144,6 +156,7 @@ async function loadTaskForPermissionCheck(taskId: string) {
       id: true,
       status: true,
       title: true,
+      deadline: true,
       assigneeMemberId: true,
       section: {
         select: {
@@ -153,7 +166,9 @@ async function loadTaskForPermissionCheck(taskId: string) {
           department: { select: { id: true, managerId: true } },
         },
       },
-      assigneeMember: { select: { userId: true } },
+      assigneeMember: {
+        select: { userId: true, user: { select: { id: true, email: true, fullName: true } } },
+      },
     },
   });
   if (!task) {
@@ -188,6 +203,14 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
     fields.assigneeMemberId !== null && fields.assigneeMemberId !== task.assigneeMemberId;
   const newAssignee = isReassignment ? assigneeUser : null;
 
+  // Срок считается "изменённым" только когда исполнитель НЕ меняется в этом
+  // же вызове — при реассайне новый исполнитель уже получает
+  // notifyTaskAssigned/письмо о назначении, второе уведомление было бы шумом.
+  const deadlineChanged =
+    !isReassignment &&
+    task.assigneeMember !== null &&
+    (task.deadline?.getTime() ?? null) !== (fields.deadline?.getTime() ?? null);
+
   await prisma.$transaction(async (tx) => {
     await tx.task.update({
       where: { id: taskId },
@@ -209,6 +232,16 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
         projectName: task.section.project.name,
       });
     }
+
+    if (deadlineChanged && task.assigneeMember) {
+      await notifyDeadlineChanged(tx, {
+        userId: task.assigneeMember.userId,
+        actorId: session.user.id,
+        taskId: task.id,
+        taskTitle: fields.title,
+        projectName: task.section.project.name,
+      });
+    }
   });
 
   if (isReassignment && newAssignee) {
@@ -220,6 +253,18 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
       deadline: fields.deadline,
     }).catch((error) => {
       console.error("Не удалось отправить уведомление о назначении задачи", error);
+    });
+  }
+
+  if (deadlineChanged && task.assigneeMember) {
+    sendDeadlineChangedEmail({
+      to: task.assigneeMember.user.email,
+      employeeName: task.assigneeMember.user.fullName,
+      taskTitle: fields.title,
+      projectName: task.section.project.name,
+      deadline: fields.deadline,
+    }).catch((error) => {
+      console.error("Не удалось отправить письмо об изменении срока", error);
     });
   }
 
@@ -248,15 +293,59 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
     return;
   }
 
+  const isRevision = FORWARD_TRANSITIONS[nextStatus] === task.status;
+  const isApproval = task.status === TaskStatus.НА_ПРОВЕРКЕ && nextStatus === TaskStatus.ВЫПОЛНЕНО;
+
   await prisma.$transaction(async (tx) => {
     await tx.task.update({ where: { id: taskId }, data: { status: nextStatus } });
 
-    const isRevision = FORWARD_TRANSITIONS[nextStatus] === task.status;
     const message = isRevision
       ? `${session.user.name} вернул(а) задачу «${task.title}» на доработку`
       : `${session.user.name} изменил(а) статус задачи «${task.title}» на «${TASK_STATUS_LABELS[nextStatus]}»`;
     await logActivity(tx, { projectId: task.section.projectId, actorId: session.user.id, message });
+
+    if (isRevision && task.assigneeMember) {
+      await notifyTaskReturned(tx, {
+        userId: task.assigneeMember.userId,
+        actorId: session.user.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        projectName: task.section.project.name,
+      });
+    }
+
+    if (isApproval && task.assigneeMember) {
+      await notifyTaskApproved(tx, {
+        userId: task.assigneeMember.userId,
+        actorId: session.user.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        projectName: task.section.project.name,
+      });
+    }
   });
+
+  if (isRevision && task.assigneeMember) {
+    sendTaskReturnedEmail({
+      to: task.assigneeMember.user.email,
+      employeeName: task.assigneeMember.user.fullName,
+      taskTitle: task.title,
+      projectName: task.section.project.name,
+    }).catch((error) => {
+      console.error("Не удалось отправить письмо о возврате задачи", error);
+    });
+  }
+
+  if (isApproval && task.assigneeMember) {
+    sendTaskApprovedEmail({
+      to: task.assigneeMember.user.email,
+      employeeName: task.assigneeMember.user.fullName,
+      taskTitle: task.title,
+      projectName: task.section.project.name,
+    }).catch((error) => {
+      console.error("Не удалось отправить письмо об одобрении задачи", error);
+    });
+  }
 
   revalidatePath(`/projects/${task.section.projectId}`);
 }

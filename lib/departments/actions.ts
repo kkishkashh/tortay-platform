@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { sendDepartmentAssignedEmail } from "@/lib/email/send";
+import { notifyDepartmentAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import {
   canManageDepartment,
@@ -152,7 +154,26 @@ export async function addEmployeeToDepartmentAction(departmentId: string, userId
     }
   }
 
-  await prisma.user.update({ where: { id: userId }, data: { homeDepartmentId: departmentId } });
+  const target = await prisma.$transaction(async (tx) => {
+    const updated = await tx.user.update({
+      where: { id: userId },
+      data: { homeDepartmentId: departmentId },
+    });
+    await notifyDepartmentAssigned(tx, {
+      userId,
+      actorId: session.user.id,
+      departmentName: department.name,
+    });
+    return updated;
+  });
+
+  sendDepartmentAssignedEmail({
+    to: target.email,
+    employeeName: target.fullName,
+    departmentName: department.name,
+  }).catch((error) => {
+    console.error("Не удалось отправить письмо о назначении в департамент", error);
+  });
 
   revalidatePath("/departments");
   revalidatePath(`/departments/${departmentId}`);
@@ -188,7 +209,7 @@ export async function removeEmployeeFromDepartmentAction(userId: string, departm
 async function loadDepartmentOrThrow(departmentId: string) {
   const department = await prisma.department.findUnique({
     where: { id: departmentId },
-    select: { id: true, managerId: true },
+    select: { id: true, managerId: true, name: true },
   });
   if (!department) {
     throw new Error("Департамент не найден");
