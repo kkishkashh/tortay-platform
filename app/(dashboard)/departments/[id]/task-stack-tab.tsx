@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ArrowDown, ArrowUp, Check, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, Trash2, X } from "lucide-react";
 
 import {
   createTaskStackItemAction,
@@ -21,12 +21,21 @@ function TaskStackRow({
   isLast,
   canManage,
   onMove,
+  subItemCount,
+  expanded,
+  onToggleExpand,
 }: {
   item: DepartmentTaskStackSubItem;
   isFirst: boolean;
   isLast: boolean;
   canManage: boolean;
   onMove: (itemId: string, direction: "up" | "down") => void;
+  // Только у пунктов ВЕРХНЕГО уровня — раскрывает/скрывает подпункты,
+  // которые по умолчанию не показаны (см. план: клик по основному пункту
+  // открывает его подпункты и форму добавления нового подпункта).
+  subItemCount?: number;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -86,17 +95,38 @@ function TaskStackRow({
     );
   }
 
+  const isExpandable = onToggleExpand !== undefined;
+
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{item.title}</p>
-        {item.description ? (
-          <p className="truncate text-xs text-muted-foreground">{item.description}</p>
+    <div
+      className={`flex items-center justify-between gap-3 rounded-lg border p-3 ${isExpandable ? "cursor-pointer" : ""}`}
+      onClick={isExpandable ? onToggleExpand : undefined}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        {isExpandable ? (
+          expanded ? (
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
+          )
         ) : null}
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">
+            {item.title}
+            {subItemCount ? (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                (подпунктов: {subItemCount})
+              </span>
+            ) : null}
+          </p>
+          {item.description ? (
+            <p className="truncate text-xs text-muted-foreground">{item.description}</p>
+          ) : null}
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        </div>
       </div>
       {canManage ? (
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1" onClick={(event) => event.stopPropagation()}>
           <Button
             type="button"
             variant="ghost"
@@ -204,6 +234,20 @@ export function TaskStackTab({
   const [isPending, startTransition] = useTransition();
   const [addError, setAddError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  // Подпункты скрыты, пока не кликнешь по основному пункту (см. план).
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  function toggleExpand(itemId: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  }
 
   function handleAdd(formData: FormData) {
     setAddError(null);
@@ -256,33 +300,39 @@ export function TaskStackTab({
         <p className="text-sm text-muted-foreground">В базовом стеке пока нет задач.</p>
       ) : (
         <div className="space-y-3">
-          {items.map((item, index) => (
-            <div key={item.id} className="space-y-2">
-              <TaskStackRow
-                item={item}
-                isFirst={index === 0}
-                isLast={index === items.length - 1}
-                canManage={canManage}
-                onMove={handleMove}
-              />
+          {items.map((item, index) => {
+            const isExpanded = expandedIds.has(item.id);
+            return (
+              <div key={item.id} className="space-y-2">
+                <TaskStackRow
+                  item={item}
+                  isFirst={index === 0}
+                  isLast={index === items.length - 1}
+                  canManage={canManage}
+                  onMove={handleMove}
+                  subItemCount={item.subItems.length}
+                  expanded={isExpanded}
+                  onToggleExpand={() => toggleExpand(item.id)}
+                />
 
-              {item.subItems.length > 0 || canManage ? (
-                <div className="ml-6 space-y-2 border-l pl-3">
-                  {item.subItems.map((sub, subIndex) => (
-                    <TaskStackRow
-                      key={sub.id}
-                      item={sub}
-                      isFirst={subIndex === 0}
-                      isLast={subIndex === item.subItems.length - 1}
-                      canManage={canManage}
-                      onMove={(subItemId, direction) => handleMoveSubItem(item, subItemId, direction)}
-                    />
-                  ))}
-                  {canManage ? <AddSubItemForm parentItemId={item.id} /> : null}
-                </div>
-              ) : null}
-            </div>
-          ))}
+                {isExpanded ? (
+                  <div className="ml-6 space-y-2 border-l pl-3">
+                    {item.subItems.map((sub, subIndex) => (
+                      <TaskStackRow
+                        key={sub.id}
+                        item={sub}
+                        isFirst={subIndex === 0}
+                        isLast={subIndex === item.subItems.length - 1}
+                        canManage={canManage}
+                        onMove={(subItemId, direction) => handleMoveSubItem(item, subItemId, direction)}
+                      />
+                    ))}
+                    {canManage ? <AddSubItemForm parentItemId={item.id} /> : null}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
 
