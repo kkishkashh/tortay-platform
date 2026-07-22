@@ -158,9 +158,7 @@ export function TaskCard({
         {canManage ? (
           <ManagerTaskStatusControl taskId={task.id} status={task.status} />
         ) : isAssignee ? (
-          <div className="flex justify-end">
-            <AssigneeTaskStatusControl taskId={task.id} status={task.status} />
-          </div>
+          <AssigneeTaskStatusControl taskId={task.id} status={task.status} />
         ) : null}
       </div>
     </Card>
