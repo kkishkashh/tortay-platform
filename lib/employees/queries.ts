@@ -1,5 +1,7 @@
 import { ProjectStatus, SystemRole, UserType } from "@prisma/client";
 
+import { auth } from "@/auth";
+import { getCurrentUserRoleTier, getManagedDepartment } from "@/lib/departments/queries";
 import { prisma } from "@/lib/prisma";
 import { workloadLevel, type WorkloadLevel } from "@/lib/workload";
 
@@ -35,9 +37,31 @@ export type EmployeeListItem = {
 // Руководители департаментов сюда не входят (managedDepartments: none) —
 // это отдельная категория (Account Portal → Менеджеры); они сами
 // добавляют сотрудников в свой департамент.
+// Область видимости (см. план, Phase 15, D17): администратор и рядовой
+// сотрудник видят весь список без изменений; руководитель департамента —
+// только сотрудников СВОЕГО департамента плюс самого себя (чтобы видеть
+// свою запись в списке, даже хотя managedDepartments у него не пустой).
 export async function getEmployees(): Promise<EmployeeListItem[]> {
+  const session = await auth();
+  const tier = await getCurrentUserRoleTier(session?.user);
+
+  let scopeWhere = {};
+  if (tier === "department_manager" && session?.user) {
+    const managed = await getManagedDepartment(session.user.id);
+    scopeWhere = managed
+      ? {
+          OR: [
+            { managedDepartments: { none: {} }, homeDepartmentId: managed.id },
+            { id: session.user.id },
+          ],
+        }
+      : { id: session.user.id };
+  } else {
+    scopeWhere = { managedDepartments: { none: {} } };
+  }
+
   const employees = await prisma.user.findMany({
-    where: { userType: UserType.ШТАТНЫЙ, managedDepartments: { none: {} } },
+    where: { userType: UserType.ШТАТНЫЙ, ...scopeWhere },
     select: {
       id: true,
       fullName: true,

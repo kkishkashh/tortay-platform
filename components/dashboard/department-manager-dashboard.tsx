@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { AlertTriangle, Building2, CheckCircle2, FolderKanban, ListTodo, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Building2,
+  CheckCircle2,
+  ClipboardCheck,
+  FolderKanban,
+  ListTodo,
+  Users,
+} from "lucide-react";
 
 import { DepartmentIcon } from "@/components/departments/department-icon";
 import { RecentActivity } from "@/components/dashboard/recent-activity";
@@ -54,7 +62,7 @@ export function DepartmentManagerDashboard({
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Сотрудников" value={String(stats.employeesCount)} icon={Users} color="green" />
         <StatCard label="Проектов" value={String(stats.projectsCount)} icon={FolderKanban} color="blue" />
         <StatCard label="Активных задач" value={String(stats.activeTasksCount)} icon={ListTodo} color="gold" />
@@ -63,6 +71,12 @@ export function DepartmentManagerDashboard({
           value={String(stats.overdueTasksCount)}
           icon={AlertTriangle}
           color="purple"
+        />
+        <StatCard
+          label="Ожидают проверки"
+          value={String(stats.pendingReviewCount)}
+          icon={ClipboardCheck}
+          color="gold"
         />
       </div>
 

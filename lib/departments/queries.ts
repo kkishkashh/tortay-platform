@@ -176,6 +176,7 @@ export type DepartmentDashboardStats = {
   activeTasksCount: number;
   completedTasksCount: number;
   overdueTasksCount: number;
+  pendingReviewCount: number;
   taskStatusBreakdown: { status: TaskStatus; count: number }[];
   recentActivity: { id: string; message: string; createdAt: Date }[];
 };
@@ -209,6 +210,7 @@ export async function getDepartmentDashboardStats(
   const overdueTasksCount = allTasks.filter(
     (t) => t.deadline !== null && t.deadline < now && t.status !== TaskStatus.ВЫПОЛНЕНО,
   ).length;
+  const pendingReviewCount = allTasks.filter((t) => t.status === TaskStatus.НА_ПРОВЕРКЕ).length;
 
   const breakdownMap = new Map<TaskStatus, number>();
   for (const task of allTasks) {
@@ -239,6 +241,7 @@ export async function getDepartmentDashboardStats(
     activeTasksCount,
     completedTasksCount,
     overdueTasksCount,
+    pendingReviewCount,
     taskStatusBreakdown,
     recentActivity,
   };

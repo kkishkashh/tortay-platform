@@ -1,7 +1,17 @@
 import { TaskStatus } from "@prisma/client";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Banknote, CheckCircle2, FolderKanban, User, Users } from "lucide-react";
+import {
+  Banknote,
+  Briefcase,
+  Building2,
+  CheckCircle2,
+  FileText,
+  FolderKanban,
+  User,
+  UserCog,
+  Users,
+} from "lucide-react";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
@@ -134,6 +144,33 @@ export default async function DashboardPage() {
           label={`Завершено в ${currentYear} году`}
           value={String(stats.completedThisYearCount)}
           icon={CheckCircle2}
+          color="purple"
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 px-8 pb-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Департаменты"
+          value={String(stats.departmentsCount ?? 0)}
+          icon={Building2}
+          color="blue"
+        />
+        <StatCard
+          label="Руководители"
+          value={String(stats.managersCount ?? 0)}
+          icon={UserCog}
+          color="green"
+        />
+        <StatCard
+          label="Договоры"
+          value={String(stats.contractsCount ?? 0)}
+          icon={FileText}
+          color="gold"
+        />
+        <StatCard
+          label="Аутсорсеры"
+          value={String(stats.outsourcersCount ?? 0)}
+          icon={Briefcase}
           color="purple"
         />
       </div>

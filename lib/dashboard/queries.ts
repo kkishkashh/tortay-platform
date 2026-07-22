@@ -10,6 +10,12 @@ export type DashboardStats = {
   completedThisYearCount: number;
   // null означает "скрыто" — финансовые суммы видит только РУКОВОДИТЕЛЬ.
   pendingPaymentsTotal: number | null;
+  // Вторая строка карточек на дашборде — только для администратора (см.
+  // план, Phase 15), как и pendingPaymentsTotal.
+  departmentsCount: number | null;
+  managersCount: number | null;
+  contractsCount: number | null;
+  outsourcersCount: number | null;
 };
 
 // Показатели дашборда считаются в той же зоне видимости, что и список
@@ -23,6 +29,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       employeesCount: 0,
       completedThisYearCount: 0,
       pendingPaymentsTotal: null,
+      departmentsCount: null,
+      managersCount: null,
+      contractsCount: null,
+      outsourcersCount: null,
     };
   }
 
@@ -34,27 +44,39 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const startOfYear = new Date(new Date().getFullYear(), 0, 1);
   const startOfNextYear = new Date(new Date().getFullYear() + 1, 0, 1);
 
-  const [activeProjectsCount, employeesCount, completedThisYearCount, pendingPayments] =
-    await Promise.all([
-      prisma.project.count({
-        where: { ...projectScope, status: ProjectStatus.В_РАБОТЕ },
-      }),
-      prisma.user.count({ where: { userType: UserType.ШТАТНЫЙ } }),
-      prisma.project.count({
-        where: {
-          ...projectScope,
-          status: ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ,
-          completedAt: { gte: startOfYear, lt: startOfNextYear },
-        },
-      }),
-      // Финансовые данные — только для РУКОВОДИТЕЛЯ.
-      isHead
-        ? prisma.payment.aggregate({
-            where: { status: PaymentStatus.ОЖИДАЕТСЯ },
-            _sum: { amount: true },
-          })
-        : null,
-    ]);
+  const [
+    activeProjectsCount,
+    employeesCount,
+    completedThisYearCount,
+    pendingPayments,
+    departmentsCount,
+    managersCount,
+    contractsCount,
+    outsourcersCount,
+  ] = await Promise.all([
+    prisma.project.count({
+      where: { ...projectScope, status: ProjectStatus.В_РАБОТЕ },
+    }),
+    prisma.user.count({ where: { userType: UserType.ШТАТНЫЙ } }),
+    prisma.project.count({
+      where: {
+        ...projectScope,
+        status: ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ,
+        completedAt: { gte: startOfYear, lt: startOfNextYear },
+      },
+    }),
+    // Финансовые данные — только для РУКОВОДИТЕЛЯ.
+    isHead
+      ? prisma.payment.aggregate({
+          where: { status: PaymentStatus.ОЖИДАЕТСЯ },
+          _sum: { amount: true },
+        })
+      : null,
+    isHead ? prisma.department.count() : null,
+    isHead ? prisma.user.count({ where: { managedDepartments: { some: {} } } }) : null,
+    isHead ? prisma.contract.count() : null,
+    isHead ? prisma.outsourcer.count() : null,
+  ]);
 
   return {
     activeProjectsCount,
@@ -63,6 +85,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     pendingPaymentsTotal: pendingPayments
       ? Number(pendingPayments._sum.amount ?? 0)
       : null,
+    departmentsCount,
+    managersCount,
+    contractsCount,
+    outsourcersCount,
   };
 }
 
