@@ -30,15 +30,6 @@ export const FORWARD_TRANSITIONS: Record<TaskStatus, TaskStatus | null> = {
   [TaskStatus.ВЫПОЛНЕНО]: null,
 };
 
-export function canAdvanceTaskStatus(
-  user: { id: string },
-  task: { status: TaskStatus; assigneeMember: { userId: string } | null },
-  nextStatus: TaskStatus,
-) {
-  if (!task.assigneeMember || task.assigneeMember.userId !== user.id) return false;
-  return FORWARD_TRANSITIONS[task.status] === nextStatus;
-}
-
 // Комментировать задачу может любой участник ЕЁ проекта (не только
 // исполнитель) плюс администратор/руководитель департамента — это
 // совместная зона, а не зона контроля, поэтому проверка сильно мягче, чем

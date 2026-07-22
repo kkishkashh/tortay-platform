@@ -22,7 +22,7 @@ import {
 } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { TASK_STATUS_LABELS } from "@/lib/projects/status-labels";
-import { canAdvanceTaskStatus, canManageProjectTasks, FORWARD_TRANSITIONS } from "@/lib/tasks/permissions";
+import { canManageProjectTasks, FORWARD_TRANSITIONS } from "@/lib/tasks/permissions";
 import { UNASSIGNED_MEMBER_VALUE } from "@/lib/tasks/constants";
 
 const TASK_PRIORITY_VALUES = new Set<string>(Object.values(TaskPriority));
@@ -285,7 +285,13 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
   }
 
   const task = await loadTaskForPermissionCheck(taskId);
-  if (!canManageProjectTasks(session.user, task.section)) {
+  // Полная свобода смены статуса (любое направление, не только вперёд) —
+  // либо руководитель/администратор департамента, либо сам исполнитель
+  // своей же задачи (по просьбе пользователя: сотрудник должен уметь сам
+  // вернуть свою задачу с "Выполнено" на "На проверке"/"В работе", а не
+  // только двигать её вперёд).
+  const isAssignee = task.assigneeMember?.userId === session.user.id;
+  if (!canManageProjectTasks(session.user, task.section) && !isAssignee) {
     throw new Error("Недостаточно прав для изменения статуса этой задачи");
   }
 
@@ -295,16 +301,30 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
 
   const isRevision = FORWARD_TRANSITIONS[nextStatus] === task.status;
   const isApproval = task.status === TaskStatus.НА_ПРОВЕРКЕ && nextStatus === TaskStatus.ВЫПОЛНЕНО;
+  // Достигли "На проверке" (с любой стороны, не только форвардом) —
+  // руководителя департамента (или всех админов, если не задан) нужно
+  // уведомить, что задача ждёт его — перенесено сюда из бывшего
+  // advanceTaskStatusAction, который эта функция теперь полностью заменяет.
+  const isReachingReview = nextStatus === TaskStatus.НА_ПРОВЕРКЕ;
+  // Не уведомляем исполнителя о его же собственном действии над своей
+  // задачей — уведомления здесь имеют смысл только когда статус поменял
+  // КТО-ТО ДРУГОЙ (обычно руководитель).
+  const notifyAssignee = task.assigneeMember && task.assigneeMember.userId !== session.user.id;
+  const reviewRecipients = isReachingReview ? await resolveReviewRecipients(task.section.department) : [];
 
   await prisma.$transaction(async (tx) => {
     await tx.task.update({ where: { id: taskId }, data: { status: nextStatus } });
 
     const message = isRevision
       ? `${session.user.name} вернул(а) задачу «${task.title}» на доработку`
-      : `${session.user.name} изменил(а) статус задачи «${task.title}» на «${TASK_STATUS_LABELS[nextStatus]}»`;
+      : isReachingReview
+        ? `${session.user.name} отправил(а) задачу «${task.title}» на проверку`
+        : nextStatus === TaskStatus.ВЫПОЛНЕНО
+          ? `${session.user.name} выполнил(а) задачу «${task.title}»`
+          : `${session.user.name} изменил(а) статус задачи «${task.title}» на «${TASK_STATUS_LABELS[nextStatus]}»`;
     await logActivity(tx, { projectId: task.section.projectId, actorId: session.user.id, message });
 
-    if (isRevision && task.assigneeMember) {
+    if (isRevision && notifyAssignee && task.assigneeMember) {
       await notifyTaskReturned(tx, {
         userId: task.assigneeMember.userId,
         actorId: session.user.id,
@@ -314,7 +334,7 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
       });
     }
 
-    if (isApproval && task.assigneeMember) {
+    if (isApproval && notifyAssignee && task.assigneeMember) {
       await notifyTaskApproved(tx, {
         userId: task.assigneeMember.userId,
         actorId: session.user.id,
@@ -323,9 +343,20 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
         projectName: task.section.project.name,
       });
     }
+
+    for (const recipient of reviewRecipients) {
+      await notifyTaskReadyForReview(tx, {
+        userId: recipient.id,
+        actorId: session.user.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        employeeName: session.user.name ?? "Сотрудник",
+        projectName: task.section.project.name,
+      });
+    }
   });
 
-  if (isRevision && task.assigneeMember) {
+  if (isRevision && notifyAssignee && task.assigneeMember) {
     sendTaskReturnedEmail({
       to: task.assigneeMember.user.email,
       employeeName: task.assigneeMember.user.fullName,
@@ -336,7 +367,7 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
     });
   }
 
-  if (isApproval && task.assigneeMember) {
+  if (isApproval && notifyAssignee && task.assigneeMember) {
     sendTaskApprovedEmail({
       to: task.assigneeMember.user.email,
       employeeName: task.assigneeMember.user.fullName,
@@ -344,6 +375,18 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
       projectName: task.section.project.name,
     }).catch((error) => {
       console.error("Не удалось отправить письмо об одобрении задачи", error);
+    });
+  }
+
+  for (const recipient of reviewRecipients) {
+    sendTaskReadyForReviewEmail({
+      to: recipient.email,
+      managerName: recipient.fullName,
+      taskTitle: task.title,
+      employeeName: session.user.name ?? "Сотрудник",
+      projectName: task.section.project.name,
+    }).catch((error) => {
+      console.error("Не удалось отправить уведомление о готовности задачи к проверке", error);
     });
   }
 
@@ -412,72 +455,6 @@ async function resolveReviewRecipients(department: { managerId: string | null } 
     where: { systemRole: SystemRole.РУКОВОДИТЕЛЬ },
     select: { id: true, email: true, fullName: true },
   });
-}
-
-// Единственное действие, доступное исполнителю задачи: перевести СВОЮ
-// задачу на один шаг вперёд по фиксированному циклу. Тот же экшен могут
-// вызвать и менеджер/администратор — тоже только вперёд (для движения
-// назад у них есть updateTaskStatusAction). Проверка на сервере
-// обязательна: это не просто скрытая в интерфейсе кнопка (см.
-// lib/tasks/permissions.ts).
-export async function advanceTaskStatusAction(taskId: string, nextStatus: TaskStatus) {
-  const session = await auth();
-  if (!session?.user) {
-    throw new Error("Не авторизован");
-  }
-
-  const task = await loadTaskForPermissionCheck(taskId);
-
-  const allowedNext = FORWARD_TRANSITIONS[task.status];
-  if (!allowedNext || allowedNext !== nextStatus) {
-    throw new Error("Недопустимый переход статуса");
-  }
-
-  const isManager = canManageProjectTasks(session.user, task.section);
-  const isAssignee = canAdvanceTaskStatus(session.user, task, nextStatus);
-  if (!isManager && !isAssignee) {
-    throw new Error("Недостаточно прав для изменения статуса этой задачи");
-  }
-
-  const reviewRecipients =
-    nextStatus === TaskStatus.НА_ПРОВЕРКЕ ? await resolveReviewRecipients(task.section.department) : [];
-
-  await prisma.$transaction(async (tx) => {
-    await tx.task.update({ where: { id: taskId }, data: { status: nextStatus } });
-
-    const message =
-      nextStatus === TaskStatus.НА_ПРОВЕРКЕ
-        ? `${session.user.name} отправил(а) задачу «${task.title}» на проверку`
-        : nextStatus === TaskStatus.ВЫПОЛНЕНО
-          ? `${session.user.name} выполнил(а) задачу «${task.title}»`
-          : `${session.user.name} перевёл(а) задачу «${task.title}» в статус «В работе»`;
-    await logActivity(tx, { projectId: task.section.projectId, actorId: session.user.id, message });
-
-    for (const recipient of reviewRecipients) {
-      await notifyTaskReadyForReview(tx, {
-        userId: recipient.id,
-        actorId: session.user.id,
-        taskId: task.id,
-        taskTitle: task.title,
-        employeeName: session.user.name ?? "Сотрудник",
-        projectName: task.section.project.name,
-      });
-    }
-  });
-
-  for (const recipient of reviewRecipients) {
-    sendTaskReadyForReviewEmail({
-      to: recipient.email,
-      managerName: recipient.fullName,
-      taskTitle: task.title,
-      employeeName: session.user.name ?? "Сотрудник",
-      projectName: task.section.project.name,
-    }).catch((error) => {
-      console.error("Не удалось отправить уведомление о готовности задачи к проверке", error);
-    });
-  }
-
-  revalidatePath(`/projects/${task.section.projectId}`);
 }
 
 // Галочка чек-листа внутри задачи — доступна исполнителю (сам отмечает свой
