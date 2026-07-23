@@ -6,7 +6,7 @@ export type WorkloadLevel = "low" | "medium" | "high";
 // Общий модуль: используется и на дашборде (WorkloadBoard), и на
 // странице сотрудников (EmployeeCard) — одно и то же понятие должно
 // считаться и раскрашиваться одинаково в обоих местах.
-const WORKLOAD_THRESHOLDS = { medium: 2, high: 3 } as const;
+const WORKLOAD_THRESHOLDS = { medium: 2, high: 4 } as const;
 
 export function workloadLevel(activeProjectsCount: number): WorkloadLevel {
   if (activeProjectsCount >= WORKLOAD_THRESHOLDS.high) return "high";
