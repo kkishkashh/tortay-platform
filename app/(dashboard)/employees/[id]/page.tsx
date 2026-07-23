@@ -142,7 +142,7 @@ export default async function EmployeeProfilePage({
         <Tabs defaultValue="overview">
           <TabsList>
             <TabsTrigger value="overview">Обзор</TabsTrigger>
-            <TabsTrigger value="tasks">Проекты и задачи</TabsTrigger>
+            <TabsTrigger value="profile">Личные данные</TabsTrigger>
             <TabsTrigger value="comments">Комментарии</TabsTrigger>
             <TabsTrigger value="timeline">Таймлайн</TabsTrigger>
           </TabsList>
@@ -210,6 +210,24 @@ export default async function EmployeeProfilePage({
               </CardContent>
             </Card>
 
+            <Card>
+              <CardHeader>
+                <CardTitle>Задачи</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TasksTab
+                  tasks={tasks}
+                  commentsByTask={commentsByTask}
+                  documentsByTask={documentsByTask}
+                  projectMembersByProject={projectMembersByProject}
+                  currentUserId={session?.user?.id}
+                  canManageByTask={canManageByTask}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="profile" className="mt-4 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Личные данные</CardTitle>
@@ -288,17 +306,6 @@ export default async function EmployeeProfilePage({
                 <PasswordForm userId={employee.id} isSelf={Boolean(isSelf)} />
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="tasks" className="mt-4">
-            <TasksTab
-              tasks={tasks}
-              commentsByTask={commentsByTask}
-              documentsByTask={documentsByTask}
-              projectMembersByProject={projectMembersByProject}
-              currentUserId={session?.user?.id}
-              canManageByTask={canManageByTask}
-            />
           </TabsContent>
 
           <TabsContent value="comments" className="mt-4">
