@@ -66,15 +66,27 @@ export default async function CalendarPage() {
         <Card>
           <CardContent className="space-y-3">
             <p className="text-sm font-medium capitalize">{monthLabel}</p>
+            <div className="grid grid-cols-7 gap-1 rounded-lg bg-muted/60 text-center">
+              {WEEKDAY_LABELS.map((label, index) => {
+                const isWeekend = index === 5 || index === 6;
+                return (
+                  <div
+                    key={label}
+                    className={cn(
+                      "py-2 text-[13px] font-bold tracking-wide uppercase",
+                      isWeekend ? "text-destructive" : "text-foreground",
+                    )}
+                  >
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
             <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-              {WEEKDAY_LABELS.map((label) => (
-                <div key={label} className="py-1 font-medium">
-                  {label}
-                </div>
-              ))}
               {days.map((day) => {
                 const inMonth = day.getMonth() === today.getMonth();
                 const isToday = isSameDay(day, today);
+                const isWeekend = day.getDay() === 0 || day.getDay() === 6;
                 const dayTasks = [...deadlineTasks.filter((t) => isSameDay(t.deadline!, day))].sort(
                   (a, b) => PRIORITY_URGENCY_ORDER.indexOf(a.priority) - PRIORITY_URGENCY_ORDER.indexOf(b.priority),
                 );
@@ -92,7 +104,13 @@ export default async function CalendarPage() {
                       hasUrgent && inMonth && "bg-destructive/5",
                     )}
                   >
-                    <span className={cn("text-xs", isToday && "font-semibold text-primary")}>
+                    <span
+                      className={cn(
+                        "text-xs",
+                        isWeekend && inMonth && "font-semibold text-destructive",
+                        isToday && "font-semibold text-primary",
+                      )}
+                    >
                       {day.getDate()}
                     </span>
                     {dayTasks.length > 0 ? (
