@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMyTasks } from "@/lib/tasks/queries";
+import { getMyPersonalTasks } from "@/lib/personal-tasks/queries";
 import {
   TASK_PRIORITY_BADGE_VARIANT,
   TASK_PRIORITY_BORDER_COLOR,
@@ -47,17 +48,50 @@ function buildMonthGrid(year: number, month: number) {
   return days;
 }
 
+type CalendarDeadlineItem = {
+  id: string;
+  title: string;
+  priority: TaskPriority;
+  deadline: Date;
+  subtitle: string;
+  href: string;
+};
+
 export default async function CalendarPage() {
-  const tasks = await getMyTasks();
-  const deadlineTasks = tasks.filter((t) => t.deadline !== null);
+  const [tasks, personalTasks] = await Promise.all([getMyTasks(), getMyPersonalTasks()]);
+
+  // Личные задачи (см. "+ Новая задача" на /my-tasks) не привязаны ни к
+  // какому проекту, но у них тоже есть срок и приоритет — раньше они
+  // молча пропадали с календаря, потому что здесь читались только задачи
+  // из проектов (getMyTasks).
+  const deadlineTasks: CalendarDeadlineItem[] = [
+    ...tasks
+      .filter((t) => t.deadline !== null)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        deadline: t.deadline!,
+        subtitle: t.projectName,
+        href: `/projects/${t.projectId}`,
+      })),
+    ...personalTasks
+      .filter((t) => t.deadline !== null)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        deadline: t.deadline!,
+        subtitle: "Личная задача",
+        href: "/my-tasks",
+      })),
+  ];
 
   const today = new Date();
   const days = buildMonthGrid(today.getFullYear(), today.getMonth());
   const monthLabel = today.toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
 
-  const upcoming = [...deadlineTasks].sort(
-    (a, b) => a.deadline!.getTime() - b.deadline!.getTime(),
-  );
+  const upcoming = [...deadlineTasks].sort((a, b) => a.deadline.getTime() - b.deadline.getTime());
 
   return (
     <>
@@ -87,7 +121,7 @@ export default async function CalendarPage() {
                 const inMonth = day.getMonth() === today.getMonth();
                 const isToday = isSameDay(day, today);
                 const isWeekend = day.getDay() === 0 || day.getDay() === 6;
-                const dayTasks = [...deadlineTasks.filter((t) => isSameDay(t.deadline!, day))].sort(
+                const dayTasks = [...deadlineTasks.filter((t) => isSameDay(t.deadline, day))].sort(
                   (a, b) => PRIORITY_URGENCY_ORDER.indexOf(a.priority) - PRIORITY_URGENCY_ORDER.indexOf(b.priority),
                 );
                 const hasUrgent = dayTasks.some((t) => t.priority === TaskPriority.СРОЧНЫЙ);
@@ -152,12 +186,12 @@ export default async function CalendarPage() {
           ) : (
             <div className="space-y-2">
               {upcoming.map((task) => (
-                <Link key={task.id} href={`/projects/${task.projectId}`} className="block">
+                <Link key={task.id} href={task.href} className="block">
                   <Card size="sm" hoverable className={cn("border-l-4", TASK_PRIORITY_BORDER_COLOR[task.priority])}>
                     <CardContent className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{task.title}</p>
-                        <p className="truncate text-xs text-muted-foreground">{task.projectName}</p>
+                        <p className="truncate text-xs text-muted-foreground">{task.subtitle}</p>
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <Badge variant={TASK_PRIORITY_BADGE_VARIANT[task.priority]}>
@@ -165,7 +199,7 @@ export default async function CalendarPage() {
                         </Badge>
                         <span className="flex items-center gap-1 text-xs text-muted-foreground">
                           <CalendarClock className="size-3.5" />
-                          {task.deadline!.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })}
+                          {task.deadline.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" })}
                         </span>
                       </div>
                     </CardContent>
