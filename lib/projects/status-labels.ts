@@ -45,3 +45,23 @@ export const TASK_PRIORITY_BADGE_VARIANT: Record<
   [TaskPriority.ВЫСОКИЙ]: "warning",
   [TaskPriority.СРОЧНЫЙ]: "destructive",
 };
+
+// Те же 4 цвета, что и в TASK_PRIORITY_BADGE_VARIANT, но как сплошной
+// bg-* класс — для маленьких точек-индикаторов в календаре (см.
+// app/(dashboard)/calendar/page.tsx), где полупрозрачный фон бейджа
+// слишком бледный, чтобы различать приоритет на мелком элементе.
+export const TASK_PRIORITY_DOT_COLOR: Record<TaskPriority, string> = {
+  [TaskPriority.НИЗКИЙ]: "bg-muted-foreground",
+  [TaskPriority.СРЕДНИЙ]: "bg-info",
+  [TaskPriority.ВЫСОКИЙ]: "bg-warning",
+  [TaskPriority.СРОЧНЫЙ]: "bg-destructive",
+};
+
+// Полные строки класса (а не сборка вида `bg-`.replace(...)) — иначе
+// Tailwind не увидит их при статическом анализе исходников и не сгенерирует.
+export const TASK_PRIORITY_BORDER_COLOR: Record<TaskPriority, string> = {
+  [TaskPriority.НИЗКИЙ]: "border-l-muted-foreground",
+  [TaskPriority.СРЕДНИЙ]: "border-l-info",
+  [TaskPriority.ВЫСОКИЙ]: "border-l-warning",
+  [TaskPriority.СРОЧНЫЙ]: "border-l-destructive",
+};

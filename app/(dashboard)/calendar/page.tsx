@@ -1,14 +1,31 @@
 import Link from "next/link";
 import { CalendarClock } from "lucide-react";
+import { TaskPriority } from "@prisma/client";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMyTasks } from "@/lib/tasks/queries";
-import { TASK_PRIORITY_BADGE_VARIANT, TASK_PRIORITY_LABELS } from "@/lib/projects/status-labels";
+import {
+  TASK_PRIORITY_BADGE_VARIANT,
+  TASK_PRIORITY_BORDER_COLOR,
+  TASK_PRIORITY_DOT_COLOR,
+  TASK_PRIORITY_LABELS,
+} from "@/lib/projects/status-labels";
 import { cn, formatTodayLabel } from "@/lib/utils";
 
 const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+
+// От самого срочного к самому спокойному — определяет и порядок точек в
+// ячейке дня (при нехватке места показываем самые срочные), и порядок
+// приоритетов в легенде под календарём.
+const PRIORITY_URGENCY_ORDER = [
+  TaskPriority.СРОЧНЫЙ,
+  TaskPriority.ВЫСОКИЙ,
+  TaskPriority.СРЕДНИЙ,
+  TaskPriority.НИЗКИЙ,
+];
+const MAX_DOTS_PER_DAY = 4;
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -58,7 +75,12 @@ export default async function CalendarPage() {
               {days.map((day) => {
                 const inMonth = day.getMonth() === today.getMonth();
                 const isToday = isSameDay(day, today);
-                const dayTasks = deadlineTasks.filter((t) => isSameDay(t.deadline!, day));
+                const dayTasks = [...deadlineTasks.filter((t) => isSameDay(t.deadline!, day))].sort(
+                  (a, b) => PRIORITY_URGENCY_ORDER.indexOf(a.priority) - PRIORITY_URGENCY_ORDER.indexOf(b.priority),
+                );
+                const hasUrgent = dayTasks.some((t) => t.priority === TaskPriority.СРОЧНЫЙ);
+                const visibleDots = dayTasks.slice(0, MAX_DOTS_PER_DAY);
+                const hiddenCount = dayTasks.length - visibleDots.length;
 
                 return (
                   <div
@@ -67,21 +89,38 @@ export default async function CalendarPage() {
                       "flex min-h-16 flex-col items-center gap-1 rounded-lg border border-transparent p-1.5",
                       !inMonth && "text-muted-foreground/40",
                       isToday && "border-primary bg-primary/5",
+                      hasUrgent && inMonth && "bg-destructive/5",
                     )}
                   >
                     <span className={cn("text-xs", isToday && "font-semibold text-primary")}>
                       {day.getDate()}
                     </span>
                     {dayTasks.length > 0 ? (
-                      <div className="flex flex-wrap justify-center gap-0.5">
-                        {dayTasks.slice(0, 3).map((t) => (
-                          <span key={t.id} className="size-1.5 rounded-full bg-primary" title={t.title} />
+                      <div className="flex flex-wrap items-center justify-center gap-0.5">
+                        {visibleDots.map((t) => (
+                          <span
+                            key={t.id}
+                            className={cn("size-1.5 rounded-full", TASK_PRIORITY_DOT_COLOR[t.priority])}
+                            title={`${t.title} — ${TASK_PRIORITY_LABELS[t.priority]}`}
+                          />
                         ))}
+                        {hiddenCount > 0 ? (
+                          <span className="text-[10px] leading-none text-muted-foreground">+{hiddenCount}</span>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
                 );
               })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+              {PRIORITY_URGENCY_ORDER.map((priority) => (
+                <span key={priority} className="flex items-center gap-1.5">
+                  <span className={cn("size-1.5 rounded-full", TASK_PRIORITY_DOT_COLOR[priority])} />
+                  {TASK_PRIORITY_LABELS[priority]}
+                </span>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -96,7 +135,7 @@ export default async function CalendarPage() {
             <div className="space-y-2">
               {upcoming.map((task) => (
                 <Link key={task.id} href={`/projects/${task.projectId}`} className="block">
-                  <Card size="sm" hoverable>
+                  <Card size="sm" hoverable className={cn("border-l-4", TASK_PRIORITY_BORDER_COLOR[task.priority])}>
                     <CardContent className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{task.title}</p>
