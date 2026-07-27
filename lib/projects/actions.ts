@@ -8,7 +8,7 @@ import { del } from "@vercel/blob";
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
 import { sendGipAssignedEmail, sendTaskAssignedEmail } from "@/lib/email/send";
-import { appendProjectToSheet } from "@/lib/google-sheets";
+import { appendProjectRow, syncProjectField } from "@/lib/google-sheets";
 import { notifyGipAssigned, notifyTaskAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { ensureProjectMember } from "@/lib/projects/membership";
@@ -318,7 +318,7 @@ export async function createProjectAction(formData: FormData) {
     deadline: Date | null;
   }[] = [];
 
-  await prisma.$transaction(async (tx) => {
+  const createdProject = await prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
       data: { name, client, location, startDate, endDate, description },
     });
@@ -451,6 +451,8 @@ export async function createProjectAction(formData: FormData) {
         ],
       });
     }
+
+    return project;
   });
 
   // Письма — уже после того, как проект реально создан и закоммичен;
@@ -478,7 +480,8 @@ export async function createProjectAction(formData: FormData) {
 
   // Экспорт в Google Sheets — как и письма, после коммита и без throw
   // наружу: недоступность таблицы не должна откатывать создание проекта.
-  appendProjectToSheet({
+  appendProjectRow({
+    id: createdProject.id,
     name,
     client,
     location,
@@ -487,6 +490,8 @@ export async function createProjectAction(formData: FormData) {
     description,
     gipName: gipUser.fullName,
     createdByName: session.user.name ?? "Руководитель",
+    statusLabel: PROJECT_STATUS_LABELS[createdProject.status],
+    createdAt: createdProject.createdAt,
   }).catch((error) => {
     console.error("Не удалось экспортировать проект в Google Sheets", error);
   });
@@ -522,6 +527,10 @@ export async function updateProjectNameAction(projectId: string, name: string) {
     });
   });
 
+  syncProjectField(projectId, "name", trimmedName).catch((error) => {
+    console.error("Не удалось обновить название проекта в Google Sheets", error);
+  });
+
   revalidatePath("/");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}`);
@@ -552,13 +561,13 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
     throw new Error("Выбранный сотрудник не найден");
   }
 
-  await prisma.$transaction(async (tx) => {
+  const changed = await prisma.$transaction(async (tx) => {
     const currentGip = await tx.projectMember.findFirst({
       where: { projectId, projectRole: ProjectRole.ГИП },
     });
 
     if (currentGip?.userId === gipUserId) {
-      return;
+      return false;
     }
 
     if (currentGip) {
@@ -590,7 +599,15 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
       actorId: session.user.id,
       message: `${session.user.name} назначил(а) ${gipUser.fullName} ГИП-ом проекта «${project.name}»`,
     });
+
+    return true;
   });
+
+  if (changed) {
+    syncProjectField(projectId, "gip", gipUser.fullName).catch((error) => {
+      console.error("Не удалось обновить ГИП проекта в Google Sheets", error);
+    });
+  }
 
   revalidatePath("/");
   revalidatePath("/projects");
@@ -603,6 +620,11 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
 // к корню, чтобы ни один внешний ключ не сослался на уже несуществующую
 // строку. Всё в одной транзакции — либо удаляется весь проект целиком,
 // либо ничего.
+//
+// Сознательно НЕ трогаем строку проекта в Google Sheets здесь — по
+// требованию Камилы таблица служит подстраховкой на случай недоступности
+// сайта, и информация в ней никогда не должна удаляться, даже если сам
+// проект удалили в приложении.
 export async function deleteProjectAction(projectId: string) {
   const session = await auth();
   if (!session?.user) {
@@ -693,6 +715,10 @@ export async function updateProjectStatusAction(
       actorId: session.user.id,
       message: `${session.user.name} изменил статус проекта «${project.name}» на «${PROJECT_STATUS_LABELS[status]}»`,
     });
+  });
+
+  syncProjectField(projectId, "status", PROJECT_STATUS_LABELS[status]).catch((error) => {
+    console.error("Не удалось обновить статус проекта в Google Sheets", error);
   });
 
   revalidatePath("/");
