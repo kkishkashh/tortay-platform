@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# staged onboarding data (contains real credentials — never commit)
+prisma/scripts/*.local.json
