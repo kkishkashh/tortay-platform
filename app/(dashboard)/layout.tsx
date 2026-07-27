@@ -9,6 +9,7 @@ import {
   getNotificationsForCurrentUser,
   getUnreadNotificationCount,
 } from "@/lib/notifications/queries";
+import { getPositions } from "@/lib/positions/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
 
 export default async function DashboardLayout({
@@ -24,7 +25,7 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const [notifications, unreadNotificationCount, roleTier, profile, hasFinanceAccess] = await Promise.all([
+  const [notifications, unreadNotificationCount, roleTier, profile, hasFinanceAccess, positions] = await Promise.all([
     getNotificationsForCurrentUser(10),
     getUnreadNotificationCount(),
     getCurrentUserRoleTier(session.user),
@@ -33,6 +34,7 @@ export default async function DashboardLayout({
     // (see plan D12: сессия/JWT не обновляются на лету).
     getEmployeeProfile(session.user.id),
     canManageFinance(session.user),
+    getPositions(),
   ]);
 
   return (
@@ -46,6 +48,7 @@ export default async function DashboardLayout({
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}
         profile={profile}
+        positions={positions}
       />
       <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">{children}</main>
     </div>

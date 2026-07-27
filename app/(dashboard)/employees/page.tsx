@@ -4,13 +4,14 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { getCurrentUserRoleTier } from "@/lib/departments/queries";
 import { getEmployees } from "@/lib/employees/queries";
+import { getPositions } from "@/lib/positions/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
 import { EmployeesExplorer } from "./employees-explorer";
 import { NewEmployeeDialog } from "./new-employee-dialog";
 
 export default async function EmployeesPage() {
-  const [session, employees] = await Promise.all([auth(), getEmployees()]);
+  const [session, employees, positions] = await Promise.all([auth(), getEmployees(), getPositions()]);
   const roleTier = await getCurrentUserRoleTier(session?.user);
 
   // Руководитель департамента тоже может добавлять сотрудников — но только
@@ -23,7 +24,7 @@ export default async function EmployeesPage() {
       <PageHeader
         title="Сотрудники"
         subtitle={formatTodayLabel(new Date())}
-        action={canAddEmployees ? <NewEmployeeDialog isAdmin={isAdmin} /> : undefined}
+        action={canAddEmployees ? <NewEmployeeDialog isAdmin={isAdmin} positions={positions} /> : undefined}
       />
       <div className="p-8">
         {employees.length === 0 ? (

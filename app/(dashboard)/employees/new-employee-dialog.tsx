@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { CheckCircle2, UserPlus } from "lucide-react";
 
 import { createEmployeeAction } from "@/lib/employees/actions";
-import { COMMON_POSITIONS } from "@/lib/employees/positions";
+import type { PositionItem } from "@/lib/positions/queries";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,8 +23,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PositionSelect } from "@/components/employees/position-select";
 
-export function NewEmployeeDialog({ isAdmin }: { isAdmin: boolean }) {
+export function NewEmployeeDialog({
+  isAdmin,
+  positions,
+}: {
+  isAdmin: boolean;
+  positions: PositionItem[];
+}) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [showToast, setShowToast] = useState(false);
@@ -71,22 +78,7 @@ export function NewEmployeeDialog({ isAdmin }: { isAdmin: boolean }) {
 
             <div className="space-y-2">
               <Label htmlFor="position">Должность</Label>
-              <Select
-                name="position"
-                required
-                items={COMMON_POSITIONS.map((position) => ({ value: position, label: position }))}
-              >
-                <SelectTrigger id="position" className="w-full">
-                  <SelectValue placeholder="Выберите должность" />
-                </SelectTrigger>
-                <SelectContent>
-                  {COMMON_POSITIONS.map((position) => (
-                    <SelectItem key={position} value={position}>
-                      {position}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <PositionSelect id="position" positions={positions} required />
             </div>
 
             <div className="space-y-2">

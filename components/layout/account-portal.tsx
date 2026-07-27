@@ -16,6 +16,7 @@ import { ContactForm } from "@/components/employees/contact-form";
 import { DetailsForm } from "@/components/employees/details-form";
 import { PasswordForm } from "@/components/employees/password-form";
 import type { EmployeeProfile } from "@/lib/employees/queries";
+import type { PositionItem } from "@/lib/positions/queries";
 
 // Всегда работает с СОБСТСТВЕННЫМ профилем (session.user.id) — в отличие
 // от /employees/[id], который руководитель может открыть для чужого
@@ -25,9 +26,11 @@ import type { EmployeeProfile } from "@/lib/employees/queries";
 export function AccountPortal({
   profile,
   trigger,
+  positions,
 }: {
   profile: EmployeeProfile;
   trigger: ReactNode;
+  positions: PositionItem[];
 }) {
   const [open, setOpen] = useState(false);
   const isHead = profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
@@ -58,6 +61,7 @@ export function AccountPortal({
                 systemRole={profile.systemRole}
                 canEditSalary={isHead}
                 canEditSystemRole={isHead}
+                positions={positions}
               />
             ) : null}
             <PasswordForm userId={profile.id} isSelf />

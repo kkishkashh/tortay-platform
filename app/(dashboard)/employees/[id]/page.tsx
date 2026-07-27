@@ -11,6 +11,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
+import { getPositions } from "@/lib/positions/queries";
 import { getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
@@ -41,7 +42,7 @@ export default async function EmployeeProfilePage({
 }) {
   const { id } = await params;
 
-  const [session, employee] = await Promise.all([auth(), getEmployeeProfile(id)]);
+  const [session, employee, positions] = await Promise.all([auth(), getEmployeeProfile(id), getPositions()]);
   if (!employee) {
     notFound();
   }
@@ -265,6 +266,7 @@ export default async function EmployeeProfilePage({
                     systemRole={employee.systemRole}
                     canEditSalary={canEditSalary}
                     canEditSystemRole={canEditSystemRole}
+                    positions={positions}
                   />
                 </CardContent>
               </Card>

@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { PositionSelect } from "@/components/employees/position-select";
 import { updateEmployeeDetailsAction } from "@/lib/employees/actions";
-import { COMMON_POSITIONS } from "@/lib/employees/positions";
+import type { PositionItem } from "@/lib/positions/queries";
 
 function toDateInputValue(date: Date | null) {
   if (!date) return "";
@@ -38,6 +39,7 @@ export function DetailsForm({
   systemRole,
   canEditSalary,
   canEditSystemRole,
+  positions,
 }: {
   userId: string;
   fullName: string;
@@ -47,6 +49,7 @@ export function DetailsForm({
   systemRole: SystemRole;
   canEditSalary: boolean;
   canEditSystemRole: boolean;
+  positions: PositionItem[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -81,22 +84,7 @@ export function DetailsForm({
 
         <div className="space-y-1.5">
           <Label htmlFor="details-position">Должность</Label>
-          <Select
-            name="position"
-            defaultValue={position ?? undefined}
-            items={COMMON_POSITIONS.map((p) => ({ value: p, label: p }))}
-          >
-            <SelectTrigger id="details-position" className="w-full">
-              <SelectValue placeholder="Выберите должность" />
-            </SelectTrigger>
-            <SelectContent>
-              {COMMON_POSITIONS.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <PositionSelect id="details-position" positions={positions} defaultValue={position} />
         </div>
 
         <div className="space-y-1.5">
