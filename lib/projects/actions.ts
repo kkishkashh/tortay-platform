@@ -8,6 +8,7 @@ import { del } from "@vercel/blob";
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
 import { sendGipAssignedEmail, sendTaskAssignedEmail } from "@/lib/email/send";
+import { appendProjectToSheet } from "@/lib/google-sheets";
 import { notifyGipAssigned, notifyTaskAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { ensureProjectMember } from "@/lib/projects/membership";
@@ -473,6 +474,21 @@ export async function createProjectAction(formData: FormData) {
     assignedByName: session.user.name ?? "Руководитель",
   }).catch((error) => {
     console.error("Не удалось отправить уведомление о назначении ГИП", error);
+  });
+
+  // Экспорт в Google Sheets — как и письма, после коммита и без throw
+  // наружу: недоступность таблицы не должна откатывать создание проекта.
+  appendProjectToSheet({
+    name,
+    client,
+    location,
+    startDate,
+    endDate,
+    description,
+    gipName: gipUser.fullName,
+    createdByName: session.user.name ?? "Руководитель",
+  }).catch((error) => {
+    console.error("Не удалось экспортировать проект в Google Sheets", error);
   });
 
   revalidatePath("/projects");
