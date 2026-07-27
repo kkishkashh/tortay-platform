@@ -94,7 +94,9 @@ export default async function OutsourcerProfilePage({
               projectSubject: outsourcer.projectSubject,
               durationDays: outsourcer.durationDays,
               totalAmount: outsourcer.totalAmount ? Number(outsourcer.totalAmount) : null,
-              advancePercent: outsourcer.advancePercent,
+              paymentPercent1: outsourcer.paymentPercent1,
+              paymentPercent2: outsourcer.paymentPercent2,
+              paymentPercent3: outsourcer.paymentPercent3,
               contractNumber: outsourcer.contractNumber,
             }}
           />

@@ -486,7 +486,18 @@ model Outsourcer {
   projectSubject String?   @db.Text // предмет договора / название и описание объекта
   durationDays   Int? // срок выполнения работ, календарных дней
   totalAmount    Decimal?  @db.Decimal(14, 2)
-  advancePercent Int?      @default(50) // % предоплаты, остаток — по сдаче работ
+
+  // Разбивка оплаты на до 3 траншей (проценты должны суммарно давать 100 —
+  // проверяется в updateOutsourcerContractDetailsAction, не на уровне БД).
+  // Два готовых пресета в форме — 60/20/20 и 40/30/30 — но это просто
+  // дефолтные значения полей, а не отдельная сущность: можно вводить любые
+  // свои проценты. Триггер каждого транша в тексте договора определяется
+  // динамически по позиции среди НЕнулевых траншей (первый — при подписании,
+  // последний — по сдаче работ, средний(е) — по сдаче промежуточного этапа),
+  // см. lib/outsourcers/contract-docx.ts.
+  paymentPercent1 Int? @default(60)
+  paymentPercent2 Int? @default(20)
+  paymentPercent3 Int? @default(20)
 
   @@map("outsourcers")
 }

@@ -46,8 +46,34 @@ export type OutsourcerContractData = {
   projectSubject: string;
   durationDays: number;
   totalAmount: number;
-  advancePercent: number;
+  // До 3 траншей, должны суммарно давать 100 (проверяется при сохранении,
+  // см. lib/outsourcers/actions.ts) — 0 означает "транш не используется".
+  paymentPercent1: number;
+  paymentPercent2: number;
+  paymentPercent3: number;
 };
+
+// Триггер платежа зависит от его позиции среди НЕнулевых траншей, а не от
+// номера поля — так 50/50/0 (старое поведение) и 60/20/20 (новое) оба дают
+// осмысленный текст без отдельной ветки на "старый"/"новый" формат.
+function buildPaymentBullets(totalAmount: number, percents: number[]): string[] {
+  const active = percents
+    .map((percent, index) => ({ percent, index }))
+    .filter((p) => p.percent > 0);
+
+  return active.map((p, position) => {
+    const amount = Math.round((totalAmount * p.percent) / 100);
+    const isFirst = position === 0;
+    const isLast = position === active.length - 1;
+    const trigger = isFirst
+      ? "в течении 10 (десяти) банковских дней с момента подписания настоящего договора"
+      : isLast
+        ? "в течении 10 (десяти) банковских дней после завершения работы, получения заключения Государственной экспртизы проектов и подписания Сторонами Акта выполненных работ"
+        : "в течении 10 (десяти) банковских дней после сдачи промежуточного этапа работ";
+    const label = isFirst ? "предоплаты в размере" : "";
+    return `${label ? label + " " : ""}${p.percent}% от общей суммы договора, указанной в п.3.1, что составляет ${formatMoneyPhrase(amount)} ${trigger};`;
+  });
+}
 
 function heading(text: string): Paragraph {
   return new Paragraph({
@@ -73,10 +99,11 @@ function bullet(text: string): Paragraph {
 }
 
 export async function buildOutsourcerContractDocx(data: OutsourcerContractData): Promise<Buffer> {
-  const advancePercent = data.advancePercent;
-  const finalPercent = 100 - advancePercent;
-  const advanceAmount = Math.round((data.totalAmount * advancePercent) / 100);
-  const finalAmount = data.totalAmount - advanceAmount;
+  const paymentBullets = buildPaymentBullets(data.totalAmount, [
+    data.paymentPercent1,
+    data.paymentPercent2,
+    data.paymentPercent3,
+  ]);
   const idIssuedDate = data.idCardIssuedAt.toLocaleDateString("ru-RU", {
     day: "2-digit",
     month: "2-digit",
@@ -123,12 +150,7 @@ export async function buildOutsourcerContractDocx(data: OutsourcerContractData):
       `3.1. Общая стоимость работ по настоящему договору составляет ${formatMoneyPhrase(data.totalAmount)} (без учёта обязательных налоговых платежей) за полный объем выполненных работ.`,
     ),
     body("3.2. Платежи по настоящему договору производятся Заказчиком в виде:"),
-    bullet(
-      `предоплаты в размере ${advancePercent}% от общей суммы договора, указанной в п.3.1, что составляет ${formatMoneyPhrase(advanceAmount)} в течении 10 (десяти) банковских дней с момента подписания настоящего договора;`,
-    ),
-    bullet(
-      `${finalPercent}% от общей суммы договора, указанной в п.3.1, что составляет ${formatMoneyPhrase(finalAmount)} - в течении 10 (десяти) банковских дней после завершения работы, получения заключения Государственной экспртизы проектов и подписания Сторонами Акта выполненных работ.`,
-    ),
+    ...paymentBullets.map((text) => bullet(text)),
     body(
       "3.3. Все расчеты производятся на текущий банковский счет Исполнителя, указанный в разделе 11 настоящего Договора.",
     ),

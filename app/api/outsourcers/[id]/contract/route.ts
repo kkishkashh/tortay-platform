@@ -50,7 +50,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     projectSubject: outsourcer.projectSubject,
     durationDays: outsourcer.durationDays,
     totalAmount: Number(outsourcer.totalAmount),
-    advancePercent: outsourcer.advancePercent ?? 50,
+    paymentPercent1: outsourcer.paymentPercent1 ?? 60,
+    paymentPercent2: outsourcer.paymentPercent2 ?? 20,
+    paymentPercent3: outsourcer.paymentPercent3 ?? 20,
   });
 
   // Кириллица в имени файла требует RFC 5987 (filename*=UTF-8''...) —

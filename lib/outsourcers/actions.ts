@@ -83,7 +83,9 @@ export async function updateOutsourcerContractDetailsAction(formData: FormData) 
   const projectSubject = (formData.get("projectSubject") as string | null)?.trim();
   const durationDaysRaw = (formData.get("durationDays") as string | null)?.trim();
   const totalAmountRaw = (formData.get("totalAmount") as string | null)?.trim();
-  const advancePercentRaw = (formData.get("advancePercent") as string | null)?.trim();
+  const paymentPercent1Raw = (formData.get("paymentPercent1") as string | null)?.trim();
+  const paymentPercent2Raw = (formData.get("paymentPercent2") as string | null)?.trim();
+  const paymentPercent3Raw = (formData.get("paymentPercent3") as string | null)?.trim();
 
   if (
     !id || !iin || !address || !bankName || !bankKbe || !bankAccountNumber || !bankBik ||
@@ -103,9 +105,20 @@ export async function updateOutsourcerContractDetailsAction(formData: FormData) 
     throw new Error("Некорректная стоимость работ");
   }
 
-  const advancePercent = advancePercentRaw ? Number(advancePercentRaw) : 50;
-  if (!Number.isInteger(advancePercent) || advancePercent < 0 || advancePercent > 100) {
-    throw new Error("Процент предоплаты должен быть от 0 до 100");
+  const paymentPercent1 = paymentPercent1Raw ? Number(paymentPercent1Raw) : 60;
+  const paymentPercent2 = paymentPercent2Raw ? Number(paymentPercent2Raw) : 20;
+  const paymentPercent3 = paymentPercent3Raw ? Number(paymentPercent3Raw) : 20;
+  for (const [label, value] of [
+    ["Первый транш", paymentPercent1],
+    ["Второй транш", paymentPercent2],
+    ["Третий транш", paymentPercent3],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      throw new Error(`${label} оплаты должен быть от 0 до 100`);
+    }
+  }
+  if (paymentPercent1 + paymentPercent2 + paymentPercent3 !== 100) {
+    throw new Error("Сумма процентов по всем траншам должна быть равна 100");
   }
 
   const existing = await prisma.outsourcer.findUnique({
@@ -142,7 +155,9 @@ export async function updateOutsourcerContractDetailsAction(formData: FormData) 
         projectSubject,
         durationDays,
         totalAmount,
-        advancePercent,
+        paymentPercent1,
+        paymentPercent2,
+        paymentPercent3,
         contractNumber,
         contractDate,
       },
