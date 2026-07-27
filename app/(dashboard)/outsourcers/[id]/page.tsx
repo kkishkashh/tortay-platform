@@ -8,6 +8,7 @@ import { canManageFinance } from "@/lib/projects/permissions";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 import { DeleteOutsourcerDialog } from "./delete-outsourcer-dialog";
+import { OutsourcerContractForm } from "./contract-form";
 
 export default async function OutsourcerProfilePage({
   params,
@@ -77,8 +78,30 @@ export default async function OutsourcerProfilePage({
           </div>
         </dl>
 
+        <div className="mt-8">
+          <OutsourcerContractForm
+            outsourcer={{
+              id: outsourcer.id,
+              iin: outsourcer.iin,
+              address: outsourcer.address,
+              bankName: outsourcer.bankName,
+              bankKbe: outsourcer.bankKbe,
+              bankAccountNumber: outsourcer.bankAccountNumber,
+              bankBik: outsourcer.bankBik,
+              idCardNumber: outsourcer.idCardNumber,
+              idCardIssuedAt: outsourcer.idCardIssuedAt,
+              idCardIssuedBy: outsourcer.idCardIssuedBy,
+              projectSubject: outsourcer.projectSubject,
+              durationDays: outsourcer.durationDays,
+              totalAmount: outsourcer.totalAmount ? Number(outsourcer.totalAmount) : null,
+              advancePercent: outsourcer.advancePercent,
+              contractNumber: outsourcer.contractNumber,
+            }}
+          />
+        </div>
+
         <p className="mt-8 text-sm text-muted-foreground">
-          Назначенные проекты и редактирование появятся здесь на следующих шагах.
+          Назначенные проекты появятся здесь на следующих шагах.
         </p>
       </div>
     </>

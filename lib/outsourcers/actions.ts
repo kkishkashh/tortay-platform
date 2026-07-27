@@ -59,6 +59,104 @@ export async function createOutsourcerAction(formData: FormData) {
   revalidatePath("/outsourcers");
 }
 
+// Данные для автогенерации договора подряда (см. lib/outsourcers/contract-docx.ts) —
+// заполняются на странице аутсорсера отдельно от быстрой карточки создания.
+// Номер и дата договора генерируются автоматически при первом сохранении,
+// если ещё не заданы — дальше не меняются даже при повторном сохранении
+// формы, чтобы не переносить дату уже заключённого договора.
+export async function updateOutsourcerContractDetailsAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user || !(await canManageFinance(session.user))) {
+    throw new Error("Недостаточно прав");
+  }
+
+  const id = formData.get("id") as string;
+  const iin = (formData.get("iin") as string | null)?.trim();
+  const address = (formData.get("address") as string | null)?.trim();
+  const bankName = (formData.get("bankName") as string | null)?.trim();
+  const bankKbe = (formData.get("bankKbe") as string | null)?.trim();
+  const bankAccountNumber = (formData.get("bankAccountNumber") as string | null)?.trim();
+  const bankBik = (formData.get("bankBik") as string | null)?.trim();
+  const idCardNumber = (formData.get("idCardNumber") as string | null)?.trim();
+  const idCardIssuedAtRaw = formData.get("idCardIssuedAt") as string | null;
+  const idCardIssuedBy = (formData.get("idCardIssuedBy") as string | null)?.trim();
+  const projectSubject = (formData.get("projectSubject") as string | null)?.trim();
+  const durationDaysRaw = (formData.get("durationDays") as string | null)?.trim();
+  const totalAmountRaw = (formData.get("totalAmount") as string | null)?.trim();
+  const advancePercentRaw = (formData.get("advancePercent") as string | null)?.trim();
+
+  if (
+    !id || !iin || !address || !bankName || !bankKbe || !bankAccountNumber || !bankBik ||
+    !idCardNumber || !idCardIssuedAtRaw || !idCardIssuedBy || !projectSubject ||
+    !durationDaysRaw || !totalAmountRaw
+  ) {
+    throw new Error("Заполните все поля договора");
+  }
+
+  const durationDays = Number(durationDaysRaw);
+  if (!Number.isInteger(durationDays) || durationDays <= 0) {
+    throw new Error("Некорректный срок выполнения работ");
+  }
+
+  const totalAmount = Number(totalAmountRaw);
+  if (Number.isNaN(totalAmount) || totalAmount <= 0) {
+    throw new Error("Некорректная стоимость работ");
+  }
+
+  const advancePercent = advancePercentRaw ? Number(advancePercentRaw) : 50;
+  if (!Number.isInteger(advancePercent) || advancePercent < 0 || advancePercent > 100) {
+    throw new Error("Процент предоплаты должен быть от 0 до 100");
+  }
+
+  const existing = await prisma.outsourcer.findUnique({
+    where: { id },
+    select: { contractNumber: true, contractDate: true },
+  });
+  if (!existing) {
+    throw new Error("Аутсорсер не найден");
+  }
+
+  let contractNumber = existing.contractNumber;
+  if (!contractNumber) {
+    const year = new Date().getFullYear();
+    const countThisYear = await prisma.outsourcer.count({
+      where: { contractNumber: { startsWith: `ДОГ-АУТ-${year}-` } },
+    });
+    contractNumber = `ДОГ-АУТ-${year}-${String(countThisYear + 1).padStart(3, "0")}`;
+  }
+  const contractDate = existing.contractDate ?? new Date();
+
+  try {
+    await prisma.outsourcer.update({
+      where: { id },
+      data: {
+        iin,
+        address,
+        bankName,
+        bankKbe,
+        bankAccountNumber,
+        bankBik,
+        idCardNumber,
+        idCardIssuedAt: new Date(idCardIssuedAtRaw),
+        idCardIssuedBy,
+        projectSubject,
+        durationDays,
+        totalAmount,
+        advancePercent,
+        contractNumber,
+        contractDate,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new Error("Договор с таким номером уже зарегистрирован");
+    }
+    throw error;
+  }
+
+  revalidatePath(`/outsourcers/${id}`);
+}
+
 // Outsourcer — самостоятельная запись без внешних ключей на другие
 // таблицы (см. schema.prisma), поэтому удаление простое, без каскада.
 export async function deleteOutsourcerAction(id: string) {

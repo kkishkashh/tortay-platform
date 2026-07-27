@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "outsourcers" ADD COLUMN     "address" TEXT,
+ADD COLUMN     "advancePercent" INTEGER DEFAULT 50,
+ADD COLUMN     "bankAccountNumber" TEXT,
+ADD COLUMN     "bankBik" TEXT,
+ADD COLUMN     "bankKbe" TEXT,
+ADD COLUMN     "bankName" TEXT,
+ADD COLUMN     "contractDate" DATE,
+ADD COLUMN     "durationDays" INTEGER,
+ADD COLUMN     "idCardIssuedAt" DATE,
+ADD COLUMN     "idCardIssuedBy" TEXT,
+ADD COLUMN     "idCardNumber" TEXT,
+ADD COLUMN     "iin" TEXT,
+ADD COLUMN     "projectSubject" TEXT,
+ADD COLUMN     "totalAmount" DECIMAL(14,2);

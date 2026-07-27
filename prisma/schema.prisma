@@ -44,7 +44,7 @@ model User {
   position     String?
   birthDate    DateTime?  @db.Date
   salary       Decimal?   @db.Decimal(12, 2) // оклад — финансовые данные, нигде пока не отображается
-  avatarUrl    String?    // ссылка на файл в Vercel Blob (см. app/api/uploads/avatar)
+  avatarUrl    String? // ссылка на файл в Vercel Blob (см. app/api/uploads/avatar)
   // Косметическое поле, НЕ используется для входа (вход остаётся по email,
   // см. auth.ts) — только для формы создания руководителя (см. план, D1).
   username     String?    @unique
@@ -56,8 +56,8 @@ model User {
   // "Домашний" департамент сотрудника (Employees-таб на странице департамента).
   // Отдельно от ProjectMember.projectRole — это постоянная орг. принадлежность,
   // а не роль в конкретном проекте.
-  homeDepartmentId String?
-  homeDepartment    Department? @relation("DepartmentEmployees", fields: [homeDepartmentId], references: [id])
+  homeDepartmentId   String?
+  homeDepartment     Department?  @relation("DepartmentEmployees", fields: [homeDepartmentId], references: [id])
   // Департаменты, которыми этот пользователь руководит (обычно 0-1, но не
   // ограничиваем на уровне схемы — один человек в принципе может управлять
   // несколькими небольшими департаментами).
@@ -69,16 +69,16 @@ model User {
   comments           Comment[]
   activityLogEntries ActivityLog[]
 
-  notifications           Notification[] @relation("NotificationRecipient")
-  notificationsTriggered  Notification[] @relation("NotificationActor")
+  notifications          Notification[] @relation("NotificationRecipient")
+  notificationsTriggered Notification[] @relation("NotificationActor")
 
   // Контактное лицо по департаменту на конкретном проекте (см. Section.contactManagerId) —
   // отображение/маршрутизация уведомлений, НЕ источник прав (canManageProjectTasks и т.п.
   // по-прежнему смотрят только на Department.managerId).
-  sectionsAsContactManager Section[] @relation("SectionContactManager")
+  sectionsAsContactManager Section[]      @relation("SectionContactManager")
   // Кто поставил задачу — заполняется автоматически при создании, никогда не редактируется вручную.
-  tasksAssignedByMe        Task[]    @relation("TaskAssignedBy")
-  personalTasks             PersonalTask[]
+  tasksAssignedByMe        Task[]         @relation("TaskAssignedBy")
+  personalTasks            PersonalTask[]
 
   @@map("users")
 }
@@ -96,17 +96,17 @@ enum ProjectRole {
 }
 
 model ProjectMember {
-  id         String      @id @default(uuid())
-  projectId  String
-  project    Project     @relation(fields: [projectId], references: [id])
-  userId     String
-  user       User        @relation(fields: [userId], references: [id])
+  id          String      @id @default(uuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id])
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
   projectRole ProjectRole
-  assignedAt DateTime    @default(now())
+  assignedAt  DateTime    @default(now())
 
-  tasksAssigned      Task[]
-  contractsCreated   Contract[]
-  digitalSignatures  DigitalSignature[]
+  tasksAssigned     Task[]
+  contractsCreated  Contract[]
+  digitalSignatures DigitalSignature[]
 
   // Один человек не может быть добавлен в один проект дважды
   @@unique([projectId, userId])
@@ -152,15 +152,15 @@ enum SectionStatus {
 }
 
 model Section {
-  id                 String        @id @default(uuid())
-  projectId          String
-  project            Project       @relation(fields: [projectId], references: [id])
-  name               String
-  status             SectionStatus @default(В_РАБОТЕ)
-  completionPercent  Int           @default(0)
-  startDate          DateTime?     // для диаграммы Ганта
-  deadline           DateTime?
-  orderIndex         Int           @default(0) // для сортировки разделов внутри проекта
+  id                String        @id @default(uuid())
+  projectId         String
+  project           Project       @relation(fields: [projectId], references: [id])
+  name              String
+  status            SectionStatus @default(В_РАБОТЕ)
+  completionPercent Int           @default(0)
+  startDate         DateTime? // для диаграммы Ганта
+  deadline          DateTime?
+  orderIndex        Int           @default(0) // для сортировки разделов внутри проекта
 
   // Департамент, ответственный за раздел — источник истины для базового
   // стека задач, цвета/иконки и области видимости руководителя департамента.
@@ -175,11 +175,11 @@ model Section {
   // создании проекта (мастер, шаг 3). Это только контакт для отображения/
   // уведомлений — Department.managerId (структура компании) не трогает.
   contactManagerId String?
-  contactManager    User?   @relation("SectionContactManager", fields: [contactManagerId], references: [id])
+  contactManager   User?   @relation("SectionContactManager", fields: [contactManagerId], references: [id])
 
-  tasks     Task[]
-  documents Document[]
-  comments  Comment[]
+  tasks             Task[]
+  documents         Document[]
+  comments          Comment[]
   paymentsTriggered Payment[]
 
   @@map("sections")
@@ -200,9 +200,9 @@ enum TaskPriority {
 }
 
 model Task {
-  id               String        @id @default(uuid())
+  id               String         @id @default(uuid())
   sectionId        String
-  section          Section       @relation(fields: [sectionId], references: [id])
+  section          Section        @relation(fields: [sectionId], references: [id])
   title            String
   description      String?
   assigneeMemberId String?
@@ -212,11 +212,11 @@ model Task {
   // до этой фазы, остаётся NULL (надёжного источника для бэкафилла нет).
   assignedByUserId String?
   assignedByUser   User?          @relation("TaskAssignedBy", fields: [assignedByUserId], references: [id])
-  status           TaskStatus    @default(НОВАЯ)
-  priority         TaskPriority  @default(СРЕДНИЙ)
-  startDate        DateTime?     // для диаграммы Ганта
+  status           TaskStatus     @default(НОВАЯ)
+  priority         TaskPriority   @default(СРЕДНИЙ)
+  startDate        DateTime? // для диаграммы Ганта
   deadline         DateTime?
-  createdAt        DateTime      @default(now())
+  createdAt        DateTime       @default(now())
 
   comments       Comment[]
   notifications  Notification[]
@@ -329,20 +329,20 @@ model Notification {
 // стартовые сидовые данные (prisma/scripts/migrate-departments.ts).
 
 model Department {
-  id           String   @id @default(uuid())
-  name         String
-  code         String   @unique // AR, KJ, VK, OV, EOM, SS, PB, SMR — короткий код для меток/бейджей
-  color        String   // hex, напр. "#7c3aed"
-  icon         String   // имя иконки lucide-react — резолвится через фиксированную карту в коде,
-                         // никогда не через eval/динамический импорт по произвольной строке
-  description  String?
-  orderIndex   Int      @default(0)
-  createdAt    DateTime @default(now())
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique // AR, KJ, VK, OV, EOM, SS, PB, SMR — короткий код для меток/бейджей
+  color       String // hex, напр. "#7c3aed"
+  icon        String // имя иконки lucide-react — резолвится через фиксированную карту в коде,
+  // никогда не через eval/динамический импорт по произвольной строке
+  description String?
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
 
   managerId String?
   manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id])
 
-  employees         User[]                        @relation("DepartmentEmployees")
+  employees         User[]                       @relation("DepartmentEmployees")
   taskTemplateItems DepartmentTaskTemplateItem[]
   sections          Section[]
 
@@ -403,7 +403,7 @@ model Document {
   uploadedBy String
   uploader   User     @relation(fields: [uploadedBy], references: [id])
   fileName   String
-  fileUrl    String   // ссылка на файл во внешнем хранилище (не сам файл!)
+  fileUrl    String // ссылка на файл во внешнем хранилище (не сам файл!)
   fileSize   Int?
   uploadedAt DateTime @default(now())
 
@@ -465,6 +465,29 @@ model Outsourcer {
   contractNumber String?  @unique
   createdAt      DateTime @default(now())
 
+  // Поля ниже — для автогенерации договора подряда с физлицом-исполнителем
+  // в Word (см. lib/outsourcers/contract-docx.ts). organization для такого
+  // договора используется как ФИО исполнителя (person), а не название
+  // компании — сознательно не заводим отдельное поле fullName, чтобы не
+  // дублировать то, что уже вводится при создании карточки. Все поля
+  // необязательны — они нужны только в момент реальной генерации договора,
+  // не при первичном создании карточки аутсорсера.
+  iin               String? // ИИН исполнителя
+  address           String? // адрес исполнителя
+  bankName          String?
+  bankKbe           String? // КБе (код бенефициара)
+  bankAccountNumber String? // ИИК
+  bankBik           String?
+  idCardNumber      String? // № удостоверения личности
+  idCardIssuedAt    DateTime? @db.Date
+  idCardIssuedBy    String? // кем выдано, напр. "МВД РК"
+
+  contractDate   DateTime? @db.Date
+  projectSubject String?   @db.Text // предмет договора / название и описание объекта
+  durationDays   Int? // срок выполнения работ, календарных дней
+  totalAmount    Decimal?  @db.Decimal(14, 2)
+  advancePercent Int?      @default(50) // % предоплаты, остаток — по сдаче работ
+
   @@map("outsourcers")
 }
 
@@ -497,19 +520,19 @@ model Contract {
   id                String         @id @default(uuid())
   projectId         String
   project           Project        @relation(fields: [projectId], references: [id])
-  createdByMemberId String         // менеджер, сформировавший договор
+  createdByMemberId String // менеджер, сформировавший договор
   createdByMember   ProjectMember  @relation(fields: [createdByMemberId], references: [id])
   number            String         @unique // человекочитаемый номер, напр. "ДОГ-2025-018"
-  clientName        String         // заказчик
+  clientName        String // заказчик
   totalAmount       Decimal        @db.Decimal(14, 2)
   status            ContractStatus @default(ЧЕРНОВИК)
   avrStage          AvrStage       @default(НЕТ)
   createdAt         DateTime       @default(now())
 
-  requisites         Requisites?
-  payments           Payment[]
-  digitalSignatures  DigitalSignature[]
-  closingDocuments   ClosingDocument[]
+  requisites        Requisites?
+  payments          Payment[]
+  digitalSignatures DigitalSignature[]
+  closingDocuments  ClosingDocument[]
 
   @@map("contracts")
 }
@@ -520,9 +543,9 @@ model Requisites {
   contractId    String   @unique
   contract      Contract @relation(fields: [contractId], references: [id])
   bankName      String?
-  accountNumber String?  // ИИК / расчётный счёт
-  bik           String?  // БИК банка
-  binIin        String?  // БИН/ИИН контрагента
+  accountNumber String? // ИИК / расчётный счёт
+  bik           String? // БИК банка
+  binIin        String? // БИН/ИИН контрагента
 
   @@map("requisites")
 }
@@ -545,9 +568,9 @@ model Payment {
   paymentType          PaymentType
   amount               Decimal       @db.Decimal(14, 2)
   status               PaymentStatus @default(ОЖИДАЕТСЯ)
-  dueDate              DateTime?     // плановый срок платежа — задаётся вручную менеджером
-  paidAt               DateTime?     // менеджер фиксирует фактическую дату оплаты вручную
-  triggeredBySectionId String?       // какой раздел/этап открывает доступность транша
+  dueDate              DateTime? // плановый срок платежа — задаётся вручную менеджером
+  paidAt               DateTime? // менеджер фиксирует фактическую дату оплаты вручную
+  triggeredBySectionId String? // какой раздел/этап открывает доступность транша
   triggeredBySection   Section?      @relation(fields: [triggeredBySectionId], references: [id])
 
   @@map("payments")
@@ -556,13 +579,13 @@ model Payment {
 // ЭЦП — здесь хранится РЕЗУЛЬТАТ подписи от внешнего провайдера
 // (напр. НУЦ РК), а не реализация самой криптографии.
 model DigitalSignature {
-  id             String   @id @default(uuid())
-  contractId     String
-  contract       Contract @relation(fields: [contractId], references: [id])
+  id               String        @id @default(uuid())
+  contractId       String
+  contract         Contract      @relation(fields: [contractId], references: [id])
   signedByMemberId String
-  signedByMember ProjectMember @relation(fields: [signedByMemberId], references: [id])
-  signatureData  String   // данные подписи/сертификата от внешнего провайдера ЭЦП
-  signedAt       DateTime @default(now())
+  signedByMember   ProjectMember @relation(fields: [signedByMemberId], references: [id])
+  signatureData    String // данные подписи/сертификата от внешнего провайдера ЭЦП
+  signedAt         DateTime      @default(now())
 
   closingDocuments ClosingDocument[]
 
