@@ -2,28 +2,15 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { Prisma, SystemRole, UserType } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageDepartments } from "@/lib/departments/permissions";
+import { generateTemporaryPassword } from "@/lib/auth/generate-temporary-password";
 import { notifyManagerCreated, notifyPasswordReset } from "@/lib/notifications/notify";
 import { sendManagerCreatedEmail, sendPasswordResetEmail } from "@/lib/email/send";
-
-// Читаемый временный пароль (без похожих на вид символов 0/O/1/l) — его
-// один раз показывают в письме, на экране администратора он никогда не
-// отображается (см. create-manager-dialog.tsx).
-const PASSWORD_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz";
-function generateTemporaryPassword(length = 12) {
-  const bytes = crypto.randomBytes(length);
-  let password = "";
-  for (let i = 0; i < length; i++) {
-    password += PASSWORD_ALPHABET[bytes[i] % PASSWORD_ALPHABET.length];
-  }
-  return password;
-}
 
 function parseManagerFields(formData: FormData) {
   const fullName = (formData.get("fullName") as string | null)?.trim();

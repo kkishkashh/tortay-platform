@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -52,6 +53,9 @@ export function NewEmployeeDialog({ isAdmin }: { isAdmin: boolean }) {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Новый сотрудник</DialogTitle>
+            <DialogDescription>
+              Временный пароль сгенерируется автоматически и придёт на указанный email.
+            </DialogDescription>
           </DialogHeader>
           <form action={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
@@ -125,11 +129,6 @@ export function NewEmployeeDialog({ isAdmin }: { isAdmin: boolean }) {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Пароль</Label>
-              <Input id="password" name="password" type="password" required minLength={6} />
-            </div>
-
             {isAdmin ? (
               <div className="space-y-2">
                 <Label htmlFor="systemRole">Системная роль</Label>
@@ -172,7 +171,7 @@ export function NewEmployeeDialog({ isAdmin }: { isAdmin: boolean }) {
       {showToast ? (
         <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-lg bg-foreground px-4 py-3 text-sm font-medium text-background shadow-lg">
           <CheckCircle2 className="size-4" />
-          Сотрудник добавлен
+          Сотрудник добавлен, письмо с паролем отправлено
         </div>
       ) : null}
     </>

@@ -174,10 +174,12 @@ export async function sendManagerCreatedEmail({
 export async function sendEmployeeCreatedEmail({
   to,
   employeeName,
+  temporaryPassword,
   departmentName,
 }: {
   to: string;
   employeeName: string;
+  temporaryPassword: string;
   departmentName: string | null;
 }) {
   if (!transporter) {
@@ -197,6 +199,9 @@ export async function sendEmployeeCreatedEmail({
       <p>Здравствуйте, ${employeeName}!</p>
       <p>Для вас создан аккаунт сотрудника в Tortay Engineering.</p>
       ${departmentLine}
+      <p>Email для входа: ${to}</p>
+      <p>Временный пароль: <strong>${temporaryPassword}</strong></p>
+      <p>Рекомендуем сменить пароль после первого входа в личном кабинете.</p>
       <p><a href="${APP_URL}/login">Войти в платформу</a></p>
     `,
   });

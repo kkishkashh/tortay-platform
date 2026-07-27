@@ -7,6 +7,7 @@ import { SystemRole, UserType } from "@prisma/client";
 import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
+import { generateTemporaryPassword } from "@/lib/auth/generate-temporary-password";
 import { sendEmployeeCreatedEmail, sendPasswordResetEmail } from "@/lib/email/send";
 import { notifyEmployeeCreated, notifyPasswordReset } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,6 @@ export async function createEmployeeAction(formData: FormData) {
 
   const fullName = (formData.get("fullName") as string | null)?.trim();
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
-  const password = formData.get("password") as string | null;
   const systemRole = isAdmin
     ? ((formData.get("systemRole") as SystemRole | null) ?? SystemRole.СОТРУДНИК)
     : SystemRole.СОТРУДНИК;
@@ -58,7 +58,7 @@ export async function createEmployeeAction(formData: FormData) {
     }
   }
 
-  if (!fullName || !email || !password) {
+  if (!fullName || !email) {
     throw new Error("Заполните все обязательные поля");
   }
 
@@ -67,7 +67,8 @@ export async function createEmployeeAction(formData: FormData) {
     throw new Error("Сотрудник с таким email уже существует");
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
@@ -94,12 +95,13 @@ export async function createEmployeeAction(formData: FormData) {
     return created;
   });
 
-  // Пароль в письмо НЕ попадает — в отличие от менеджерского флоу, здесь
-  // администратор/руководитель департамента сам вводит реальный пароль в
-  // форме и сообщает его сотруднику лично (см. план, Phase 14).
+  // Как и у руководителей (см. lib/managers/actions.ts): пароль генерируется
+  // на сервере, администратор его не вводит и не видит — уходит только
+  // письмом (было наоборот до объединения флоу, см. git log).
   sendEmployeeCreatedEmail({
     to: user.email,
     employeeName: user.fullName,
+    temporaryPassword,
     departmentName: scopedDepartmentName,
   }).catch((error) => {
     console.error("Не удалось отправить приветственное письмо", error);
