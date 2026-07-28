@@ -62,7 +62,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Работа",
     items: [
       { href: "/projects", label: "Проекты", icon: FolderKanban },
-      { href: "/departments", label: "Департаменты", icon: Building2, visibility: "admin_or_manager" },
+      { href: "/departments", label: "Департаменты", icon: Building2 },
       { href: "/employees", label: "Сотрудники", icon: Users },
       { href: "/managers", label: "Руководители", icon: UserCog },
       { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin_or_finance" },

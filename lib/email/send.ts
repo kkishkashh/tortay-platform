@@ -141,6 +141,35 @@ export async function sendTaskReadyForReviewEmail({
   });
 }
 
+export async function sendTaskStartedEmail({
+  to,
+  managerName,
+  taskTitle,
+  employeeName,
+  projectName,
+}: {
+  to: string;
+  managerName: string;
+  taskTitle: string;
+  employeeName: string;
+  projectName: string;
+}) {
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY не задан — письмо о начале работы (${to}, «${taskTitle}») не отправлено`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `${employeeName} взял(а) в работу задачу «${taskTitle}»`,
+    html: `
+      <p>Здравствуйте, ${managerName}!</p>
+      <p>${employeeName} начал(а) работу над задачей «${taskTitle}» в проекте «${projectName}».</p>
+    `,
+  });
+}
+
 export async function sendManagerCreatedEmail({
   to,
   employeeName,
@@ -220,6 +249,31 @@ export async function sendEmployeeCreatedEmail({
       <p>Временный пароль: <strong>${temporaryPassword}</strong></p>
       <p>Рекомендуем сменить пароль после первого входа в личном кабинете.</p>
       <p><a href="${APP_URL}/login">Войти в платформу</a></p>
+    `,
+  });
+}
+
+export async function sendPositionChangedEmail({
+  to,
+  employeeName,
+  position,
+}: {
+  to: string;
+  employeeName: string;
+  position: string;
+}) {
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY не задан — письмо о новой должности (${to}) не отправлено`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Вам назначена новая должность: ${position}`,
+    html: `
+      <p>Здравствуйте, ${employeeName}!</p>
+      <p>Ваша должность в Tortay Engineering изменена на «${position}».</p>
     `,
   });
 }

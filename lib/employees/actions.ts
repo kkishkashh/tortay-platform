@@ -8,8 +8,8 @@ import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { generateTemporaryPassword } from "@/lib/auth/generate-temporary-password";
-import { sendEmployeeCreatedEmail, sendPasswordResetEmail } from "@/lib/email/send";
-import { notifyEmployeeCreated, notifyPasswordReset } from "@/lib/notifications/notify";
+import { sendEmployeeCreatedEmail, sendPasswordResetEmail, sendPositionChangedEmail } from "@/lib/email/send";
+import { notifyEmployeeCreated, notifyPasswordReset, notifyPositionChanged } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { canManageFinance } from "@/lib/projects/permissions";
 
@@ -304,19 +304,34 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
 
   const previous = await prisma.user.findUnique({
     where: { id: userId },
-    select: { homeDepartmentId: true },
+    select: { homeDepartmentId: true, position: true, email: true },
   });
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      fullName,
-      position,
-      birthDate,
-      homeDepartmentId,
-      systemRole,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        fullName,
+        position,
+        birthDate,
+        homeDepartmentId,
+        systemRole,
+      },
+    });
+
+    // Уведомляем о новой должности — по прямой просьбе Камилы. Не свою же
+    // смену (человек сам видит форму) и не "снятие" должности (position:
+    // null) — там уведомлять не о чем.
+    if (position && position !== previous?.position && userId !== session.user.id) {
+      await notifyPositionChanged(tx, { userId, actorId: session.user.id, position });
+    }
   });
+
+  if (position && position !== previous?.position && userId !== session.user.id && previous?.email) {
+    sendPositionChangedEmail({ to: previous.email, employeeName: fullName, position }).catch((error) => {
+      console.error("Не удалось отправить письмо о смене должности", error);
+    });
+  }
 
   revalidatePath(`/employees/${userId}`);
   revalidatePath("/employees");

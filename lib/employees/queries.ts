@@ -37,10 +37,15 @@ export type EmployeeListItem = {
 // Руководители департаментов сюда не входят (managedDepartments: none) —
 // это отдельная категория (Account Portal → Менеджеры); они сами
 // добавляют сотрудников в свой департамент.
-// Область видимости (см. план, Phase 15, D17): администратор и рядовой
-// сотрудник видят весь список без изменений; руководитель департамента —
-// только сотрудников СВОЕГО департамента плюс самого себя (чтобы видеть
-// свою запись в списке, даже хотя managedDepartments у него не пустой).
+// Область видимости (обновлено по прямой просьбе Камилы про 3 роли):
+// администратор видит весь список без изменений; руководитель
+// департамента — только сотрудников СВОЕГО департамента плюс самого себя
+// (чтобы видеть свою запись в списке, даже хотя managedDepartments у него
+// не пустой); рядовой сотрудник — ТОЛЬКО сотрудников своего же
+// департамента (раньше видел всю компанию, см. git log — это сознательно
+// сузили). Названия ЧУЖИХ департаментов сотрудник по-прежнему видит на
+// /departments (см. department-card.tsx — там для не-руководителей только
+// имя, без состава).
 export async function getEmployees(): Promise<EmployeeListItem[]> {
   const session = await auth();
   const tier = await getCurrentUserRoleTier(session?.user);
@@ -55,6 +60,14 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
             { id: session.user.id },
           ],
         }
+      : { id: session.user.id };
+  } else if (tier === "employee" && session?.user) {
+    const me = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { homeDepartmentId: true },
+    });
+    scopeWhere = me?.homeDepartmentId
+      ? { managedDepartments: { none: {} }, homeDepartmentId: me.homeDepartmentId }
       : { id: session.user.id };
   } else {
     scopeWhere = { managedDepartments: { none: {} } };

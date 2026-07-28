@@ -11,17 +11,20 @@ import { NewDepartmentDialog } from "./new-department-dialog";
 
 export default async function DepartmentsPage() {
   const session = await auth();
-
-  // Тот же уровень доступа, что и у страницы департамента ([id]/page.tsx):
-  // список департаментов — тоже не для рядового сотрудника (см. бриф,
-  // "No departments" в Employee Dashboard), а не только пункт меню скрыт.
-  const roleTier = await getCurrentUserRoleTier(session?.user);
-  if (roleTier === "employee") {
-    redirect("/");
+  if (!session?.user) {
+    redirect("/login");
   }
 
+  // Рядовой сотрудник видит страницу, но только НАЗВАНИЯ департаментов —
+  // без состава/статистики/руководителя и без перехода на страницу
+  // департамента (та по-прежнему доступна только руководителю/админу, см.
+  // [id]/page.tsx). Раньше сотрудника сюда не пускали вовсе — по прямой
+  // просьбе Камилы это открыли (см. описание 3 ролей).
+  const roleTier = await getCurrentUserRoleTier(session.user);
+  const nameOnly = roleTier === "employee";
+
   const departments = await getDepartments();
-  const canCreate = session?.user ? canManageDepartments(session.user) : false;
+  const canCreate = canManageDepartments(session.user);
 
   return (
     <>
@@ -36,7 +39,7 @@ export default async function DepartmentsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {departments.map((department) => (
-              <DepartmentCard key={department.id} department={department} />
+              <DepartmentCard key={department.id} department={department} nameOnly={nameOnly} />
             ))}
           </div>
         )}

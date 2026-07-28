@@ -51,6 +51,48 @@ export async function notifyTaskReadyForReview(
   });
 }
 
+export async function notifyTaskStarted(
+  db: Db,
+  data: {
+    userId: string;
+    actorId: string;
+    taskId: string;
+    taskTitle: string;
+    employeeName: string;
+    projectName: string;
+  },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ЗАДАЧА_В_РАБОТЕ,
+      title: "Сотрудник начал работу над задачей",
+      body: `${data.employeeName} взял(а) в работу «${data.taskTitle}» в проекте «${data.projectName}»`,
+      taskId: data.taskId,
+    },
+  });
+}
+
+export async function notifyPositionChanged(
+  db: Db,
+  data: {
+    userId: string;
+    actorId: string;
+    position: string;
+  },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ДОЛЖНОСТЬ_ИЗМЕНЕНА,
+      title: "Вам назначена новая должность",
+      body: `Ваша должность изменена на «${data.position}»`,
+    },
+  });
+}
+
 // Уведомление для САМОГО нового руководителя — увидит его, как только
 // впервые войдёт (учётные данные приходят отдельно письмом, см.
 // sendManagerCreatedEmail).

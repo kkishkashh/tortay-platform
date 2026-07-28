@@ -12,6 +12,7 @@ import {
   sendTaskAssignedEmail,
   sendTaskReadyForReviewEmail,
   sendTaskReturnedEmail,
+  sendTaskStartedEmail,
 } from "@/lib/email/send";
 import {
   notifyDeadlineChanged,
@@ -19,6 +20,7 @@ import {
   notifyTaskAssigned,
   notifyTaskReadyForReview,
   notifyTaskReturned,
+  notifyTaskStarted,
 } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { TASK_STATUS_LABELS } from "@/lib/projects/status-labels";
@@ -311,6 +313,14 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
   // КТО-ТО ДРУГОЙ (обычно руководитель).
   const notifyAssignee = task.assigneeMember && task.assigneeMember.userId !== session.user.id;
   const reviewRecipients = isReachingReview ? await resolveReviewRecipients(task.section.department) : [];
+  // "Взял в работу" — по прямой просьбе Камилы руководителю нужно знать,
+  // когда сотрудник САМ начинает задачу (Новая → В работе). Если статус
+  // на это же значение ставит руководитель/админ (не сам исполнитель) —
+  // это не "сотрудник начал работу", а обычное административное действие,
+  // уведомление не нужно (та же логика, что и notifyAssignee выше).
+  const isStartingWork =
+    task.status === TaskStatus.НОВАЯ && nextStatus === TaskStatus.В_РАБОТЕ && isAssignee;
+  const startRecipients = isStartingWork ? await resolveReviewRecipients(task.section.department) : [];
 
   await prisma.$transaction(async (tx) => {
     await tx.task.update({ where: { id: taskId }, data: { status: nextStatus } });
@@ -354,6 +364,17 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
         projectName: task.section.project.name,
       });
     }
+
+    for (const recipient of startRecipients) {
+      await notifyTaskStarted(tx, {
+        userId: recipient.id,
+        actorId: session.user.id,
+        taskId: task.id,
+        taskTitle: task.title,
+        employeeName: session.user.name ?? "Сотрудник",
+        projectName: task.section.project.name,
+      });
+    }
   });
 
   if (isRevision && notifyAssignee && task.assigneeMember) {
@@ -387,6 +408,18 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
       projectName: task.section.project.name,
     }).catch((error) => {
       console.error("Не удалось отправить уведомление о готовности задачи к проверке", error);
+    });
+  }
+
+  for (const recipient of startRecipients) {
+    sendTaskStartedEmail({
+      to: recipient.email,
+      managerName: recipient.fullName,
+      taskTitle: task.title,
+      employeeName: session.user.name ?? "Сотрудник",
+      projectName: task.section.project.name,
+    }).catch((error) => {
+      console.error("Не удалось отправить письмо о начале работы над задачей", error);
     });
   }
 
