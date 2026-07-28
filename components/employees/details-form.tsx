@@ -24,20 +24,15 @@ function toDateInputValue(date: Date | null) {
 }
 
 // ФИО/должность/дата рождения — доступны администратору и руководителю
-// департамента этого сотрудника. Оклад — администратору и руководителю
-// Административного департамента (canEditSalary, финансово-кадровая зона,
-// см. lib/projects/permissions.ts::canManageFinance). Системная роль — это
-// смена привилегий, ЗАВЕДОМО только администратору (canEditSystemRole),
-// финансовому руководителю НЕ открываем; сервер тоже разделяет эти два
-// поля, см. lib/employees/actions.ts.
+// департамента этого сотрудника. Системная роль — это смена привилегий,
+// ЗАВЕДОМО только администратору (canEditSystemRole); сервер тоже
+// проверяет это отдельно, см. lib/employees/actions.ts.
 export function DetailsForm({
   userId,
   fullName,
   position,
   birthDate,
-  salary,
   systemRole,
-  canEditSalary,
   canEditSystemRole,
   positions,
 }: {
@@ -45,9 +40,7 @@ export function DetailsForm({
   fullName: string;
   position: string | null;
   birthDate: Date | null;
-  salary: number | null;
   systemRole: SystemRole;
-  canEditSalary: boolean;
   canEditSystemRole: boolean;
   positions: PositionItem[];
 }) {
@@ -96,20 +89,6 @@ export function DetailsForm({
             defaultValue={toDateInputValue(birthDate)}
           />
         </div>
-
-        {canEditSalary ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="details-salary">Оклад, ₸</Label>
-            <Input
-              id="details-salary"
-              name="salary"
-              type="number"
-              min="0"
-              step="1000"
-              defaultValue={salary ?? ""}
-            />
-          </div>
-        ) : null}
 
         {canEditSystemRole ? (
           <div className="space-y-1.5">

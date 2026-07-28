@@ -57,9 +57,7 @@ export function AccountPortal({
                 fullName={profile.fullName}
                 position={profile.position}
                 birthDate={profile.birthDate}
-                salary={profile.salary}
                 systemRole={profile.systemRole}
-                canEditSalary={isHead}
                 canEditSystemRole={isHead}
                 positions={positions}
               />

@@ -49,15 +49,6 @@ export async function createEmployeeAction(formData: FormData) {
   const birthDateRaw = formData.get("birthDate") as string | null;
   const birthDate = birthDateRaw ? new Date(birthDateRaw) : null;
 
-  const salaryRaw = (formData.get("salary") as string | null)?.trim();
-  let salary: number | null = null;
-  if (salaryRaw) {
-    salary = Number(salaryRaw);
-    if (Number.isNaN(salary) || salary <= 0) {
-      throw new Error("Оклад должен быть положительным числом");
-    }
-  }
-
   if (!fullName || !email) {
     throw new Error("Заполните все обязательные поля");
   }
@@ -81,7 +72,6 @@ export async function createEmployeeAction(formData: FormData) {
         phone,
         position,
         birthDate,
-        salary,
         homeDepartmentId: scopedDepartmentId,
       },
     });
@@ -264,9 +254,7 @@ export async function updateEmployeeContactAction(formData: FormData) {
 // департамента этого сотрудника, или руководитель Административного
 // департамента (canManageFinance — финансово-кадровая зона компании
 // целиком, см. lib/projects/permissions.ts). Системная роль — смена
-// привилегий, ЗАВЕДОМО только администратор. Оклад — администратор и
-// финансовый руководитель (canEditSalary), но не обычный руководитель
-// департамента — он чужую зарплату через эту форму не видит.
+// привилегий, ЗАВЕДОМО только администратор.
 export async function updateEmployeeDetailsAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) {
@@ -294,18 +282,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
     throw new Error("ФИО обязательно");
   }
 
-  let salary: number | null | undefined = undefined;
   let systemRole: SystemRole | undefined = undefined;
-  if (isAdmin || isFinanceManager) {
-    const salaryRaw = (formData.get("salary") as string | null)?.trim();
-    salary = null;
-    if (salaryRaw) {
-      salary = Number(salaryRaw);
-      if (Number.isNaN(salary) || salary <= 0) {
-        throw new Error("Оклад должен быть положительным числом");
-      }
-    }
-  }
   if (isAdmin) {
     systemRole = (formData.get("systemRole") as SystemRole | null) ?? undefined;
   }
@@ -316,7 +293,6 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
       fullName,
       position,
       birthDate,
-      salary,
       systemRole,
     },
   });

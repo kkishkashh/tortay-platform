@@ -87,19 +87,6 @@ export function NewEmployeeDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="salary">Оклад, ₸</Label>
-              <Input
-                id="salary"
-                name="salary"
-                type="number"
-                min="0"
-                step="1000"
-                placeholder="250000"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"

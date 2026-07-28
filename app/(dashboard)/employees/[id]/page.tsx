@@ -78,11 +78,9 @@ export default async function EmployeeProfilePage({
 
   const canManage = isHead || isDeptManagerOfEmployee;
   const canEditContact = isSelf || canManage;
-  // Оклад и системная роль — отдельные, более узкие права (см.
-  // DetailsForm): canEditSalary открыт ещё и финансовому руководителю,
-  // canEditSystemRole — смена привилегий, заведомо только у isHead.
+  // Системная роль — отдельное, более узкое право (см. DetailsForm):
+  // смена привилегий, заведомо только у isHead.
   const canEditDetails = canManage || isFinanceManager;
-  const canEditSalary = isHead || isFinanceManager;
   const canEditSystemRole = isHead;
   const workloadMeta = WORKLOAD_META[employee.workload];
   const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
@@ -262,9 +260,7 @@ export default async function EmployeeProfilePage({
                     fullName={employee.fullName}
                     position={employee.position}
                     birthDate={employee.birthDate}
-                    salary={employee.salary}
                     systemRole={employee.systemRole}
-                    canEditSalary={canEditSalary}
                     canEditSystemRole={canEditSystemRole}
                     positions={positions}
                   />
@@ -289,12 +285,6 @@ export default async function EmployeeProfilePage({
                           : "—"}
                       </dd>
                     </div>
-                    {isSelf && employee.salary !== null ? (
-                      <div>
-                        <dt className="text-xs text-muted-foreground">Оклад</dt>
-                        <dd className="text-sm">{employee.salary.toLocaleString("ru-RU")} ₸</dd>
-                      </div>
-                    ) : null}
                   </dl>
                 </CardContent>
               </Card>

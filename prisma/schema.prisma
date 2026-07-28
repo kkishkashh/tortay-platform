@@ -43,7 +43,6 @@ model User {
   phone        String?
   position     String?
   birthDate    DateTime?  @db.Date
-  salary       Decimal?   @db.Decimal(12, 2) // оклад — финансовые данные, нигде пока не отображается
   avatarUrl    String? // ссылка на файл в Vercel Blob (см. app/api/uploads/avatar)
   // Косметическое поле, НЕ используется для входа (вход остаётся по email,
   // см. auth.ts) — только для формы создания руководителя (см. план, D1).

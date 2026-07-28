@@ -113,7 +113,6 @@ export type EmployeeProfile = {
   position: string | null;
   avatarUrl: string | null;
   birthDate: Date | null;
-  salary: number | null;
   createdAt: Date;
   homeDepartmentId: string | null;
   projectsByStatus: { status: ProjectStatus; projects: { id: string; name: string }[] }[];
@@ -154,7 +153,6 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       position: true,
       avatarUrl: true,
       birthDate: true,
-      salary: true,
       createdAt: true,
       homeDepartmentId: true,
       projectMemberships: {
@@ -207,7 +205,6 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     position: user.position,
     avatarUrl: user.avatarUrl,
     birthDate: user.birthDate,
-    salary: user.salary !== null ? Number(user.salary) : null,
     createdAt: user.createdAt,
     homeDepartmentId: user.homeDepartmentId,
     projectsByStatus,
