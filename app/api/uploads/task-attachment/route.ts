@@ -3,6 +3,7 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { canCommentOnTask } from "@/lib/tasks/permissions";
 
 // Тот же принцип, что и у app/api/uploads/avatar/route.ts (см. D10 в
@@ -51,7 +52,8 @@ export async function POST(request: Request) {
             },
           }),
         );
-        if (!canCommentOnTask(session.user, task.section, isProjectMember)) {
+        const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+        if (!canCommentOnTask(session.user, task.section, isProjectMember, managesAnyDepartment)) {
           throw new Error("Недостаточно прав для загрузки файлов к этой задаче");
         }
 

@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { getDepartmentsWithTaskStackForProjectCreation } from "@/lib/departments/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
-import { canManageOperations } from "@/lib/projects/permissions";
+import { canManageOperations, userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { getProjectsForCurrentUser } from "@/lib/projects/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
@@ -16,7 +16,8 @@ export default async function ProjectsPage() {
     getEmployeesForSelect(),
     getDepartmentsWithTaskStackForProjectCreation(),
   ]);
-  const canManage = session?.user ? canManageOperations(session.user) : false;
+  const managesAnyDepartment = session?.user ? await userManagesAnyDepartment(session.user) : false;
+  const canManage = session?.user ? canManageOperations(session.user, managesAnyDepartment) : false;
 
   return (
     <>

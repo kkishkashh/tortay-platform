@@ -5,6 +5,7 @@ import { getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getMyPersonalTasks } from "@/lib/personal-tasks/queries";
 import { getProjectMembersForProjects } from "@/lib/projects/queries";
+import { userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getMyTasks } from "@/lib/tasks/queries";
 import { formatTodayLabel } from "@/lib/utils";
@@ -29,6 +30,8 @@ export default async function MyTasksPage() {
     getCommentsForTasksBatch(taskIds),
     getDocumentsForTasksBatch(taskIds),
   ]);
+
+  const managesAnyDepartment = session?.user ? await userManagesAnyDepartment(session.user) : false;
 
   const grouped = new Map<string, { projectName: string; tasks: typeof tasks }>();
   for (const task of tasks) {
@@ -76,9 +79,11 @@ export default async function MyTasksPage() {
                     currentUserId={session?.user.id}
                     canManage={
                       session?.user
-                        ? canManageProjectTasks(session.user, {
-                            department: { managerId: task.departmentManagerId },
-                          })
+                        ? canManageProjectTasks(
+                            session.user,
+                            { department: { managerId: task.departmentManagerId } },
+                            managesAnyDepartment,
+                          )
                         : false
                     }
                     isAssignee

@@ -12,7 +12,7 @@ import { appendProjectRow, syncProjectField } from "@/lib/google-sheets";
 import { notifyGipAssigned, notifyTaskAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { ensureProjectMember } from "@/lib/projects/membership";
-import { canManageOperations } from "@/lib/projects/permissions";
+import { canManageOperations, userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 
 const TASK_PRIORITY_VALUES = new Set<string>(Object.values(TaskPriority));
@@ -132,7 +132,8 @@ export async function createProjectAction(formData: FormData) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Создавать проекты может только руководитель");
   }
 
@@ -505,7 +506,8 @@ export async function updateProjectNameAction(projectId: string, name: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Редактировать проект может только руководитель");
   }
 
@@ -546,7 +548,8 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Назначать ГИП может только руководитель");
   }
 
@@ -630,7 +633,8 @@ export async function deleteProjectAction(projectId: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Удалять проект может только руководитель");
   }
 
@@ -697,7 +701,8 @@ export async function updateProjectStatusAction(
     throw new Error("Не авторизован");
   }
 
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Менять статус проекта может только руководитель");
   }
 
@@ -747,7 +752,8 @@ export async function updateSectionStatusAction(
     throw new Error("Раздел не найден");
   }
 
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Менять статус раздела может только руководитель");
   }
 
@@ -791,7 +797,8 @@ export async function updateSectionDatesAction(
     throw new Error("Раздел не найден");
   }
 
-  if (!canManageOperations(session.user)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canManageOperations(session.user, managesAnyDepartment)) {
     throw new Error("Менять сроки раздела может только руководитель");
   }
 

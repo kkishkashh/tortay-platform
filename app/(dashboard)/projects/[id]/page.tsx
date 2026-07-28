@@ -14,7 +14,7 @@ import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
-import { canManageOperations } from "@/lib/projects/permissions";
+import { canManageOperations, userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import {
   PROJECT_STATUS_LABELS,
@@ -63,6 +63,8 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
+  const managesAnyDepartment = session?.user ? await userManagesAnyDepartment(session.user) : false;
+
   // Раньше это был Promise.all(sections.map(async section => ... await
   // Promise.all(tasks.map(async task => ...)))) — запрос комментариев и
   // документов НА КАЖДУЮ задачу отдельно. При десятках задач это десятки
@@ -89,11 +91,15 @@ export default async function ProjectDetailPage({
     return {
       section,
       tasksWithComments,
-      canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
+      canManageTasks: session?.user
+        ? canManageProjectTasks(session.user, section, managesAnyDepartment)
+        : false,
     };
   });
 
-  const canChangeStatus = session?.user ? canManageOperations(session.user) : false;
+  const canChangeStatus = session?.user
+    ? canManageOperations(session.user, managesAnyDepartment)
+    : false;
   const currentUserId = session?.user?.id;
 
   return (

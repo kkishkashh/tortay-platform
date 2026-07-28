@@ -13,7 +13,7 @@ import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getPositions } from "@/lib/positions/queries";
 import { getProjectMembersForProjects } from "@/lib/projects/queries";
-import { canManageFinance } from "@/lib/projects/permissions";
+import { canManageFinance, userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForUser } from "@/lib/tasks/queries";
@@ -102,11 +102,16 @@ export default async function EmployeeProfilePage({
     getDocumentsForTasksBatch(taskIds),
   ]);
 
+  const managesAnyDepartment = session?.user ? await userManagesAnyDepartment(session.user) : false;
   const canManageByTask = new Map(
     tasks.map((task) => [
       task.id,
       session?.user
-        ? canManageProjectTasks(session.user, { department: { managerId: task.departmentManagerId } })
+        ? canManageProjectTasks(
+            session.user,
+            { department: { managerId: task.departmentManagerId } },
+            managesAnyDepartment,
+          )
         : false,
     ]),
   );

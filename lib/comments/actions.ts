@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { canCommentOnTask, canManageProjectTasks } from "@/lib/tasks/permissions";
 
 async function loadTaskSectionForComments(taskId: string) {
@@ -38,7 +39,8 @@ export async function createTaskCommentAction(taskId: string, formData: FormData
       where: { projectId_userId: { projectId: task.section.projectId, userId: session.user.id } },
     }),
   );
-  if (!canCommentOnTask(session.user, task.section, isProjectMember)) {
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  if (!canCommentOnTask(session.user, task.section, isProjectMember, managesAnyDepartment)) {
     throw new Error("Недостаточно прав для комментирования этой задачи");
   }
 
@@ -83,7 +85,8 @@ export async function deleteTaskCommentAction(commentId: string) {
   }
 
   const isAuthor = comment.authorId === session.user.id;
-  const isManager = canManageProjectTasks(session.user, comment.task.section);
+  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
+  const isManager = canManageProjectTasks(session.user, comment.task.section, managesAnyDepartment);
   if (!isAuthor && !isManager) {
     throw new Error("Недостаточно прав для удаления этого комментария");
   }
