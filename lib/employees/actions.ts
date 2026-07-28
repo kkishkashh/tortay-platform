@@ -277,9 +277,24 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
   const position = (formData.get("position") as string | null)?.trim() || null;
   const birthDateRaw = formData.get("birthDate") as string | null;
   const birthDate = birthDateRaw ? new Date(birthDateRaw) : null;
+  // "Обзор" сотрудника: любой, кто вообще может открыть эту форму
+  // (руководитель компании, руководитель ТЕКУЩЕГО департамента сотрудника
+  // или финансовый руководитель — см. canActOnEmployee/isFinanceManager
+  // выше), может перевести его в ЛЮБОЙ департамент компании, не только
+  // между "свой" и "без департамента" — по прямой просьбе Камилы.
+  const homeDepartmentIdRaw = (formData.get("homeDepartmentId") as string | null)?.trim() || "";
+  const homeDepartmentId =
+    homeDepartmentIdRaw && homeDepartmentIdRaw !== "__none__" ? homeDepartmentIdRaw : null;
 
   if (!fullName) {
     throw new Error("ФИО обязательно");
+  }
+
+  if (homeDepartmentId) {
+    const department = await prisma.department.findUnique({ where: { id: homeDepartmentId } });
+    if (!department) {
+      throw new Error("Департамент не найден");
+    }
   }
 
   let systemRole: SystemRole | undefined = undefined;
@@ -287,18 +302,27 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
     systemRole = (formData.get("systemRole") as SystemRole | null) ?? undefined;
   }
 
+  const previous = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { homeDepartmentId: true },
+  });
+
   await prisma.user.update({
     where: { id: userId },
     data: {
       fullName,
       position,
       birthDate,
+      homeDepartmentId,
       systemRole,
     },
   });
 
   revalidatePath(`/employees/${userId}`);
   revalidatePath("/employees");
+  revalidatePath("/departments");
+  if (previous?.homeDepartmentId) revalidatePath(`/departments/${previous.homeDepartmentId}`);
+  if (homeDepartmentId) revalidatePath(`/departments/${homeDepartmentId}`);
 }
 
 // Сам сотрудник обязан подтвердить текущий пароль (проверка личности).

@@ -64,7 +64,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2, visibility: "admin_or_manager" },
       { href: "/employees", label: "Сотрудники", icon: Users },
-      { href: "/managers", label: "Руководители", icon: UserCog, visibility: "admin" },
+      { href: "/managers", label: "Руководители", icon: UserCog },
       { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin_or_finance" },
     ],
   },
@@ -93,6 +93,7 @@ type SidebarProps = {
   unreadNotificationCount: number;
   profile: EmployeeProfile | null;
   positions: PositionItem[];
+  departments: { id: string; name: string }[];
 };
 
 export function Sidebar({
@@ -105,6 +106,7 @@ export function Sidebar({
   unreadNotificationCount,
   profile,
   positions,
+  departments,
 }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -255,6 +257,7 @@ export function Sidebar({
             <AccountPortal
               profile={profile}
               positions={positions}
+              departments={departments}
               trigger={
                 <button
                   type="button"

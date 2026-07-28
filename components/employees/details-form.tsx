@@ -23,15 +23,23 @@ function toDateInputValue(date: Date | null) {
   return date.toISOString().slice(0, 10);
 }
 
-// ФИО/должность/дата рождения — доступны администратору и руководителю
-// департамента этого сотрудника. Системная роль — это смена привилегий,
-// ЗАВЕДОМО только администратору (canEditSystemRole); сервер тоже
-// проверяет это отдельно, см. lib/employees/actions.ts.
+const NO_DEPARTMENT = "__none__";
+
+// ФИО/должность/дата рождения/департамент — доступны администратору и
+// руководителю департамента этого сотрудника. Департамент можно сменить
+// на ЛЮБОЙ из компании (не только "свой"/"без департамента") — по прямой
+// просьбе Камилы: любой руководитель, открывший карточку сотрудника,
+// может целиком перевести его в другой отдел прямо отсюда. Системная
+// роль — это смена привилегий, ЗАВЕДОМО только администратору
+// (canEditSystemRole); сервер тоже проверяет это отдельно, см.
+// lib/employees/actions.ts.
 export function DetailsForm({
   userId,
   fullName,
   position,
   birthDate,
+  homeDepartmentId,
+  departments,
   systemRole,
   canEditSystemRole,
   positions,
@@ -40,6 +48,8 @@ export function DetailsForm({
   fullName: string;
   position: string | null;
   birthDate: Date | null;
+  homeDepartmentId: string | null;
+  departments: { id: string; name: string }[];
   systemRole: SystemRole;
   canEditSystemRole: boolean;
   positions: PositionItem[];
@@ -88,6 +98,30 @@ export function DetailsForm({
             type="date"
             defaultValue={toDateInputValue(birthDate)}
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="details-department">Департамент</Label>
+          <Select
+            name="homeDepartmentId"
+            defaultValue={homeDepartmentId ?? NO_DEPARTMENT}
+            items={[
+              { value: NO_DEPARTMENT, label: "Без департамента" },
+              ...departments.map((d) => ({ value: d.id, label: d.name })),
+            ]}
+          >
+            <SelectTrigger id="details-department" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_DEPARTMENT}>Без департамента</SelectItem>
+              {departments.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {canEditSystemRole ? (

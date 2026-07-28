@@ -75,15 +75,19 @@ function ManagerRowActions({ manager }: { manager: ManagerListItem }) {
 export function ManagersTab({
   managers,
   departments,
+  isAdmin,
 }: {
   managers: ManagerListItem[];
   departments: DepartmentListItem[];
+  isAdmin: boolean;
 }) {
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <CreateManagerDialog departments={departments} />
-      </div>
+      {isAdmin ? (
+        <div className="flex justify-end">
+          <CreateManagerDialog departments={departments} />
+        </div>
+      ) : null}
 
       {managers.length === 0 ? (
         <p className="text-sm text-muted-foreground">Руководителей пока нет.</p>
@@ -94,7 +98,7 @@ export function ManagersTab({
               <TableHead>Руководитель</TableHead>
               <TableHead>Департамент</TableHead>
               <TableHead>Статус</TableHead>
-              <TableHead className="text-right">Действия</TableHead>
+              {isAdmin ? <TableHead className="text-right">Действия</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -126,13 +130,15 @@ export function ManagersTab({
                     {manager.isActive ? "Активен" : "Деактивирован"}
                   </Badge>
                 </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-1">
-                    <EditManagerDialog manager={manager} departments={departments} />
-                    <ManagerRowActions manager={manager} />
-                    <DeleteManagerDialog userId={manager.id} fullName={manager.fullName} />
-                  </div>
-                </TableCell>
+                {isAdmin ? (
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      <EditManagerDialog manager={manager} departments={departments} />
+                      <ManagerRowActions manager={manager} />
+                      <DeleteManagerDialog userId={manager.id} fullName={manager.fullName} />
+                    </div>
+                  </TableCell>
+                ) : null}
               </TableRow>
             ))}
           </TableBody>

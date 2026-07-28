@@ -12,7 +12,10 @@ import { Button } from "@/components/ui/button";
 import {
   Combobox,
   ComboboxClear,
+  ComboboxCollection,
   ComboboxContent,
+  ComboboxGroup,
+  ComboboxGroupLabel,
   ComboboxInput,
   ComboboxInputGroup,
   ComboboxItem,
@@ -26,6 +29,10 @@ type Employee = { id: string; fullName: string; position?: string | null };
 // списке и участвует в поиске (должность/чем руководит), но не попадает в
 // текст самого поля ввода после выбора (это отдельно от itemToStringLabel).
 type PickerItem = { value: string; label: string; sublabel?: string };
+// Группа для пикера руководителя — "Уже руководят департаментом" /
+// "Сотрудники", чтобы сразу было видно, кто есть кто, а не искать глазами
+// по подписи в одном большом списке (см. план: "чёткое разделение").
+type PickerGroup = { label: string | null; items: PickerItem[] };
 
 function comboboxFilter(item: PickerItem, query: string) {
   const q = query.trim().toLowerCase();
@@ -71,20 +78,28 @@ export function EmployeesTab({
 
   const availableToAdd = allEmployees.filter((e) => e.homeDepartmentId !== departmentId);
 
-  const managerItems: PickerItem[] = [
-    { value: NO_MANAGER, label: "Не назначен" },
-    ...managerCandidates.map((c) => ({
-      value: c.id,
-      label: c.fullName,
-      // Явно показываем, что человек уже руководит другим департаментом —
-      // иначе легко перепутать рядового сотрудника с действующим
-      // руководителем (см. план). Видно и в списке, и участвует в поиске.
-      sublabel:
-        c.managedDepartmentNames.length > 0
-          ? `Руководит: ${c.managedDepartmentNames.join(", ")}`
-          : (c.position ?? undefined),
-    })),
+  const currentManagers = managerCandidates.filter((c) => c.managedDepartmentNames.length > 0);
+  const plainStaff = managerCandidates.filter((c) => c.managedDepartmentNames.length === 0);
+
+  const toPickerItem = (c: ManagerCandidate): PickerItem => ({
+    value: c.id,
+    label: c.fullName,
+    sublabel:
+      c.managedDepartmentNames.length > 0
+        ? `Руководит: ${c.managedDepartmentNames.join(", ")}`
+        : (c.position ?? undefined),
+  });
+
+  const managerGroups: PickerGroup[] = [
+    { label: null, items: [{ value: NO_MANAGER, label: "Не назначен" }] },
+    ...(currentManagers.length > 0
+      ? [{ label: "Уже руководят департаментом", items: currentManagers.map(toPickerItem) }]
+      : []),
+    ...(plainStaff.length > 0
+      ? [{ label: "Сотрудники", items: plainStaff.map(toPickerItem) }]
+      : []),
   ];
+  const managerItems: PickerItem[] = managerGroups.flatMap((group) => group.items);
   const selectedManagerItem = managerItems.find((i) => i.value === (managerId ?? NO_MANAGER)) ?? null;
 
   const addEmployeeItems: PickerItem[] = availableToAdd.map((e) => ({
@@ -141,7 +156,7 @@ export function EmployeesTab({
         <div className="space-y-2">
           <p className="text-sm font-medium">Руководитель департамента</p>
           <Combobox
-            items={managerItems}
+            items={managerGroups}
             value={selectedManagerItem}
             onValueChange={(item) => handleAssignManager(item?.value ?? null)}
             isItemEqualToValue={(a, b) => a.value === b.value}
@@ -154,15 +169,22 @@ export function EmployeesTab({
               <ComboboxClear />
             </ComboboxInputGroup>
             <ComboboxContent emptyMessage="Никого не нашлось">
-              {(item: PickerItem) => (
-                <ComboboxItem key={item.value} value={item}>
-                  <div className="flex min-w-0 flex-col">
-                    <span className="truncate">{item.label}</span>
-                    {item.sublabel ? (
-                      <span className="truncate text-xs text-muted-foreground">{item.sublabel}</span>
-                    ) : null}
-                  </div>
-                </ComboboxItem>
+              {(group: PickerGroup) => (
+                <ComboboxGroup key={group.label ?? "__unlabeled__"} items={group.items}>
+                  {group.label ? <ComboboxGroupLabel>{group.label}</ComboboxGroupLabel> : null}
+                  <ComboboxCollection>
+                    {(item: PickerItem) => (
+                      <ComboboxItem key={item.value} value={item}>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate">{item.label}</span>
+                          {item.sublabel ? (
+                            <span className="truncate text-xs text-muted-foreground">{item.sublabel}</span>
+                          ) : null}
+                        </div>
+                      </ComboboxItem>
+                    )}
+                  </ComboboxCollection>
+                </ComboboxGroup>
               )}
             </ComboboxContent>
           </Combobox>

@@ -27,10 +27,12 @@ export function AccountPortal({
   profile,
   trigger,
   positions,
+  departments,
 }: {
   profile: EmployeeProfile;
   trigger: ReactNode;
   positions: PositionItem[];
+  departments: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const isHead = profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
@@ -57,6 +59,8 @@ export function AccountPortal({
                 fullName={profile.fullName}
                 position={profile.position}
                 birthDate={profile.birthDate}
+                homeDepartmentId={profile.homeDepartmentId}
+                departments={departments}
                 systemRole={profile.systemRole}
                 canEditSystemRole={isHead}
                 positions={positions}
