@@ -5,7 +5,6 @@ import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { canCommentOnTask, canManageProjectTasks } from "@/lib/tasks/permissions";
 
 async function loadTaskSectionForAttachments(taskId: string) {
@@ -46,8 +45,7 @@ export async function createTaskAttachmentAction(
       where: { projectId_userId: { projectId: task.section.projectId, userId: session.user.id } },
     }),
   );
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  if (!canCommentOnTask(session.user, task.section, isProjectMember, managesAnyDepartment)) {
+  if (!canCommentOnTask(session.user, task.section, isProjectMember)) {
     throw new Error("Недостаточно прав для добавления файлов к этой задаче");
   }
 
@@ -94,8 +92,7 @@ export async function deleteTaskAttachmentAction(documentId: string) {
   }
 
   const isUploader = document.uploadedBy === session.user.id;
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  const isManager = canManageProjectTasks(session.user, document.task.section, managesAnyDepartment);
+  const isManager = canManageProjectTasks(session.user, document.task.section);
   if (!isUploader && !isManager) {
     throw new Error("Недостаточно прав для удаления этого файла");
   }

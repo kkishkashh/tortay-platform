@@ -5,18 +5,17 @@ import { isDepartmentManager } from "@/lib/departments/permissions";
 
 // Управлять задачами раздела (создавать/редактировать/удалять/менять
 // приоритет и срок/двигать статус в любую сторону, включая "вернуть на
-// доработку") может либо администратор компании, либо руководитель ЛЮБОГО
-// департамента (canManageOperations теперь открыта не только админу, см.
-// lib/projects/permissions.ts), либо руководитель ТОГО департамента, к
-// которому привязан раздел (уже не только через canManageOperations —
-// на случай, если сам раздел вообще без департамента, легаси-случай, см.
-// миграцию Section.departmentId, D4 в плане).
+// доработку") может либо администратор компании, либо руководитель ТОГО
+// департамента, к которому привязан раздел — не любого, только своего
+// (см. lib/projects/permissions.ts — canManageOperations открыта шире
+// только для действий над ЭТИМ проектом/разделом, а не blanket-грант). У
+// легаси-разделов без департамента (см. миграцию Section.departmentId, D4
+// в плане) отдать управление некому, кроме администратора.
 export function canManageProjectTasks(
   user: { id: string; systemRole: SystemRole },
   section: { department: { managerId: string | null } | null },
-  managesAnyDepartment = false,
 ) {
-  if (canManageOperations(user, managesAnyDepartment)) return true;
+  if (canManageOperations(user)) return true;
   if (section.department && isDepartmentManager(user, section.department)) return true;
   return false;
 }
@@ -41,7 +40,6 @@ export function canCommentOnTask(
   user: { id: string; systemRole: SystemRole },
   section: { department: { managerId: string | null } | null },
   isProjectMember: boolean,
-  managesAnyDepartment = false,
 ) {
-  return isProjectMember || canManageProjectTasks(user, section, managesAnyDepartment);
+  return isProjectMember || canManageProjectTasks(user, section);
 }

@@ -22,7 +22,6 @@ import {
 } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { TASK_STATUS_LABELS } from "@/lib/projects/status-labels";
-import { userManagesAnyDepartment } from "@/lib/projects/permissions";
 import { canManageProjectTasks, FORWARD_TRANSITIONS } from "@/lib/tasks/permissions";
 import { UNASSIGNED_MEMBER_VALUE } from "@/lib/tasks/constants";
 
@@ -95,8 +94,7 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
   }
 
   const section = await loadSectionForPermissionCheck(sectionId);
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  if (!canManageProjectTasks(session.user, section, managesAnyDepartment)) {
+  if (!canManageProjectTasks(session.user, section)) {
     throw new Error("Недостаточно прав для создания задач в этом разделе");
   }
 
@@ -192,8 +190,7 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
   }
 
   const task = await loadTaskForPermissionCheck(taskId);
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  if (!canManageProjectTasks(session.user, task.section, managesAnyDepartment)) {
+  if (!canManageProjectTasks(session.user, task.section)) {
     throw new Error("Недостаточно прав для редактирования этой задачи");
   }
 
@@ -294,8 +291,7 @@ export async function updateTaskStatusAction(taskId: string, nextStatus: TaskSta
   // вернуть свою задачу с "Выполнено" на "На проверке"/"В работе", а не
   // только двигать её вперёд).
   const isAssignee = task.assigneeMember?.userId === session.user.id;
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  if (!canManageProjectTasks(session.user, task.section, managesAnyDepartment) && !isAssignee) {
+  if (!canManageProjectTasks(session.user, task.section) && !isAssignee) {
     throw new Error("Недостаточно прав для изменения статуса этой задачи");
   }
 
@@ -408,8 +404,7 @@ export async function deleteTaskAction(taskId: string) {
   }
 
   const task = await loadTaskForPermissionCheck(taskId);
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  if (!canManageProjectTasks(session.user, task.section, managesAnyDepartment)) {
+  if (!canManageProjectTasks(session.user, task.section)) {
     throw new Error("Недостаточно прав для удаления этой задачи");
   }
 
@@ -494,8 +489,7 @@ export async function toggleTaskChecklistItemAction(itemId: string, isDone: bool
   }
 
   const isAssignee = item.task.assigneeMember?.userId === session.user.id;
-  const managesAnyDepartment = await userManagesAnyDepartment(session.user);
-  const isManager = canManageProjectTasks(session.user, item.task.section, managesAnyDepartment);
+  const isManager = canManageProjectTasks(session.user, item.task.section);
   if (!isAssignee && !isManager) {
     throw new Error("Недостаточно прав для изменения этого пункта чек-листа");
   }

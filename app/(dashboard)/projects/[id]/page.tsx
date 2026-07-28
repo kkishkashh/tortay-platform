@@ -14,7 +14,7 @@ import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
-import { canManageOperations, userManagesAnyDepartment } from "@/lib/projects/permissions";
+import { canManageOperations, userManagesDepartmentInProject } from "@/lib/projects/permissions";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import {
   PROJECT_STATUS_LABELS,
@@ -63,7 +63,9 @@ export default async function ProjectDetailPage({
     notFound();
   }
 
-  const managesAnyDepartment = session?.user ? await userManagesAnyDepartment(session.user) : false;
+  const managesThisProject = session?.user
+    ? await userManagesDepartmentInProject(session.user, id)
+    : false;
 
   // Раньше это был Promise.all(sections.map(async section => ... await
   // Promise.all(tasks.map(async task => ...)))) — запрос комментариев и
@@ -91,14 +93,12 @@ export default async function ProjectDetailPage({
     return {
       section,
       tasksWithComments,
-      canManageTasks: session?.user
-        ? canManageProjectTasks(session.user, section, managesAnyDepartment)
-        : false,
+      canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
     };
   });
 
   const canChangeStatus = session?.user
-    ? canManageOperations(session.user, managesAnyDepartment)
+    ? canManageOperations(session.user, managesThisProject)
     : false;
   const currentUserId = session?.user?.id;
 
