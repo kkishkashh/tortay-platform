@@ -10,19 +10,30 @@ import {
 } from "@/lib/departments/actions";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectLabel,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Combobox,
+  ComboboxClear,
+  ComboboxContent,
+  ComboboxInput,
+  ComboboxInputGroup,
+  ComboboxItem,
+} from "@/components/ui/combobox";
 import type { ManagerCandidate } from "@/lib/departments/queries";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 type Employee = { id: string; fullName: string; position?: string | null };
+
+// Элемент пикера с поиском (Combobox) — sublabel показывается под именем в
+// списке и участвует в поиске (должность/чем руководит), но не попадает в
+// текст самого поля ввода после выбора (это отдельно от itemToStringLabel).
+type PickerItem = { value: string; label: string; sublabel?: string };
+
+function comboboxFilter(item: PickerItem, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return (
+    item.label.toLowerCase().includes(q) || (item.sublabel?.toLowerCase().includes(q) ?? false)
+  );
+}
 
 const NO_MANAGER = "__none__";
 
@@ -38,7 +49,7 @@ export function EmployeesTab({
   departmentId: string;
   managerId: string | null;
   employees: Employee[];
-  allEmployees: { id: string; fullName: string; homeDepartmentId: string | null }[];
+  allEmployees: { id: string; fullName: string; homeDepartmentId: string | null; position: string | null }[];
   // Все штатные сотрудники компании — НЕ ограничено сотрудниками этого
   // департамента и НЕ исключает тех, кто уже руководит другим департаментом
   // (один человек может руководить несколькими департаментами одновременно,
@@ -53,20 +64,34 @@ export function EmployeesTab({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [addEmployeeId, setAddEmployeeId] = useState<string>("");
+  // Меняется после каждого добавления, чтобы Combobox размонтировался и
+  // очистил введённый текст поиска — у него нет отдельного пропа для сброса
+  // введённого текста без сброса выбранного значения.
+  const [addPickerResetKey, setAddPickerResetKey] = useState(0);
 
   const availableToAdd = allEmployees.filter((e) => e.homeDepartmentId !== departmentId);
 
-  // Чёткое разделение в пикере руководителя — иначе легко перепутать
-  // рядового сотрудника с тем, кто уже руководит другим департаментом
-  // (см. план). Метка второй группы называет департамент(ы) прямо в тексте
-  // пункта, а не только в отдельном заголовке — видно даже без скролла.
-  function managerCandidateLabel(candidate: ManagerCandidate) {
-    return candidate.managedDepartmentNames.length > 0
-      ? `${candidate.fullName} — руководит: ${candidate.managedDepartmentNames.join(", ")}`
-      : candidate.fullName;
-  }
-  const currentManagers = managerCandidates.filter((c) => c.managedDepartmentNames.length > 0);
-  const plainStaff = managerCandidates.filter((c) => c.managedDepartmentNames.length === 0);
+  const managerItems: PickerItem[] = [
+    { value: NO_MANAGER, label: "Не назначен" },
+    ...managerCandidates.map((c) => ({
+      value: c.id,
+      label: c.fullName,
+      // Явно показываем, что человек уже руководит другим департаментом —
+      // иначе легко перепутать рядового сотрудника с действующим
+      // руководителем (см. план). Видно и в списке, и участвует в поиске.
+      sublabel:
+        c.managedDepartmentNames.length > 0
+          ? `Руководит: ${c.managedDepartmentNames.join(", ")}`
+          : (c.position ?? undefined),
+    })),
+  ];
+  const selectedManagerItem = managerItems.find((i) => i.value === (managerId ?? NO_MANAGER)) ?? null;
+
+  const addEmployeeItems: PickerItem[] = availableToAdd.map((e) => ({
+    value: e.id,
+    label: e.fullName,
+    sublabel: e.position ?? undefined,
+  }));
 
   function handleAssignManager(value: string | null) {
     setError(null);
@@ -88,6 +113,7 @@ export function EmployeesTab({
       try {
         await addEmployeeToDepartmentAction(departmentId, addEmployeeId);
         setAddEmployeeId("");
+        setAddPickerResetKey((key) => key + 1);
       } catch (submitError) {
         setError(
           submitError instanceof Error ? submitError.message : "Не удалось добавить сотрудника",
@@ -114,50 +140,32 @@ export function EmployeesTab({
       {canAssignManager ? (
         <div className="space-y-2">
           <p className="text-sm font-medium">Руководитель департамента</p>
-          <Select
-            value={managerId ?? NO_MANAGER}
-            onValueChange={handleAssignManager}
+          <Combobox
+            items={managerItems}
+            value={selectedManagerItem}
+            onValueChange={(item) => handleAssignManager(item?.value ?? null)}
+            isItemEqualToValue={(a, b) => a.value === b.value}
+            itemToStringLabel={(item) => item.label}
+            filter={comboboxFilter}
             disabled={isPending}
-            items={[
-              { value: NO_MANAGER, label: "Не назначен" },
-              // Собственное имя выбранного — иначе SelectValue не найдёт его
-              // среди сгруппированных пунктов и покажет пустой триггер.
-              ...managerCandidates.map((e) => ({ value: e.id, label: e.fullName })),
-            ]}
           >
-            <SelectTrigger className="w-full sm:w-80">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_MANAGER}>Не назначен</SelectItem>
-              {currentManagers.length > 0 ? (
-                <>
-                  <SelectSeparator />
-                  <SelectGroup>
-                    <SelectLabel>Уже руководят департаментом</SelectLabel>
-                    {currentManagers.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {managerCandidateLabel(e)}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </>
-              ) : null}
-              {plainStaff.length > 0 ? (
-                <>
-                  <SelectSeparator />
-                  <SelectGroup>
-                    <SelectLabel>Сотрудники</SelectLabel>
-                    {plainStaff.map((e) => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.fullName}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </>
-              ) : null}
-            </SelectContent>
-          </Select>
+            <ComboboxInputGroup className="w-full sm:w-80">
+              <ComboboxInput placeholder="Найти сотрудника…" />
+              <ComboboxClear />
+            </ComboboxInputGroup>
+            <ComboboxContent emptyMessage="Никого не нашлось">
+              {(item: PickerItem) => (
+                <ComboboxItem key={item.value} value={item}>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate">{item.label}</span>
+                    {item.sublabel ? (
+                      <span className="truncate text-xs text-muted-foreground">{item.sublabel}</span>
+                    ) : null}
+                  </div>
+                </ComboboxItem>
+              )}
+            </ComboboxContent>
+          </Combobox>
           <p className="text-xs text-muted-foreground">
             Руководитель управляет только этим департаментом: сотрудниками, базовым стеком задач и задачами по проектам в его разделах.
           </p>
@@ -168,27 +176,35 @@ export function EmployeesTab({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <div className="flex-1 space-y-2">
             <p className="text-sm font-medium">Добавить сотрудника</p>
-            <Select
-              value={addEmployeeId}
-              onValueChange={(value) => setAddEmployeeId(value ?? "")}
+            <Combobox
+              key={addPickerResetKey}
+              items={addEmployeeItems}
+              onValueChange={(item) => setAddEmployeeId(item?.value ?? "")}
+              itemToStringLabel={(item) => item.label}
+              filter={comboboxFilter}
               disabled={isPending || availableToAdd.length === 0}
-              items={availableToAdd.map((e) => ({ value: e.id, label: e.fullName }))}
             >
-              <SelectTrigger className="w-full">
-                <SelectValue
+              <ComboboxInputGroup className="w-full">
+                <ComboboxInput
                   placeholder={
-                    availableToAdd.length === 0 ? "Все сотрудники уже добавлены" : "Выберите сотрудника"
+                    availableToAdd.length === 0 ? "Все сотрудники уже добавлены" : "Найти сотрудника…"
                   }
                 />
-              </SelectTrigger>
-              <SelectContent>
-                {availableToAdd.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.fullName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <ComboboxClear />
+              </ComboboxInputGroup>
+              <ComboboxContent emptyMessage="Никого не нашлось">
+                {(item: PickerItem) => (
+                  <ComboboxItem key={item.value} value={item}>
+                    <div className="flex min-w-0 flex-col">
+                      <span className="truncate">{item.label}</span>
+                      {item.sublabel ? (
+                        <span className="truncate text-xs text-muted-foreground">{item.sublabel}</span>
+                      ) : null}
+                    </div>
+                  </ComboboxItem>
+                )}
+              </ComboboxContent>
+            </Combobox>
           </div>
           <Button type="button" onClick={handleAdd} disabled={isPending || !addEmployeeId}>
             <UserPlus className="size-4" />

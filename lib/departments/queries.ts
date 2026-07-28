@@ -126,7 +126,7 @@ export async function getDepartmentTaskStack(
 export async function getEmployeesForDepartmentAssignment() {
   return prisma.user.findMany({
     where: { userType: UserType.ШТАТНЫЙ, managedDepartments: { none: {} } },
-    select: { id: true, fullName: true, homeDepartmentId: true },
+    select: { id: true, fullName: true, homeDepartmentId: true, position: true },
     orderBy: { fullName: "asc" },
   });
 }
@@ -143,6 +143,7 @@ export async function getEmployeesForDepartmentAssignment() {
 export type ManagerCandidate = {
   id: string;
   fullName: string;
+  position: string | null;
   // Названия департаментов, которыми этот человек УЖЕ руководит — пусто у
   // рядовых сотрудников. Нужно, чтобы в пикере чётко разделить "уже
   // руководители" и "сотрудники" и не перепутать их (см. план).
@@ -155,6 +156,7 @@ export async function getEmployeesForManagerAssignment(): Promise<ManagerCandida
     select: {
       id: true,
       fullName: true,
+      position: true,
       managedDepartments: { select: { name: true }, orderBy: { orderIndex: "asc" } },
     },
     orderBy: { fullName: "asc" },
@@ -163,6 +165,7 @@ export async function getEmployeesForManagerAssignment(): Promise<ManagerCandida
   return users.map((user) => ({
     id: user.id,
     fullName: user.fullName,
+    position: user.position,
     managedDepartmentNames: user.managedDepartments.map((d) => d.name),
   }));
 }
