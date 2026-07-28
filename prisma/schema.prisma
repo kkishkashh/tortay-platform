@@ -52,6 +52,13 @@ model User {
   isActive     Boolean    @default(true)
   createdAt    DateTime   @default(now())
 
+  // Код подтверждения для "регистрации" (первый вход/сброс пароля через
+  // почту) — см. lib/auth/actions.ts::requestVerificationCodeAction. Не
+  // отдельная таблица: одному пользователю в любой момент нужен максимум
+  // один активный код, храним прямо на записи.
+  verificationCode          String?
+  verificationCodeExpiresAt DateTime?
+
   // "Домашний" департамент сотрудника (Employees-таб на странице департамента).
   // Отдельно от ProjectMember.projectRole — это постоянная орг. принадлежность,
   // а не роль в конкретном проекте.

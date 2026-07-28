@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthError } from "next-auth";
 
 import { signIn } from "@/auth";
+import { AuthTabs } from "@/components/auth/auth-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,6 +63,8 @@ export default async function LoginPage({
           </div>
         </div>
 
+        <AuthTabs active="login" />
+
         {error && (
           <p className="rounded-lg bg-destructive/10 px-3 py-2 text-center text-sm text-destructive">
             Неверный email или пароль
@@ -82,13 +84,6 @@ export default async function LoginPage({
         <Button type="submit" className="w-full">
           Войти
         </Button>
-
-        <p className="text-center text-sm text-muted-foreground">
-          Нет аккаунта?{" "}
-          <Link href="/register" className="font-medium text-primary hover:underline">
-            Зарегистрироваться
-          </Link>
-        </p>
       </form>
     </main>
   );

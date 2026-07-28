@@ -17,6 +17,31 @@ if (!process.env.NEXT_PUBLIC_APP_URL) {
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const FROM = `Tortay Engineering <noreply@${process.env.RESEND_EMAIL_DOMAIN ?? "tortay.kz"}>`;
 
+export async function sendVerificationCodeEmail({
+  to,
+  code,
+}: {
+  to: string;
+  code: string;
+}) {
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY не задан — код подтверждения (${to}) не отправлен`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: FROM,
+    to,
+    subject: `Код подтверждения: ${code}`,
+    html: `
+      <p>Здравствуйте!</p>
+      <p>Ваш код подтверждения для входа в Tortay Engineering:</p>
+      <p style="font-size: 28px; font-weight: 700; letter-spacing: 4px;">${code}</p>
+      <p>Код действует 15 минут. Если вы не запрашивали вход — просто проигнорируйте это письмо.</p>
+    `,
+  });
+}
+
 export async function sendGipAssignedEmail({
   to,
   employeeName,
