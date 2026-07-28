@@ -104,7 +104,6 @@ export function NewEmployeeDialog({
                 name="phone"
                 type="tel"
                 placeholder="+7 700 123 45 67"
-                required
               />
             </div>
 
