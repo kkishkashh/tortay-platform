@@ -1,29 +1,21 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-// Тот же принцип толерантности, что и у GMAIL_*: письмо со ссылкой для
-// входа всё равно уходит, просто со ссылкой на прод-домен по умолчанию.
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://tortay-platform.vercel.app";
+// Тот же принцип толерантности, что и раньше: письмо со ссылкой для входа
+// всё равно уходит, просто со ссылкой на прод-домен по умолчанию.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://tortay.kz";
 if (!process.env.NEXT_PUBLIC_APP_URL) {
   console.warn(
     "[email] NEXT_PUBLIC_APP_URL не задан — ссылка для входа в письмах будет вести на URL по умолчанию",
   );
 }
 
-// Отправка через личный Gmail руководителя (SMTP + App Password), а не
-// через Resend: у компании нет своего домена, а Resend без верифицированного
-// домена физически отказывается слать письма на чужие адреса (только на
-// адрес, которым зарегистрирован аккаунт) — см. обсуждение при подключении.
-// Gmail SMTP такого ограничения не имеет и бесплатен (лимит ~500 писем/день).
-const transporter =
-  process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD
-    ? nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_APP_PASSWORD,
-        },
-      })
-    : null;
+// Отправка через Resend с верифицированного домена tortay.kz (см. настройку
+// DNS-записей в Cloudflare) — раньше здесь был Gmail SMTP, потому что у
+// компании ещё не было своего подтверждённого домена. Письма реально
+// доходят до сотрудников: MX для tortay.kz указывает на почтовый сервер
+// ps.kz, где у каждого сотрудника уже есть свой ящик @tortay.kz.
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const FROM = `Tortay Engineering <noreply@${process.env.RESEND_EMAIL_DOMAIN ?? "tortay.kz"}>`;
 
 export async function sendGipAssignedEmail({
   to,
@@ -36,15 +28,15 @@ export async function sendGipAssignedEmail({
   projectName: string;
   assignedByName: string;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о назначении ГИП (${to}, проект «${projectName}») не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо о назначении ГИП (${to}, проект «${projectName}») не отправлено`,
     );
     return;
   }
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Вас назначили ГИП проекта «${projectName}»`,
     html: `
@@ -68,9 +60,9 @@ export async function sendTaskAssignedEmail({
   projectName: string;
   deadline: Date | null;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о назначении задачи (${to}, «${taskTitle}») не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо о назначении задачи (${to}, «${taskTitle}») не отправлено`,
     );
     return;
   }
@@ -79,8 +71,8 @@ export async function sendTaskAssignedEmail({
     ? `<p>Срок: ${deadline.toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" })}</p>`
     : "";
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Вам назначена задача «${taskTitle}»`,
     html: `
@@ -105,15 +97,15 @@ export async function sendTaskReadyForReviewEmail({
   employeeName: string;
   projectName: string;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о готовности задачи к проверке (${to}, «${taskTitle}») не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо о готовности задачи к проверке (${to}, «${taskTitle}») не отправлено`,
     );
     return;
   }
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Задача «${taskTitle}» готова к проверке`,
     html: `
@@ -137,9 +129,9 @@ export async function sendManagerCreatedEmail({
   temporaryPassword: string;
   departmentName: string | null;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о создании аккаунта руководителя (${to}) не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо о создании аккаунта руководителя (${to}) не отправлено`,
     );
     return;
   }
@@ -150,8 +142,8 @@ export async function sendManagerCreatedEmail({
     ? `<p>Вам назначен департамент «${departmentName}».</p>`
     : "";
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: "Для вас создан аккаунт руководителя в Tortay Engineering",
     html: `
@@ -182,8 +174,8 @@ export async function sendEmployeeCreatedEmail({
   temporaryPassword: string;
   departmentName: string | null;
 }) {
-  if (!transporter) {
-    console.warn(`[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — приветственное письмо (${to}) не отправлено`);
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY не задан — приветственное письмо (${to}) не отправлено`);
     return;
   }
 
@@ -191,8 +183,8 @@ export async function sendEmployeeCreatedEmail({
     ? `<p>Вам назначен департамент «${departmentName}».</p>`
     : "";
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: "Добро пожаловать в Tortay Engineering",
     html: `
@@ -216,15 +208,15 @@ export async function sendDepartmentAssignedEmail({
   employeeName: string;
   departmentName: string;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о назначении в департамент (${to}) не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо о назначении в департамент (${to}) не отправлено`,
     );
     return;
   }
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Вас добавили в департамент «${departmentName}»`,
     html: `
@@ -247,9 +239,9 @@ export async function sendDeadlineChangedEmail({
   projectName: string;
   deadline: Date | null;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо об изменении срока (${to}, «${taskTitle}») не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо об изменении срока (${to}, «${taskTitle}») не отправлено`,
     );
     return;
   }
@@ -258,8 +250,8 @@ export async function sendDeadlineChangedEmail({
     ? `<p>Новый срок: ${deadline.toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" })}</p>`
     : "<p>Срок снят.</p>";
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Изменён срок задачи «${taskTitle}»`,
     html: `
@@ -281,15 +273,15 @@ export async function sendTaskReturnedEmail({
   taskTitle: string;
   projectName: string;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о возврате задачи (${to}, «${taskTitle}») не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо о возврате задачи (${to}, «${taskTitle}») не отправлено`,
     );
     return;
   }
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Задача «${taskTitle}» возвращена на доработку`,
     html: `
@@ -310,15 +302,15 @@ export async function sendTaskApprovedEmail({
   taskTitle: string;
   projectName: string;
 }) {
-  if (!transporter) {
+  if (!resend) {
     console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо об одобрении задачи (${to}, «${taskTitle}») не отправлено`,
+      `[email] RESEND_API_KEY не задан — письмо об одобрении задачи (${to}, «${taskTitle}») не отправлено`,
     );
     return;
   }
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: `Задача «${taskTitle}» одобрена`,
     html: `
@@ -337,17 +329,15 @@ export async function sendPasswordResetEmail({
   employeeName: string;
   temporaryPassword: string;
 }) {
-  if (!transporter) {
-    console.warn(
-      `[email] GMAIL_USER/GMAIL_APP_PASSWORD не заданы — письмо о сбросе пароля (${to}) не отправлено`,
-    );
+  if (!resend) {
+    console.warn(`[email] RESEND_API_KEY не задан — письмо о сбросе пароля (${to}) не отправлено`);
     return;
   }
 
   const loginLink = `${APP_URL}/login`;
 
-  await transporter.sendMail({
-    from: `Tortay Engineering <${process.env.GMAIL_USER}>`,
+  await resend.emails.send({
+    from: FROM,
     to,
     subject: "Ваш пароль был сброшен",
     html: `
