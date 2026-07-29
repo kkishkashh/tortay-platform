@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { CheckCircle2, UserPlus } from "lucide-react";
 
-import { createManagerAction } from "@/lib/managers/actions";
+import { createManagerAction, type ManagerFormState } from "@/lib/managers/actions";
 import type { DepartmentListItem } from "@/lib/departments/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,11 +26,13 @@ import {
 
 // Пароль администратор не вводит и не видит — он генерируется на сервере
 // и уходит новому руководителю письмом (см. lib/managers/actions.ts).
+const initialState: ManagerFormState = { error: null, successCount: 0 };
+
 export function CreateManagerDialog({ departments }: { departments: DepartmentListItem[] }) {
   const [open, setOpen] = useState(false);
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [state, formAction, isPending] = useActionState(createManagerAction, initialState);
+  const lastHandledSuccessCount = useRef(state.successCount);
 
   useEffect(() => {
     if (!showToast) return;
@@ -38,20 +40,12 @@ export function CreateManagerDialog({ departments }: { departments: DepartmentLi
     return () => clearTimeout(timer);
   }, [showToast]);
 
-  function handleSubmit(formData: FormData) {
-    setError(null);
-    startTransition(async () => {
-      try {
-        await createManagerAction(formData);
-        setOpen(false);
-        setShowToast(true);
-      } catch (submitError) {
-        setError(
-          submitError instanceof Error ? submitError.message : "Не удалось создать руководителя",
-        );
-      }
-    });
-  }
+  useEffect(() => {
+    if (state.successCount === lastHandledSuccessCount.current) return;
+    lastHandledSuccessCount.current = state.successCount;
+    setOpen(false);
+    setShowToast(true);
+  }, [state.successCount]);
 
   return (
     <>
@@ -67,7 +61,7 @@ export function CreateManagerDialog({ departments }: { departments: DepartmentLi
               Временный пароль сгенерируется автоматически и придёт на указанный email.
             </DialogDescription>
           </DialogHeader>
-          <form action={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="manager-fullName">ФИО</Label>
               <Input
@@ -122,7 +116,7 @@ export function CreateManagerDialog({ departments }: { departments: DepartmentLi
               </Select>
             </div>
 
-            {error ? <p className="text-sm text-destructive sm:col-span-2">{error}</p> : null}
+            {state.error ? <p className="text-sm text-destructive sm:col-span-2">{state.error}</p> : null}
 
             <div className="flex justify-end gap-2 sm:col-span-2">
               <Button

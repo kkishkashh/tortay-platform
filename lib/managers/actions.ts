@@ -28,17 +28,38 @@ function parseManagerFields(formData: FormData) {
   return { fullName, email, phone, position, username, departmentId };
 }
 
+// Next.js в проде обрезает сообщение любой ошибки, брошенной из Server
+// Action, до общего "An error occurred in the Server Components render..."
+// (см. node_modules/next/dist/docs/01-app/01-getting-started/10-error-handling.md
+// — "avoid using try/catch blocks and throw errors, instead model expected
+// errors as return values"). Поэтому ожидаемые ошибки (дубликат email,
+// нет прав) возвращаются значением через useActionState, а не throw —
+// иначе администратор вместо "email уже существует" видит бессмысленный digest.
+export type ManagerFormState = { error: string | null; successCount: number };
+
 // Создаёт руководителя как обычного User (systemRole: СОТРУДНИК, см. D2 —
 // "руководитель" целиком выводится из Department.managerId, отдельного
 // системного значения роли для этого нет). Пароль генерируется на сервере
 // и никогда не вводится администратором — уходит только письмом.
-export async function createManagerAction(formData: FormData) {
+export async function createManagerAction(
+  prevState: ManagerFormState,
+  formData: FormData,
+): Promise<ManagerFormState> {
   const session = await auth();
   if (!session?.user || !canManageDepartments(session.user)) {
-    throw new Error("Создавать руководителей может только администратор");
+    return { error: "Создавать руководителей может только администратор", successCount: prevState.successCount };
   }
 
-  const fields = parseManagerFields(formData);
+  let fields;
+  try {
+    fields = parseManagerFields(formData);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "Некорректные данные",
+      successCount: prevState.successCount,
+    };
+  }
+
   const temporaryPassword = generateTemporaryPassword();
   const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
@@ -87,11 +108,12 @@ export async function createManagerAction(formData: FormData) {
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       const target = (error.meta?.target as string[] | undefined)?.join(", ");
-      throw new Error(
-        target?.includes("username")
+      return {
+        error: target?.includes("username")
           ? "Этот логин уже используется"
           : "Сотрудник с таким email уже существует",
-      );
+        successCount: prevState.successCount,
+      };
     }
     throw error;
   }
@@ -99,6 +121,8 @@ export async function createManagerAction(formData: FormData) {
   revalidatePath("/departments");
   revalidatePath("/employees");
   revalidatePath("/");
+
+  return { error: null, successCount: prevState.successCount + 1 };
 }
 
 export async function updateManagerAction(userId: string, formData: FormData) {
