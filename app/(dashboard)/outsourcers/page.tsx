@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getOutsourcerFunctions } from "@/lib/outsourcer-functions/queries";
 import { getOutsourcers } from "@/lib/outsourcers/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
 import { formatTodayLabel } from "@/lib/utils";
@@ -27,14 +28,14 @@ export default async function OutsourcersPage() {
     redirect("/");
   }
 
-  const outsourcers = await getOutsourcers();
+  const [outsourcers, functions] = await Promise.all([getOutsourcers(), getOutsourcerFunctions()]);
 
   return (
     <>
       <PageHeader
         title="Аутсорсеры"
         subtitle={formatTodayLabel(new Date())}
-        action={<NewOutsourcerDialog />}
+        action={<NewOutsourcerDialog functions={functions} />}
       />
       <div className="p-8">
         {outsourcers.length === 0 ? (

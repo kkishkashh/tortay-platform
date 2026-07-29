@@ -90,6 +90,7 @@ model User {
   // Кто поставил задачу — заполняется автоматически при создании, никогда не редактируется вручную.
   tasksAssignedByMe        Task[]         @relation("TaskAssignedBy")
   personalTasks            PersonalTask[]
+  outsourcersAddedToProjects ProjectOutsourcer[]
 
   @@map("users")
 }
@@ -153,6 +154,7 @@ model Project {
   contracts   Contract[]
   comments    Comment[]
   activityLog ActivityLog[]
+  outsourcers ProjectOutsourcer[]
 
   @@map("projects")
 }
@@ -512,7 +514,69 @@ model Outsourcer {
   paymentPercent2 Int? @default(20)
   paymentPercent3 Int? @default(20)
 
+  // Многоразовый список "функций" аутсорсера (в основном "Лицензия", но
+  // расширяемо) — отдельно от specialization (домен: геодезия/архитектура/
+  // ...), это то, ЧТО именно аутсорсер предоставляет компании. Растёт
+  // через "+ добавить" на месте, как Position (см. lib/positions).
+  functions OutsourcerFunction[]
+
+  // Проекты, на которых работает этот аутсорсер — каждый со своим
+  // отдельным договором/траншами (см. модель ProjectOutsourcer ниже), по
+  // прямой просьбе Камилы: один и тот же аутсорсер может одновременно
+  // работать на нескольких проектах разных департаментов, каждый раз на
+  // разных условиях.
+  projectEngagements ProjectOutsourcer[]
+
   @@map("outsourcers")
+}
+
+model OutsourcerFunction {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  createdAt   DateTime     @default(now())
+  outsourcers Outsourcer[]
+
+  @@map("outsourcer_functions")
+}
+
+// Один "выход" аутсорсера на конкретный проект — отдельный договор,
+// отдельные транши, отдельный статус оплаты, даже если это тот же самый
+// Outsourcer, что уже работает на других проектах. Реквизиты исполнителя
+// (ИИН/адрес/банк/удостоверение) остаются на самом Outsourcer — это
+// свойства человека/организации, не меняются от проекта к проекту.
+model ProjectOutsourcer {
+  id           String     @id @default(uuid())
+  projectId    String
+  project      Project    @relation(fields: [projectId], references: [id])
+  outsourcerId String
+  outsourcer   Outsourcer @relation(fields: [outsourcerId], references: [id])
+  // Кто из бухгалтеров/админов добавил этого аутсорсера в проект — чтобы
+  // руководитель департамента видел, кто именно это сделал (см. запрос
+  // Камилы: "видит что бухгалтер добавила аутсорсера в проект").
+  addedByUserId String
+  addedByUser   User     @relation(fields: [addedByUserId], references: [id])
+  createdAt     DateTime @default(now())
+
+  contractNumber String?   @unique
+  contractDate   DateTime? @db.Date
+  projectSubject String?   @db.Text
+  durationDays   Int?
+  totalAmount    Decimal?  @db.Decimal(14, 2)
+
+  // Та же схема траншей, что у Outsourcer (см. выше) — плюс отметка
+  // "оплачено" по каждому траншу, которой раньше не было: именно она
+  // отвечает на вопрос Камилы "можно ли начинать работать над проектом" —
+  // первый ненулевой транш = аванс, его оплата = сигнал для руководителя
+  // департамента, что можно стартовать.
+  paymentPercent1 Int? @default(60)
+  paymentPercent2 Int? @default(20)
+  paymentPercent3 Int? @default(20)
+  tranche1Paid    Boolean @default(false)
+  tranche2Paid    Boolean @default(false)
+  tranche3Paid    Boolean @default(false)
+
+  @@unique([projectId, outsourcerId])
+  @@map("project_outsourcers")
 }
 
 // ============================================================

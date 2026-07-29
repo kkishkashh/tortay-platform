@@ -8,13 +8,13 @@ export type OutsourcerListItem = {
   email: string;
   directorName: string;
   contractNumber: string | null;
+  projectsCount: number;
 };
 
-// Проектов подрядчикам пока никто не назначает (нет такого флоу) —
-// поэтому "N проектов" в карточке организации всегда 0, честно.
 export async function getOutsourcers(): Promise<OutsourcerListItem[]> {
   const outsourcers = await prisma.outsourcer.findMany({
     orderBy: { organization: "asc" },
+    include: { _count: { select: { projectEngagements: true } } },
   });
 
   return outsourcers.map((outsourcer) => ({
@@ -25,9 +25,13 @@ export async function getOutsourcers(): Promise<OutsourcerListItem[]> {
     email: outsourcer.email,
     directorName: outsourcer.directorName,
     contractNumber: outsourcer.contractNumber,
+    projectsCount: outsourcer._count.projectEngagements,
   }));
 }
 
 export async function getOutsourcerById(id: string) {
-  return prisma.outsourcer.findUnique({ where: { id } });
+  return prisma.outsourcer.findUnique({
+    where: { id },
+    include: { functions: { select: { id: true, name: true } } },
+  });
 }

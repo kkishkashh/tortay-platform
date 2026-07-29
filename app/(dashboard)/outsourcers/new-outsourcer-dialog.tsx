@@ -20,10 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { OutsourcerFunctionsPicker } from "@/components/outsourcers/outsourcer-functions-picker";
+import type { OutsourcerFunctionItem } from "@/lib/outsourcer-functions/queries";
 import { createOutsourcerAction } from "@/lib/outsourcers/actions";
 import { COMMON_SPECIALIZATIONS } from "@/lib/outsourcers/specializations";
 
-export function NewOutsourcerDialog() {
+export function NewOutsourcerDialog({ functions }: { functions: OutsourcerFunctionItem[] }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +96,14 @@ export function NewOutsourcerDialog() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Функции</Label>
+              <OutsourcerFunctionsPicker
+                functions={functions}
+                defaultSelectedIds={functions.filter((f) => f.name === "Лицензия").map((f) => f.id)}
+              />
             </div>
 
             <div className="space-y-2">

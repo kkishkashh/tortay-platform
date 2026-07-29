@@ -2,6 +2,7 @@ import { ProjectRole, ProjectStatus, SectionStatus, SystemRole } from "@prisma/c
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { canManageFinance } from "@/lib/projects/permissions";
 
 export type ProjectListItem = {
   id: string;
@@ -18,7 +19,11 @@ export type ProjectListItem = {
 };
 
 // РУКОВОДИТЕЛЬ видит все проекты компании, СОТРУДНИК — только те,
-// где он состоит участником (см. согласованную модель в брифе).
+// где он состоит участником (см. согласованную модель в брифе). Отдельно —
+// доступ к финансам (canManageFinance: ADM-руководитель, бухгалтеры с
+// financeAccess) тоже видит все проекты, но только чтобы найти проект и
+// привязать к нему аутсорсера — самими проектами эти люди не управляют
+// (см. lib/project-outsourcers).
 export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   const session = await auth();
   if (!session?.user) {
@@ -26,9 +31,10 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   }
 
   const isHead = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const seesAll = isHead || (await canManageFinance(session.user));
 
   const projects = await prisma.project.findMany({
-    where: isHead
+    where: seesAll
       ? undefined
       : { members: { some: { userId: session.user.id } } },
     include: {

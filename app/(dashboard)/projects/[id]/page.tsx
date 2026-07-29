@@ -14,7 +14,8 @@ import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
-import { canManageOperations, userManagesDepartmentInProject } from "@/lib/projects/permissions";
+import { getProjectOutsourcers, getOutsourcersForPicker } from "@/lib/project-outsourcers/queries";
+import { canManageFinance, canManageOperations, userManagesDepartmentInProject } from "@/lib/projects/permissions";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import {
   PROJECT_STATUS_LABELS,
@@ -25,6 +26,7 @@ import { getAvatarColor, getInitials } from "@/lib/utils";
 import { AssignGipDialog } from "./assign-gip-dialog";
 import { DeleteProjectDialog } from "./delete-project-dialog";
 import { EditProjectDialog } from "./edit-project-dialog";
+import { ProjectOutsourcersSection } from "./project-outsourcers-section";
 import { ProjectStatusSelect } from "./project-status-select";
 import { SectionDatesFields } from "./section-dates-fields";
 import { SectionStatusSelect } from "./section-status-select";
@@ -66,6 +68,15 @@ export default async function ProjectDetailPage({
   const managesThisProject = session?.user
     ? await userManagesDepartmentInProject(session.user, id)
     : false;
+
+  const canManageOutsourcers = session?.user ? await canManageFinance(session.user) : false;
+  const [projectOutsourcers, outsourcerPickerOptions] = await Promise.all([
+    getProjectOutsourcers(id),
+    // Полный список аутсорсеров компании — только для тех, кто реально
+    // может их привязывать (см. урок про getEmployeesForManagerAssignment:
+    // не отдавать в RSC-payload то, что UI всё равно скрывает от роли).
+    canManageOutsourcers ? getOutsourcersForPicker() : Promise.resolve([]),
+  ]);
 
   // Раньше это был Promise.all(sections.map(async section => ... await
   // Promise.all(tasks.map(async task => ...)))) — запрос комментариев и
@@ -149,6 +160,13 @@ export default async function ProjectDetailPage({
             ) : null}
           </div>
         </div>
+
+        <ProjectOutsourcersSection
+          projectId={project.id}
+          outsourcers={projectOutsourcers}
+          pickerOptions={outsourcerPickerOptions}
+          canManage={canManageOutsourcers}
+        />
 
         <div className="mt-8 space-y-8">
           {sectionsWithTasks.length === 0 ? (

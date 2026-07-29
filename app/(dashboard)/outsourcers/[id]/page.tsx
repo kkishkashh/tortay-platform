@@ -3,12 +3,16 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
+import { getOutsourcerFunctions } from "@/lib/outsourcer-functions/queries";
 import { getOutsourcerById } from "@/lib/outsourcers/queries";
+import { getOutsourcerProjectEngagements } from "@/lib/project-outsourcers/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 import { DeleteOutsourcerDialog } from "./delete-outsourcer-dialog";
 import { OutsourcerContractForm } from "./contract-form";
+import { OutsourcerFunctionsForm } from "./outsourcer-functions-form";
+import { OutsourcerProjectsList } from "./outsourcer-projects-list";
 
 export default async function OutsourcerProfilePage({
   params,
@@ -21,7 +25,11 @@ export default async function OutsourcerProfilePage({
   }
 
   const { id } = await params;
-  const outsourcer = await getOutsourcerById(id);
+  const [outsourcer, functions, engagements] = await Promise.all([
+    getOutsourcerById(id),
+    getOutsourcerFunctions(),
+    getOutsourcerProjectEngagements(id),
+  ]);
   if (!outsourcer) {
     notFound();
   }
@@ -79,6 +87,18 @@ export default async function OutsourcerProfilePage({
         </dl>
 
         <div className="mt-8">
+          <OutsourcerFunctionsForm
+            outsourcerId={outsourcer.id}
+            functions={functions}
+            selectedIds={outsourcer.functions.map((f) => f.id)}
+          />
+        </div>
+
+        <div className="mt-8">
+          <OutsourcerProjectsList engagements={engagements} />
+        </div>
+
+        <div className="mt-8">
           <OutsourcerContractForm
             outsourcer={{
               id: outsourcer.id,
@@ -101,10 +121,6 @@ export default async function OutsourcerProfilePage({
             }}
           />
         </div>
-
-        <p className="mt-8 text-sm text-muted-foreground">
-          Назначенные проекты появятся здесь на следующих шагах.
-        </p>
       </div>
     </>
   );

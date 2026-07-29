@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
 import type { OutsourcerListItem } from "@/lib/outsourcers/queries";
-import { getAvatarColor, getInitials } from "@/lib/utils";
+import { getAvatarColor, getInitials, pluralizeProjects } from "@/lib/utils";
 
 export function OutsourcerRow({ outsourcer }: { outsourcer: OutsourcerListItem }) {
   const router = useRouter();
@@ -26,7 +26,9 @@ export function OutsourcerRow({ outsourcer }: { outsourcer: OutsourcerListItem }
           </span>
           <div className="min-w-0">
             <p className="truncate font-medium">{outsourcer.organization}</p>
-            <p className="text-xs text-muted-foreground">0 проектов</p>
+            <p className="text-xs text-muted-foreground">
+              {outsourcer.projectsCount} {pluralizeProjects(outsourcer.projectsCount)}
+            </p>
           </div>
         </div>
       </TableCell>

@@ -32,6 +32,7 @@ export async function createOutsourcerAction(formData: FormData) {
   const email = (formData.get("email") as string | null)?.trim().toLowerCase();
   const directorName = (formData.get("directorName") as string | null)?.trim();
   const contractNumber = (formData.get("contractNumber") as string | null)?.trim() || null;
+  const functionIds = formData.getAll("functionIds") as string[];
 
   if (!organization || !specialization || !phone || !email || !directorName) {
     throw new Error("Заполните все обязательные поля");
@@ -47,7 +48,15 @@ export async function createOutsourcerAction(formData: FormData) {
 
   try {
     await prisma.outsourcer.create({
-      data: { organization, specialization, phone, email, directorName, contractNumber },
+      data: {
+        organization,
+        specialization,
+        phone,
+        email,
+        directorName,
+        contractNumber,
+        functions: { connect: functionIds.map((id) => ({ id })) },
+      },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -172,16 +181,42 @@ export async function updateOutsourcerContractDetailsAction(formData: FormData) 
   revalidatePath(`/outsourcers/${id}`);
 }
 
-// Outsourcer — самостоятельная запись без внешних ключей на другие
-// таблицы (см. schema.prisma), поэтому удаление простое, без каскада.
+// Outsourcer больше не полностью самостоятельная запись — если она
+// участвует хоть в одном проекте (ProjectOutsourcer, ON DELETE RESTRICT),
+// удаление нужно сначала явно запретить с понятным сообщением, иначе
+// пользователь увидит только общую ошибку сервера.
 export async function deleteOutsourcerAction(id: string) {
   const session = await auth();
   if (!session?.user || !(await canManageFinance(session.user))) {
     throw new Error("Недостаточно прав");
   }
 
+  const engagementsCount = await prisma.projectOutsourcer.count({ where: { outsourcerId: id } });
+  if (engagementsCount > 0) {
+    throw new Error(
+      `Нельзя удалить: аутсорсер привязан к ${engagementsCount} проект(ам) — сначала уберите его оттуда.`,
+    );
+  }
+
   await prisma.outsourcer.delete({ where: { id } });
 
   revalidatePath("/outsourcers");
   redirect("/outsourcers");
+}
+
+// `set` вместо `connect` — полностью заменяет набор функций на переданный,
+// а не добавляет к существующему (форма на странице аутсорсера всегда
+// присылает полный актуальный набор чекбоксов, не дельту).
+export async function updateOutsourcerFunctionsAction(outsourcerId: string, functionIds: string[]) {
+  const session = await auth();
+  if (!session?.user || !(await canManageFinance(session.user))) {
+    throw new Error("Недостаточно прав");
+  }
+
+  await prisma.outsourcer.update({
+    where: { id: outsourcerId },
+    data: { functions: { set: functionIds.map((id) => ({ id })) } },
+  });
+
+  revalidatePath(`/outsourcers/${outsourcerId}`);
 }
