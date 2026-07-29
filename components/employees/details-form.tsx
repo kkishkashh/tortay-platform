@@ -125,24 +125,29 @@ export function DetailsForm({
         </div>
 
         {canEditSystemRole ? (
-          <div className="space-y-1.5">
-            <Label htmlFor="details-systemRole">Системная роль</Label>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label htmlFor="details-systemRole">Права доступа</Label>
             <Select
               name="systemRole"
               defaultValue={systemRole}
               items={[
-                { value: "СОТРУДНИК", label: "Сотрудник" },
-                { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
+                { value: "СОТРУДНИК", label: "Обычные" },
+                { value: "РУКОВОДИТЕЛЬ", label: "Полный доступ администратора" },
               ]}
             >
               <SelectTrigger id="details-systemRole" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
-                <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
+                <SelectItem value="СОТРУДНИК">Обычные</SelectItem>
+                <SelectItem value="РУКОВОДИТЕЛЬ">Полный доступ администратора</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              Это не то же самое, что «руководитель департамента» — тем, кто возглавляет отдел,
+              назначайте на странице самого департамента. Здесь — только полные права
+              администратора (финансы, договоры, управление всеми руководителями), как у Камилы.
+            </p>
           </div>
         ) : null}
 
