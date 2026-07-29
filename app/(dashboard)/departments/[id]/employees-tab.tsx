@@ -78,27 +78,25 @@ export function EmployeesTab({
 
   const availableToAdd = allEmployees.filter((e) => e.homeDepartmentId !== departmentId);
 
-  // Кандидаты сюда приходят уже отфильтрованными на сервере — только те,
-  // кто УЖЕ руководит хотя бы одним департаментом (см.
-  // lib/departments/queries.ts::getEmployeesForManagerAssignment). Этот
-  // пикер — для переназначения/добавления департамента существующему
-  // руководителю, а не для превращения рядового сотрудника в руководителя
-  // впервые (для этого — "Создать руководителя" на /managers). Поэтому
-  // группировка "Уже руководят"/"Сотрудники" больше не нужна: второй
-  // группы просто никогда не бывает — один плоский список.
+  const currentManagers = managerCandidates.filter((c) => c.managedDepartmentNames.length > 0);
+  const plainStaff = managerCandidates.filter((c) => c.managedDepartmentNames.length === 0);
+
+  const toPickerItem = (c: ManagerCandidate): PickerItem => ({
+    value: c.id,
+    label: c.fullName,
+    sublabel:
+      c.managedDepartmentNames.length > 0
+        ? `Руководит: ${c.managedDepartmentNames.join(", ")}`
+        : (c.position ?? undefined),
+  });
+
   const managerGroups: PickerGroup[] = [
     { label: null, items: [{ value: NO_MANAGER, label: "Не назначен" }] },
-    ...(managerCandidates.length > 0
-      ? [
-          {
-            label: null,
-            items: managerCandidates.map((c) => ({
-              value: c.id,
-              label: c.fullName,
-              sublabel: `Руководит: ${c.managedDepartmentNames.join(", ")}`,
-            })),
-          },
-        ]
+    ...(currentManagers.length > 0
+      ? [{ label: "Уже руководят департаментом", items: currentManagers.map(toPickerItem) }]
+      : []),
+    ...(plainStaff.length > 0
+      ? [{ label: "Сотрудники", items: plainStaff.map(toPickerItem) }]
       : []),
   ];
   const managerItems: PickerItem[] = managerGroups.flatMap((group) => group.items);
@@ -171,8 +169,8 @@ export function EmployeesTab({
               <ComboboxClear />
             </ComboboxInputGroup>
             <ComboboxContent emptyMessage="Никого не нашлось">
-              {(group: PickerGroup, index: number) => (
-                <ComboboxGroup key={group.label ?? index} items={group.items}>
+              {(group: PickerGroup) => (
+                <ComboboxGroup key={group.label ?? "__unlabeled__"} items={group.items}>
                   {group.label ? <ComboboxGroupLabel>{group.label}</ComboboxGroupLabel> : null}
                   <ComboboxCollection>
                     {(item: PickerItem) => (
