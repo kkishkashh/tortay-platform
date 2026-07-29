@@ -5,6 +5,7 @@ import { SystemRole } from "@prisma/client";
 import { CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,6 +43,7 @@ export function DetailsForm({
   departments,
   systemRole,
   canEditSystemRole,
+  financeAccess,
   positions,
 }: {
   userId: string;
@@ -52,6 +54,7 @@ export function DetailsForm({
   departments: { id: string; name: string }[];
   systemRole: SystemRole;
   canEditSystemRole: boolean;
+  financeAccess: boolean;
   positions: PositionItem[];
 }) {
   const [isPending, startTransition] = useTransition();
@@ -147,6 +150,19 @@ export function DetailsForm({
               Это не то же самое, что «руководитель департамента» — тем, кто возглавляет отдел,
               назначайте на странице самого департамента. Здесь — только полные права
               администратора (финансы, договоры, управление всеми руководителями), как у Камилы.
+            </p>
+          </div>
+        ) : null}
+
+        {canEditSystemRole ? (
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox name="financeAccess" defaultChecked={financeAccess} />
+              Доступ к аутсорсерам и договорам
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Для бухгалтеров и других сотрудников, которым нужны только эти два раздела — без
+              полных прав администратора и без назначения руководителем департамента.
             </p>
           </div>
         ) : null}

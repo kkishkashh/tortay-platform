@@ -63,6 +63,7 @@ export function AccountPortal({
                 departments={departments}
                 systemRole={profile.systemRole}
                 canEditSystemRole={isHead}
+                financeAccess={profile.financeAccess}
                 positions={positions}
               />
             ) : null}

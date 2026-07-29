@@ -50,6 +50,11 @@ model User {
   // Деактивированный пользователь не может войти (см. auth.ts::authorize) —
   // запись и вся её история остаются, в отличие от полного удаления.
   isActive     Boolean    @default(true)
+  // Точечный доступ к финансово-кадровой зоне (Аутсорсеры, Договоры) для
+  // бухгалтеров, которые не руководят Административным департаментом —
+  // см. lib/projects/permissions.ts::canManageFinance. Отдельно от
+  // systemRole/managerId: не даёт никаких других прав.
+  financeAccess Boolean   @default(false)
   createdAt    DateTime   @default(now())
 
   // Код подтверждения для "регистрации" (первый вход/сброс пароля через

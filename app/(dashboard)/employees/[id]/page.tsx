@@ -270,6 +270,7 @@ export default async function EmployeeProfilePage({
                     departments={departments}
                     systemRole={employee.systemRole}
                     canEditSystemRole={canEditSystemRole}
+                    financeAccess={employee.financeAccess}
                     positions={positions}
                   />
                 </CardContent>

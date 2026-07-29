@@ -53,15 +53,18 @@ export async function userManagesDepartmentInProject(
 // прямой просьбе пользователя открыта ЕЩЁ и руководителю Административного
 // департамента (код "ADM": "подбор персонала; оформление новых работников;
 // заключение договоров; ведение учета расходов/доходов" — реальные
-// обязанности этого департамента), помимо администратора компании.
+// обязанности этого департамента), помимо администратора компании, а
+// также отдельным сотрудникам-бухгалтерам с точечным флагом
+// User.financeAccess (см. схему) — им нужен доступ именно сюда, без того,
+// чтобы делать их руководителями департамента или администраторами.
 // Отдельная, более узкая зона, чем canManageOperations — НЕ открыта всем
-// руководителям департаментов, только ADM (плюс, разумеется, тем, кто уже
-// проходит canManageOperations как администратор).
+// руководителям департаментов, только ADM + financeAccess (плюс,
+// разумеется, тем, кто уже проходит canManageOperations как администратор).
 export async function canManageFinance(user: { id: string; systemRole: SystemRole }): Promise<boolean> {
   if (canManageOperations(user)) return true;
-  const managed = await prisma.department.findFirst({
-    where: { managerId: user.id, code: "ADM" },
-    select: { id: true },
+  const record = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { financeAccess: true, managedDepartments: { where: { code: "ADM" }, select: { id: true } } },
   });
-  return !!managed;
+  return !!record?.financeAccess || !!record?.managedDepartments.length;
 }

@@ -298,8 +298,10 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
   }
 
   let systemRole: SystemRole | undefined = undefined;
+  let financeAccess: boolean | undefined = undefined;
   if (isAdmin) {
     systemRole = (formData.get("systemRole") as SystemRole | null) ?? undefined;
+    financeAccess = formData.get("financeAccess") === "on";
   }
 
   const previous = await prisma.user.findUnique({
@@ -316,6 +318,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
         birthDate,
         homeDepartmentId,
         systemRole,
+        financeAccess,
       },
     });
 

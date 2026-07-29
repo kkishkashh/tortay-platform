@@ -128,6 +128,7 @@ export type EmployeeProfile = {
   birthDate: Date | null;
   createdAt: Date;
   homeDepartmentId: string | null;
+  financeAccess: boolean;
   projectsByStatus: { status: ProjectStatus; projects: { id: string; name: string }[] }[];
   activeProjectsCount: number;
   completedProjectsCount: number;
@@ -168,6 +169,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       birthDate: true,
       createdAt: true,
       homeDepartmentId: true,
+      financeAccess: true,
       projectMemberships: {
         select: {
           project: { select: { id: true, name: true, status: true } },
@@ -220,6 +222,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     birthDate: user.birthDate,
     createdAt: user.createdAt,
     homeDepartmentId: user.homeDepartmentId,
+    financeAccess: user.financeAccess,
     projectsByStatus,
     activeProjectsCount,
     completedProjectsCount,
