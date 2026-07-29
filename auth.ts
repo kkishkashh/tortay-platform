@@ -52,26 +52,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.fullName,
           systemRole: user.systemRole,
+          financeAccess: user.financeAccess,
         };
       },
     }),
   ],
   callbacks: {
     // authorize() выше вызывается только при входе. Дальше при каждом
-    // запросе Auth.js читает уже готовый JWT — поэтому id/systemRole
-    // нужно явно перенести из user в token, а из token — в session.
+    // запросе Auth.js читает уже готовый JWT — поэтому id/systemRole/
+    // financeAccess нужно явно перенести из user в token, а из token — в
+    // session. financeAccess попадает в токен только при входе — если
+    // админ включает его сотруднику, тому нужно перелогиниться, чтобы
+    // право подхватилось (тот же компромисс, что и с systemRole).
     jwt({ token, user }) {
       if (user) {
         // user.id типизирован как опциональный в базовом интерфейсе next-auth,
         // но authorize() выше всегда возвращает id — приведение безопасно.
         token.id = user.id!;
         token.systemRole = user.systemRole;
+        token.financeAccess = user.financeAccess;
       }
       return token;
     },
     session({ session, token }) {
       session.user.id = token.id;
       session.user.systemRole = token.systemRole;
+      session.user.financeAccess = token.financeAccess;
       return session;
     },
   },

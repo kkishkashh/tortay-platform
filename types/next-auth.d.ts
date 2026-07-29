@@ -9,11 +9,13 @@ declare module "next-auth" {
     user: {
       id: string;
       systemRole: SystemRole;
+      financeAccess: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     systemRole: SystemRole;
+    financeAccess: boolean;
   }
 }
 
@@ -24,5 +26,6 @@ declare module "@auth/core/jwt" {
   interface JWT {
     id: string;
     systemRole: SystemRole;
+    financeAccess: boolean;
   }
 }

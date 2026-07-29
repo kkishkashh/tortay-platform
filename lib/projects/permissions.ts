@@ -14,11 +14,23 @@ import { prisma } from "@/lib/prisma";
 // "только то, что касается его департамента" — второй параметр здесь
 // всегда должен быть вычислен ПОД КОНКРЕТНОЕ действие вызывающим кодом, а
 // не браться из общего "руководит хоть чем-то".
+//
+// financeAccess (бухгалтеры) — по прямой просьбе Камилы 2026-07-29 тоже
+// получает полный доступ ко ВСЕМ проектам компании (создание/редактирование/
+// удаление/назначение ГИП), а не только к привязке аутсорсеров, как было
+// изначально решено при добавлении этой роли часом ранее — она явно
+// расширила решение до "пусть могут создавать и редактировать и удалять
+// всё". financeAccess живёт в session.user (см. auth.ts/types/next-auth.d.ts),
+// поэтому здесь синхронная проверка, без похода в базу.
 export function canManageOperations(
-  user: { systemRole: SystemRole },
+  user: { systemRole: SystemRole; financeAccess?: boolean },
   managesRelevantScope = false,
 ) {
-  return user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || managesRelevantScope;
+  return (
+    user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    !!user.financeAccess ||
+    managesRelevantScope
+  );
 }
 
 // Только для CREATE — на этапе создания проекта ограничивать ещё нечем
