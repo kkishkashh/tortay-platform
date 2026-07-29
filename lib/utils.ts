@@ -25,6 +25,15 @@ export function pluralizeEmployees(count: number) {
   return "сотрудников"
 }
 
+// Реальные ФИО в базе — "Фамилия Имя Отчество" (Абдикамитов Абзал
+// Дауренович) или "Фамилия Имя" без отчества (Мамасерикова Гульнар) —
+// поэтому имя это ВТОРОЕ слово, не первое. Если слово всего одно —
+// возвращаем его как есть (лучше, чем ничего).
+export function getFirstName(fullName: string) {
+  const words = fullName.trim().split(/\s+/)
+  return words[1] ?? words[0] ?? fullName
+}
+
 export function getInitials(fullName: string) {
   // Берём буквенные "слова", а не куски по пробелу — иначе в названиях
   // организаций вроде ТОО "ГеоПроект" вторым символом попадает кавычка.

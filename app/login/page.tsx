@@ -6,6 +6,7 @@ import { AuthTabs } from "@/components/auth/auth-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 
 async function loginAction(formData: FormData) {
   "use server";
@@ -78,7 +79,7 @@ export default async function LoginPage({
 
         <div className="space-y-1.5">
           <Label htmlFor="password">Пароль</Label>
-          <Input id="password" name="password" type="password" required />
+          <PasswordInput id="password" name="password" required />
         </div>
 
         <Button type="submit" className="w-full">

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Progress, ProgressTrack, ProgressIndicator } from "@/components/ui/progress";
+import { getFirstName } from "@/lib/utils";
 
 function greetingForHour(hour: number) {
   if (hour < 5) return "Доброй ночи";
@@ -53,7 +54,7 @@ export function EmployeeDashboard({
   completedThisYearCount: number;
   weeklyCommentsCount: number;
 }) {
-  const firstName = fullName.split(" ")[0] ?? fullName;
+  const firstName = getFirstName(fullName);
   const greeting = `${greetingForHour(new Date().getHours())}, ${firstName}!`;
   const completedTasksCount = totalTasksCount - activeTasksCount;
   const taskCompletionPercent =

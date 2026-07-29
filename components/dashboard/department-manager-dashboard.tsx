@@ -16,6 +16,7 @@ import { TaskStatusChart } from "@/components/dashboard/task-status-chart";
 import { WorkloadBoard } from "@/components/dashboard/workload-board";
 import type { EmployeeWorkload } from "@/lib/dashboard/queries";
 import type { DepartmentDashboardStats } from "@/lib/departments/queries";
+import { getFirstName } from "@/lib/utils";
 
 function greetingForHour(hour: number) {
   if (hour < 5) return "Доброй ночи";
@@ -35,7 +36,7 @@ export function DepartmentManagerDashboard({
   stats: DepartmentDashboardStats;
   workload: EmployeeWorkload[];
 }) {
-  const firstName = fullName.split(" ")[0] ?? fullName;
+  const firstName = getFirstName(fullName);
   const greeting = `${greetingForHour(new Date().getHours())}, ${firstName}!`;
 
   return (

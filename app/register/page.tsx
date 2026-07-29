@@ -7,6 +7,7 @@ import { AuthTabs } from "@/components/auth/auth-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
 
 async function requestCodeSubmit(formData: FormData) {
   "use server";
@@ -119,12 +120,12 @@ export default async function RegisterPage({
 
           <div className="space-y-1.5">
             <Label htmlFor="password">Придумайте пароль</Label>
-            <Input id="password" name="password" type="password" minLength={6} required />
+            <PasswordInput id="password" name="password" minLength={6} required />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="confirmPassword">Повторите пароль</Label>
-            <Input id="confirmPassword" name="confirmPassword" type="password" minLength={6} required />
+            <PasswordInput id="confirmPassword" name="confirmPassword" minLength={6} required />
           </div>
 
           <Button type="submit" className="w-full">
