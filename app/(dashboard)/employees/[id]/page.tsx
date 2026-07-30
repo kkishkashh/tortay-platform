@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments/queries";
@@ -14,7 +14,7 @@ import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/queries";
 import { getPositions } from "@/lib/positions/queries";
-import { getProjectMembersForProjects } from "@/lib/projects/queries";
+import { getManageableProjectsForTaskCreation, getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
@@ -27,6 +27,7 @@ import { ContactForm } from "@/components/employees/contact-form";
 import { DetailsForm } from "@/components/employees/details-form";
 import { PasswordForm } from "@/components/employees/password-form";
 
+import { AddTaskToProjectDialog } from "./add-task-to-project-dialog";
 import { ArchiveEmployeeToggle } from "./archive-employee-toggle";
 import { CommentsTab } from "./comments-tab";
 import { HardDeleteEmployeeDialog } from "./hard-delete-employee-dialog";
@@ -102,10 +103,11 @@ export default async function EmployeeProfilePage({
   const workloadMeta = WORKLOAD_META[employee.workload];
   const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
 
-  const [tasks, comments, timeline] = await Promise.all([
+  const [tasks, comments, timeline, manageableProjects] = await Promise.all([
     getTasksForUser(employee.id),
     getCommentsForAssignee(employee.id),
     getEmployeeTimeline(employee.id),
+    canManage && session?.user ? getManageableProjectsForTaskCreation(session.user) : Promise.resolve([]),
   ]);
 
   // Пакетные запросы (один на все проекты/задачи), а не по одному на
@@ -206,6 +208,15 @@ export default async function EmployeeProfilePage({
             <Card>
               <CardHeader>
                 <CardTitle>Проекты</CardTitle>
+                {canManage ? (
+                  <CardAction>
+                    <AddTaskToProjectDialog
+                      employeeUserId={employee.id}
+                      employeeFullName={employee.fullName}
+                      projects={manageableProjects}
+                    />
+                  </CardAction>
+                ) : null}
               </CardHeader>
               <CardContent className="space-y-4">
                 {employee.totalProjectsCount === 0 ? (

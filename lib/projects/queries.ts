@@ -2,7 +2,7 @@ import { ProjectRole, ProjectStatus, SectionStatus, SystemRole } from "@prisma/c
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { canManageFinance } from "@/lib/projects/permissions";
+import { canManageFinance, canManageOperations } from "@/lib/projects/permissions";
 
 export type ProjectListItem = {
   id: string;
@@ -164,4 +164,49 @@ export async function getSectionDeadlineHistory(sectionId: string): Promise<Sect
     changedByName: change.changedByUser.fullName,
     createdAt: change.createdAt,
   }));
+}
+
+export type ManageableProjectOption = {
+  id: string;
+  name: string;
+  sections: { id: string; name: string }[];
+};
+
+// По прямой просьбе Камилы (2026-07-30): с профиля сотрудника — быстро
+// выбрать существующий проект/раздел и создать задачу прямо на него (см.
+// lib/tasks/actions.ts::createTaskForEmployeeAction). Список — только те
+// проекты/разделы, где у пользователя ЕСТЬ право создавать задачи
+// (canManageProjectTasks — та же проверка, что и на самой странице
+// проекта): админ/бухгалтер видят все разделы, руководитель департамента —
+// только разделы СВОЕГО департамента. Проекты без ни одного подходящего
+// раздела не попадают в список вовсе.
+export async function getManageableProjectsForTaskCreation(user: {
+  id: string;
+  systemRole: SystemRole;
+}): Promise<ManageableProjectOption[]> {
+  const seesAll = canManageOperations(user);
+
+  const projects = await prisma.project.findMany({
+    where: seesAll ? undefined : { sections: { some: { department: { managerId: user.id } } } },
+    select: {
+      id: true,
+      name: true,
+      sections: {
+        select: { id: true, name: true, department: { select: { managerId: true } } },
+        orderBy: { orderIndex: "asc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return projects
+    .map((project) => ({
+      id: project.id,
+      name: project.name,
+      sections: (seesAll
+        ? project.sections
+        : project.sections.filter((s) => s.department?.managerId === user.id)
+      ).map((s) => ({ id: s.id, name: s.name })),
+    }))
+    .filter((project) => project.sections.length > 0);
 }

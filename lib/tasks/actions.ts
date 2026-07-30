@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { SystemRole, TaskPriority, TaskStatus } from "@prisma/client";
+import { ProjectRole, SystemRole, TaskPriority, TaskStatus } from "@prisma/client";
 import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
@@ -24,6 +24,7 @@ import {
   notifyTaskStarted,
 } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
+import { ensureProjectMember } from "@/lib/projects/membership";
 import { TASK_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks, FORWARD_TRANSITIONS } from "@/lib/tasks/permissions";
 import { UNASSIGNED_MEMBER_VALUE } from "@/lib/tasks/constants";
@@ -150,6 +151,92 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
   }
 
   revalidatePath(`/projects/${section.projectId}`);
+}
+
+// По прямой просьбе Камилы (2026-07-30): со страницы профиля сотрудника —
+// выбрать существующий проект/раздел и сразу создать в нём задачу ИМЕННО
+// для этого сотрудника, без похода на страницу проекта. Право на
+// создание — то же самое, что и у createTaskAction (canManageProjectTasks
+// этого раздела), поэтому руководитель департамента может так делать
+// только в разделах СВОЕГО департамента (см.
+// lib/projects/queries.ts::getManageableProjectsForTaskCreation — список
+// в форме уже отфильтрован так же, сервер это дублирует). Сотрудник
+// становится участником проекта автоматически, даже если раньше им не был.
+export async function createTaskForEmployeeAction(formData: FormData) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const employeeUserId = formData.get("employeeUserId") as string | null;
+  const sectionId = formData.get("sectionId") as string | null;
+  if (!employeeUserId || !sectionId) {
+    throw new Error("Выберите проект и раздел");
+  }
+
+  const section = await loadSectionForPermissionCheck(sectionId);
+  if (!canManageProjectTasks(session.user, section)) {
+    throw new Error("Недостаточно прав для создания задач в этом разделе");
+  }
+
+  const employee = await prisma.user.findUnique({
+    where: { id: employeeUserId },
+    select: { email: true, fullName: true },
+  });
+  if (!employee) {
+    throw new Error("Сотрудник не найден");
+  }
+
+  const fields = parseTaskFields(formData);
+
+  await prisma.$transaction(async (tx) => {
+    const { member } = await ensureProjectMember(tx, {
+      projectId: section.projectId,
+      userId: employeeUserId,
+      role: ProjectRole.ИНЖЕНЕР,
+      actorId: session.user.id,
+      projectName: section.project.name,
+    });
+
+    const task = await tx.task.create({
+      data: {
+        sectionId,
+        title: fields.title,
+        description: fields.description,
+        priority: fields.priority,
+        deadline: fields.deadline,
+        assigneeMemberId: member.id,
+        assignedByUserId: session.user.id,
+      },
+    });
+
+    await logActivity(tx, {
+      projectId: section.projectId,
+      actorId: session.user.id,
+      message: `${session.user.name} создал(а) задачу «${task.title}» для ${employee.fullName}`,
+    });
+
+    await notifyTaskAssigned(tx, {
+      userId: employeeUserId,
+      actorId: session.user.id,
+      taskId: task.id,
+      taskTitle: task.title,
+      projectName: section.project.name,
+    });
+  });
+
+  sendTaskAssignedEmail({
+    to: employee.email,
+    employeeName: employee.fullName,
+    taskTitle: fields.title,
+    projectName: section.project.name,
+    deadline: fields.deadline,
+  }).catch((error) => {
+    console.error("Не удалось отправить уведомление о назначении задачи", error);
+  });
+
+  revalidatePath(`/projects/${section.projectId}`);
+  revalidatePath(`/employees/${employeeUserId}`);
 }
 
 async function loadTaskForPermissionCheck(taskId: string) {
