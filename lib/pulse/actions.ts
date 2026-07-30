@@ -6,13 +6,15 @@ import { PulseSignal } from "@prisma/client";
 import { auth } from "@/auth";
 import { isLeadOfDepartment } from "@/lib/leads/queries";
 import { prisma } from "@/lib/prisma";
-import { canManageOperations } from "@/lib/projects/permissions";
 import { currentIsoWeek } from "@/lib/pulse/week";
 
-// Проставить/обновить пульс раздела за ТЕКУЩУЮ неделю — тот же принцип
-// доступа, что у updateSectionDatesAction: руководитель ИЛИ Лид именно
-// этого департамента, плюс админ/бухгалтер. Upsert по @@unique([sectionId,
-// isoWeek]) — повторная отметка на той же неделе просто обновляет запись.
+// Проставить/обновить пульс раздела за ТЕКУЩУЮ неделю — ТОЛЬКО руководитель
+// ИЛИ Лид именно этого департамента. По прямой просьбе Камилы (2026-07-30)
+// без обычного админ/бухгалтер-обхода (в отличие от updateSectionDatesAction)
+// — "Пульс недели" видна и управляется строго теми, кто реально состоит в
+// Архитектуре; если админу это нужно, пусть добавит себя в департамент.
+// Upsert по @@unique([sectionId, isoWeek]) — повторная отметка на той же
+// неделе просто обновляет запись.
 export async function setPulseAction(sectionId: string, signal: PulseSignal, note?: string) {
   const session = await auth();
   if (!session?.user) {
@@ -33,8 +35,7 @@ export async function setPulseAction(sectionId: string, signal: PulseSignal, not
     throw new Error("У этого департамента не включён Пульс недели");
   }
 
-  const managesThisSection = section.department.managerId === session.user.id;
-  const isManager = canManageOperations(session.user, managesThisSection);
+  const isManager = section.department.managerId === session.user.id;
   const isLeadOfDept = !isManager && (await isLeadOfDepartment(session.user.id, section.department.id));
   if (!isManager && !isLeadOfDept) {
     throw new Error("Проставлять пульс может только руководитель или Лид этого департамента");

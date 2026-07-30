@@ -1,8 +1,7 @@
-import { PulseSignal, SectionStatus, SystemRole } from "@prisma/client";
+import { PulseSignal, SectionStatus } from "@prisma/client";
 
 import { isLeadOfDepartment } from "@/lib/leads/queries";
 import { prisma } from "@/lib/prisma";
-import { canManageOperations } from "@/lib/projects/permissions";
 import { currentIsoWeek } from "@/lib/pulse/week";
 
 export type PulseSectionItem = {
@@ -23,24 +22,14 @@ export type PulseDashboard = {
   sections: PulseSectionItem[];
 };
 
-// Департаменты, чей "Пульс недели" видит текущий пользователь — админ/
-// бухгалтер (canManageOperations) видит ВСЕ департаменты с
-// usesPulseTracking, остальные — только те, где руководит или состоит
-// (homeDepartment), и только если там включён флаг. Тот же принцип
-// видимости, что у getManageableProjectsForTaskCreation.
-async function getVisibleDepartmentIds(user: {
-  id: string;
-  systemRole: SystemRole;
-  financeAccess?: boolean;
-}): Promise<string[]> {
-  if (canManageOperations(user)) {
-    const departments = await prisma.department.findMany({
-      where: { usesPulseTracking: true },
-      select: { id: true },
-    });
-    return departments.map((d) => d.id);
-  }
-
+// Департаменты, чей "Пульс недели" видит текущий пользователь — по прямой
+// просьбе Камилы (2026-07-30): это ТОЛЬКО реальная принадлежность к
+// департаменту (руководит им или состоит в нём как homeDepartment), без
+// исключения для админа/бухгалтера — "у тех у кого полная админка тоже не
+// нужно, сами если захотят добавят себя в архитектуру". Намеренное
+// отступление от canManageOperations (который обычно даёт админу доступ
+// везде) — здесь этого делать НЕ нужно.
+async function getVisibleDepartmentIds(user: { id: string }): Promise<string[]> {
   const departments = await prisma.department.findMany({
     where: {
       usesPulseTracking: true,
@@ -54,11 +43,7 @@ async function getVisibleDepartmentIds(user: {
 // Лёгкая проверка для пункта меню (Sidebar) — есть ли у пользователя хоть
 // один видимый департамент с "Пульс недели", без похода за самими
 // разделами.
-export async function hasPulseAccess(user: {
-  id: string;
-  systemRole: SystemRole;
-  financeAccess?: boolean;
-}): Promise<boolean> {
+export async function hasPulseAccess(user: { id: string }): Promise<boolean> {
   const departmentIds = await getVisibleDepartmentIds(user);
   return departmentIds.length > 0;
 }
@@ -69,18 +54,12 @@ export async function hasPulseAccess(user: {
 // с уже проставленным на ЭТУ isoWeek сигналом, если он есть. Отсутствие
 // сигнала — нейтральное состояние, не ошибка (см. schema.prisma комментарий
 // у SectionPulse).
-export async function getPulseDashboard(user: {
-  id: string;
-  systemRole: SystemRole;
-  financeAccess?: boolean;
-}): Promise<PulseDashboard> {
+export async function getPulseDashboard(user: { id: string }): Promise<PulseDashboard> {
   const isoWeek = currentIsoWeek();
   const departmentIds = await getVisibleDepartmentIds(user);
   if (departmentIds.length === 0) {
     return { isoWeek, sections: [] };
   }
-
-  const isAdmin = canManageOperations(user);
 
   const sections = await prisma.section.findMany({
     where: {
@@ -113,12 +92,10 @@ export async function getPulseDashboard(user: {
   );
 
   const leadDepartmentIds = new Set<string>();
-  if (!isAdmin) {
-    for (const departmentId of departmentIds) {
-      if (managedDepartmentIds.has(departmentId)) continue;
-      if (await isLeadOfDepartment(user.id, departmentId)) {
-        leadDepartmentIds.add(departmentId);
-      }
+  for (const departmentId of departmentIds) {
+    if (managedDepartmentIds.has(departmentId)) continue;
+    if (await isLeadOfDepartment(user.id, departmentId)) {
+      leadDepartmentIds.add(departmentId);
     }
   }
 
@@ -149,7 +126,7 @@ export async function getPulseDashboard(user: {
               }
             : null,
           canSetPulse:
-            isAdmin || managedDepartmentIds.has(section.departmentId) || leadDepartmentIds.has(section.departmentId),
+            managedDepartmentIds.has(section.departmentId) || leadDepartmentIds.has(section.departmentId),
         };
       }),
   };
