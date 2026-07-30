@@ -130,3 +130,38 @@ export async function getProjectMembersForProjects(
   }
   return map;
 }
+
+export type SectionDeadlineChangeItem = {
+  id: string;
+  previousDeadline: Date | null;
+  newDeadline: Date | null;
+  reason: string | null;
+  changedByName: string;
+  createdAt: Date;
+};
+
+// История изменений срока раздела (по просьбе Камилы) — новые сверху,
+// для маленькой попап-истории у SectionDatesFields.
+export async function getSectionDeadlineHistory(sectionId: string): Promise<SectionDeadlineChangeItem[]> {
+  const changes = await prisma.sectionDeadlineChange.findMany({
+    where: { sectionId },
+    select: {
+      id: true,
+      previousDeadline: true,
+      newDeadline: true,
+      reason: true,
+      createdAt: true,
+      changedByUser: { select: { fullName: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return changes.map((change) => ({
+    id: change.id,
+    previousDeadline: change.previousDeadline,
+    newDeadline: change.newDeadline,
+    reason: change.reason,
+    changedByName: change.changedByUser.fullName,
+    createdAt: change.createdAt,
+  }));
+}

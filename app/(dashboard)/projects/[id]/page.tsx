@@ -33,6 +33,7 @@ import { HardDeleteProjectDialog } from "./hard-delete-project-dialog";
 import { ProjectOutsourcersSection } from "./project-outsourcers-section";
 import { ProjectStatusSelect } from "./project-status-select";
 import { SectionDatesFields } from "./section-dates-fields";
+import { SectionDeadlineHistoryButton } from "./section-deadline-history-button";
 import { SectionStatusSelect } from "./section-status-select";
 import { TaskDialog } from "./task-dialog";
 
@@ -78,6 +79,13 @@ export default async function ProjectDetailPage({
   // производный статус, наличие подчинённых само по себе им и является).
   const leadReportUserIds = session?.user ? new Set(await getLeadReportIds(session.user.id)) : new Set<string>();
   const leadAssignableMembers = projectMembers.filter((m) => leadReportUserIds.has(m.userId));
+  const isLead = leadReportUserIds.size > 0;
+  // Для права менять срок раздела (см. updateSectionDatesAction) — Лид
+  // может продлевать срок ТОЛЬКО в разделах СВОЕГО департамента.
+  const currentUserHomeDepartmentId = session?.user
+    ? (await prisma.user.findUnique({ where: { id: session.user.id }, select: { homeDepartmentId: true } }))
+        ?.homeDepartmentId ?? null
+    : null;
 
   const canManageOutsourcers = session?.user ? await canManageFinance(session.user) : false;
   const [projectOutsourcers, outsourcerPickerOptions, contractSummary] = await Promise.all([
@@ -116,6 +124,7 @@ export default async function ProjectDetailPage({
       section,
       tasksWithComments,
       canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
+      canEditDates: isLead && section.department?.id === currentUserHomeDepartmentId,
     };
   });
 
@@ -196,7 +205,7 @@ export default async function ProjectDetailPage({
           {sectionsWithTasks.length === 0 ? (
             <p className="text-sm text-muted-foreground">Разделов пока нет.</p>
           ) : (
-            sectionsWithTasks.map(({ section, tasksWithComments, canManageTasks }) => (
+            sectionsWithTasks.map(({ section, tasksWithComments, canManageTasks, canEditDates }) => (
               <div key={section.id} className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
                   <div className="flex items-center gap-2.5">
@@ -221,15 +230,16 @@ export default async function ProjectDetailPage({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
-                    {canChangeStatus ? (
+                    {canChangeStatus || canEditDates ? (
                       <SectionDatesFields
                         sectionId={section.id}
                         startDate={section.startDate}
                         deadline={section.deadline}
                       />
                     ) : (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         {formatSectionDates(section.startDate, section.deadline)}
+                        <SectionDeadlineHistoryButton sectionId={section.id} />
                       </span>
                     )}
                     {canChangeStatus ? (

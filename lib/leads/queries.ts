@@ -11,6 +11,16 @@ export async function isLead(userId: string): Promise<boolean> {
   return count > 0;
 }
 
+// Лид ИМЕННО этого департамента (не Лид вообще где-то ещё) — используется
+// для права менять срок раздела (см. lib/projects/actions.ts::
+// updateSectionDatesAction, по прямой просьбе Камилы: "любой из
+// руководителей и лид могут в любой момент изменить срок").
+export async function isLeadOfDepartment(userId: string, departmentId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { homeDepartmentId: true } });
+  if (user?.homeDepartmentId !== departmentId) return false;
+  return isLead(userId);
+}
+
 // Прямые подчинённые этого Лида — используется и для скоупа задач
 // (Task 5.2/5.4, см. lib/leads/actions.ts::leadAssignTaskAction), и для
 // Лид-дашборда (getLeadDashboardStats ниже).

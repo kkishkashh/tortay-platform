@@ -104,6 +104,7 @@ model User {
   personalTasks            PersonalTask[]
   outsourcersAddedToProjects ProjectOutsourcer[]
   auditLogEntriesAsActor   AuditLog[]
+  sectionDeadlineChanges   SectionDeadlineChange[]
 
   @@map("users")
 }
@@ -213,8 +214,30 @@ model Section {
   documents         Document[]
   comments          Comment[]
   paymentsTriggered Payment[]
+  deadlineChanges   SectionDeadlineChange[]
 
   @@map("sections")
+}
+
+// История изменений срока раздела (по просьбе Камилы: "был такой-то срок,
+// не успели, продлили — нужна причина продления"). Пишем запись при КАЖДОМ
+// изменении deadline, но reason обязателен только когда это реально
+// продление (новый срок позже старого) — см. lib/projects/actions.ts::
+// updateSectionDatesAction. reason нужен, чтобы просмотр истории
+// показывал не просто "было/стало", а объяснение.
+model SectionDeadlineChange {
+  id               String   @id @default(uuid())
+  sectionId        String
+  section          Section  @relation(fields: [sectionId], references: [id])
+  previousDeadline DateTime?
+  newDeadline      DateTime?
+  reason           String?
+  changedByUserId  String
+  changedByUser    User     @relation(fields: [changedByUserId], references: [id])
+  createdAt        DateTime @default(now())
+
+  @@index([sectionId])
+  @@map("section_deadline_changes")
 }
 
 enum TaskStatus {

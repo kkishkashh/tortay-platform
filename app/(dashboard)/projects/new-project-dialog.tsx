@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { TaskPriority, TaskStackCategory } from "@prisma/client";
 
@@ -398,6 +398,7 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [selections, setSelections] = useState<Record<string, DepartmentSelectionState>>({});
+  const formRef = useRef<HTMLFormElement>(null);
 
   function getSelection(department: DepartmentOption) {
     return selections[department.id] ?? emptySelection(department.manager?.id ?? "");
@@ -415,6 +416,29 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
   function resetAll() {
     setSelections({});
     setStep(1);
+  }
+
+  // Форма — один <form> на все 5 шагов (остальные шаги просто скрыты
+  // через CSS), а не отдельная форма на шаг — иначе финальный submit не
+  // видел бы значения с предыдущих шагов. Обратная сторона: браузер НЕ
+  // валидирует required-поля, если их шаг сейчас скрыт (display:none не
+  // участвует в constraint validation) — можно было дойти до шага 5,
+  // толком не заполнив шаг 1, и узнать об этом только по невнятной
+  // ошибке сервера уже на последнем шаге. Поэтому здесь — ручная
+  // проверка перед переходом со скрытого шага 1, а не полагаемся на
+  // required + нативную валидацию формы.
+  function handleNext() {
+    if (step === 1) {
+      const nameValue = formRef.current?.elements.namedItem("name");
+      const isEmpty = nameValue instanceof HTMLInputElement && !nameValue.value.trim();
+      if (isEmpty) {
+        setError("Название проекта обязательно");
+        nameValue?.focus();
+        return;
+      }
+    }
+    setError(null);
+    setStep((s) => Math.min(5, s + 1));
   }
 
   const checkedDepartments = departments.filter((d) => getSelection(d).checked);
@@ -453,7 +477,7 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
           </DialogTitle>
         </DialogHeader>
 
-        <form action={handleSubmit} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
+        <form ref={formRef} action={handleSubmit} className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
           {/* Шаг 1 — основные поля проекта, ГИП, договор */}
           <div className={cn("space-y-4", step !== 1 && "hidden")}>
             <div className="space-y-2">
@@ -489,19 +513,19 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gipUserId">ГИП</Label>
+              <Label htmlFor="gipUserId">ГИП (необязательно)</Label>
               <Select
                 name="gipUserId"
-                required
-                items={employees.map((employee) => ({
-                  value: employee.id,
-                  label: employee.fullName,
-                }))}
+                items={[
+                  { value: NONE_VALUE, label: "Не назначен" },
+                  ...employees.map((employee) => ({ value: employee.id, label: employee.fullName })),
+                ]}
               >
                 <SelectTrigger type="button" id="gipUserId" className="w-full">
-                  <SelectValue placeholder="Выберите сотрудника" />
+                  <SelectValue placeholder="Не назначен" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NONE_VALUE}>Не назначен</SelectItem>
                   {employees.map((employee) => (
                     <SelectItem key={employee.id} value={employee.id}>
                       {employee.fullName}
@@ -509,6 +533,7 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Можно назначить и позже, со страницы проекта.</p>
             </div>
 
             <div className="space-y-2 rounded-lg border p-3">
@@ -715,7 +740,7 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
               // применяется ПОСЛЕ обработчика onClick), увидел бы обновлённый
               // type="submit" на том же узле и отправил форму — то есть клик
               // по "Далее" на шаге 4 самопроизвольно создавал бы проект.
-              <Button key="next" type="button" onClick={() => setStep((s) => Math.min(5, s + 1))}>
+              <Button key="next" type="button" onClick={handleNext}>
                 Далее
                 <ChevronDown className="size-4 -rotate-90" />
               </Button>

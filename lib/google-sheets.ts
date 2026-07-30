@@ -102,7 +102,7 @@ export type SheetProjectRow = {
   startDate: Date | null;
   endDate: Date | null;
   description: string | null;
-  gipName: string;
+  gipName: string | null;
   createdByName: string;
   statusLabel: string;
   createdAt: Date;
@@ -117,7 +117,7 @@ function buildRow(project: SheetProjectRow): string[] {
     formatDate(project.startDate),
     formatDate(project.endDate),
     project.description ?? "",
-    project.gipName,
+    project.gipName ?? "",
     project.createdByName,
     project.statusLabel,
     project.id,

@@ -12,7 +12,9 @@ import { sendGipAssignedEmail, sendTaskAssignedEmail } from "@/lib/email/send";
 import { appendProjectRow, syncProjectField } from "@/lib/google-sheets";
 import { notifyGipAssigned, notifyTaskAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
+import { isLeadOfDepartment } from "@/lib/leads/queries";
 import { ensureProjectMember } from "@/lib/projects/membership";
+import { getSectionDeadlineHistory } from "@/lib/projects/queries";
 import {
   canManageOperations,
   userManagesAnyDepartment,
@@ -156,18 +158,22 @@ export async function createProjectAction(formData: FormData) {
   const startDate = startDateRaw ? new Date(startDateRaw) : null;
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
 
-  const gipUserId = formData.get("gipUserId") as string | null;
-  if (!gipUserId) {
-    throw new Error("Нужно выбрать ГИП");
-  }
+  // ГИП необязателен при создании (по прямой просьбе Камилы, 2026-07-30) —
+  // назначить можно и позже через assignGipAction на странице проекта.
+  // "__none__" — та же условность, что и у homeDepartmentId в
+  // lib/employees/actions.ts (пикер всегда шлёт какое-то значение).
+  const gipUserIdRaw = (formData.get("gipUserId") as string | null)?.trim() || "";
+  const gipUserId = gipUserIdRaw && gipUserIdRaw !== "__none__" ? gipUserIdRaw : null;
 
   // Нужны email/имя для уведомления о назначении — заодно валидируем,
   // что выбранный ГИП реально существует (иначе ниже упадёт по FK).
-  const gipUser = await prisma.user.findUnique({
-    where: { id: gipUserId },
-    select: { email: true, fullName: true },
-  });
-  if (!gipUser) {
+  const gipUser = gipUserId
+    ? await prisma.user.findUnique({
+        where: { id: gipUserId },
+        select: { email: true, fullName: true },
+      })
+    : null;
+  if (gipUserId && !gipUser) {
     throw new Error("Выбранный ГИП не найден");
   }
 
@@ -329,24 +335,29 @@ export async function createProjectAction(formData: FormData) {
       data: { name, client, location, startDate, endDate, description },
     });
 
-    const gipMember = await tx.projectMember.create({
-      data: {
-        projectId: project.id,
-        userId: gipUserId,
-        projectRole: ProjectRole.ГИП,
-      },
-    });
-    await notifyGipAssigned(tx, { userId: gipUserId, actorId: session.user.id, projectName: name });
-
-    const creatorMember = creatorIsGip
-      ? gipMember
-      : await tx.projectMember.create({
+    const gipMember = gipUserId
+      ? await tx.projectMember.create({
           data: {
             projectId: project.id,
-            userId: session.user.id,
-            projectRole: ProjectRole.МЕНЕДЖЕР,
+            userId: gipUserId,
+            projectRole: ProjectRole.ГИП,
           },
-        });
+        })
+      : null;
+    if (gipMember && gipUserId) {
+      await notifyGipAssigned(tx, { userId: gipUserId, actorId: session.user.id, projectName: name });
+    }
+
+    const creatorMember =
+      creatorIsGip && gipMember
+        ? gipMember
+        : await tx.projectMember.create({
+            data: {
+              projectId: project.id,
+              userId: session.user.id,
+              projectRole: ProjectRole.МЕНЕДЖЕР,
+            },
+          });
 
     // Шаг 5: каждый отдельно назначенный исполнитель должен стать участником
     // проекта, чтобы Task.assigneeMemberId на него сослался (см. план, D8).
@@ -475,14 +486,16 @@ export async function createProjectAction(formData: FormData) {
       console.error("Не удалось отправить уведомление о назначении задачи", error);
     });
   }
-  sendGipAssignedEmail({
-    to: gipUser.email,
-    employeeName: gipUser.fullName,
-    projectName: name,
-    assignedByName: session.user.name ?? "Руководитель",
-  }).catch((error) => {
-    console.error("Не удалось отправить уведомление о назначении ГИП", error);
-  });
+  if (gipUser) {
+    sendGipAssignedEmail({
+      to: gipUser.email,
+      employeeName: gipUser.fullName,
+      projectName: name,
+      assignedByName: session.user.name ?? "Руководитель",
+    }).catch((error) => {
+      console.error("Не удалось отправить уведомление о назначении ГИП", error);
+    });
+  }
 
   // Экспорт в Google Sheets — как и письма, после коммита и без throw
   // наружу: недоступность таблицы не должна откатывать создание проекта.
@@ -494,7 +507,7 @@ export async function createProjectAction(formData: FormData) {
     startDate,
     endDate,
     description,
-    gipName: gipUser.fullName,
+    gipName: gipUser?.fullName ?? null,
     createdByName: session.user.name ?? "Руководитель",
     statusLabel: PROJECT_STATUS_LABELS[createdProject.status],
     createdAt: createdProject.createdAt,
@@ -837,10 +850,17 @@ export async function updateSectionStatusAction(
 // (см. lib/dashboard/queries.ts, getProjectTimelines): по архитектуре
 // (бриф, п.7) Гант не отдельная таблица, а визуализация startDate/deadline
 // разделов, поэтому у самого проекта дат нет — только у Section.
+//
+// По прямой просьбе Камилы (2026-07-30): менять срок теперь может и Лид
+// ЭТОГО департамента, не только руководитель. Каждое изменение deadline
+// пишется в SectionDeadlineChange — reason обязателен, только если это
+// реально ПРОДЛЕНИЕ (новый срок позже старого, а старый уже был задан);
+// первичная простановка срока или перенос раньше причины не требуют.
 export async function updateSectionDatesAction(
   sectionId: string,
   startDate: string | null,
   deadline: string | null,
+  reason?: string,
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -849,25 +869,69 @@ export async function updateSectionDatesAction(
 
   const section = await prisma.section.findUnique({
     where: { id: sectionId },
-    select: { projectId: true, department: { select: { managerId: true } } },
+    select: {
+      projectId: true,
+      deadline: true,
+      department: { select: { id: true, managerId: true } },
+    },
   });
   if (!section) {
     throw new Error("Раздел не найден");
   }
 
   const managesThisSection = section.department?.managerId === session.user.id;
-  if (!canManageOperations(session.user, managesThisSection)) {
-    throw new Error("Менять сроки раздела может только руководитель");
+  const isManager = canManageOperations(session.user, managesThisSection);
+  const isLeadOfDept =
+    !isManager && section.department
+      ? await isLeadOfDepartment(session.user.id, section.department.id)
+      : false;
+  if (!isManager && !isLeadOfDept) {
+    throw new Error("Менять сроки раздела может только руководитель или Лид этого департамента");
   }
 
-  await prisma.section.update({
-    where: { id: sectionId },
-    data: {
-      startDate: startDate ? new Date(startDate) : null,
-      deadline: deadline ? new Date(deadline) : null,
-    },
+  const newDeadline = deadline ? new Date(deadline) : null;
+  const deadlineChanged = (section.deadline?.getTime() ?? null) !== (newDeadline?.getTime() ?? null);
+  const isExtension = Boolean(section.deadline && newDeadline && newDeadline.getTime() > section.deadline.getTime());
+  const trimmedReason = reason?.trim() || null;
+  if (isExtension && !trimmedReason) {
+    throw new Error("Укажите причину продления срока");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.section.update({
+      where: { id: sectionId },
+      data: {
+        startDate: startDate ? new Date(startDate) : null,
+        deadline: newDeadline,
+      },
+    });
+
+    if (deadlineChanged) {
+      await tx.sectionDeadlineChange.create({
+        data: {
+          sectionId,
+          previousDeadline: section.deadline,
+          newDeadline,
+          reason: trimmedReason,
+          changedByUserId: session.user.id,
+        },
+      });
+    }
   });
 
   revalidatePath("/");
   revalidatePath(`/projects/${section.projectId}`);
+}
+
+// Обёртка над чтением истории продлений как Server Action — вызывается по
+// клику из клиентского компонента (попап истории), а не как обычные
+// данные страницы, поэтому не в lib/projects/queries.ts напрямую.
+// Доступ — любой авторизованный (та же лёгкая видимость, что и у самой
+// страницы проекта, см. project detail page.tsx).
+export async function getSectionDeadlineHistoryAction(sectionId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  return getSectionDeadlineHistory(sectionId);
 }
