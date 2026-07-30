@@ -16,7 +16,7 @@ import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/querie
 import { getPositions } from "@/lib/positions/queries";
 import { getManageableProjectsForTaskCreation, getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
-import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
+import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForUser } from "@/lib/tasks/queries";
 import { UserAvatar } from "@/components/ui/user-avatar";
@@ -176,6 +176,55 @@ export default async function EmployeeProfilePage({
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Проекты
+                  {employee.totalProjectsCount > 0 ? (
+                    <Badge variant="secondary">{employee.totalProjectsCount}</Badge>
+                  ) : null}
+                </CardTitle>
+                {canManage ? (
+                  <CardAction>
+                    <AddTaskToProjectDialog
+                      employeeUserId={employee.id}
+                      employeeFullName={employee.fullName}
+                      projects={manageableProjects}
+                    />
+                  </CardAction>
+                ) : null}
+              </CardHeader>
+              <CardContent>
+                {employee.totalProjectsCount === 0 ? (
+                  <p className="text-sm text-muted-foreground">Пока нет проектов.</p>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {employee.projectsByStatus.flatMap(({ status, projects }) =>
+                      projects.map((project) => (
+                        <Link
+                          key={project.id}
+                          href={`/projects/${project.id}`}
+                          className="flex items-center justify-between gap-3 rounded-lg border p-3 transition-colors duration-150 hover:border-primary/40 hover:bg-muted/50"
+                        >
+                          <div className="flex min-w-0 items-center gap-2">
+                            <FolderKanban className="size-4 shrink-0 text-muted-foreground" />
+                            <span className="truncate text-sm font-medium">{project.name}</span>
+                          </div>
+                          <Badge variant="secondary" className="shrink-0 gap-1.5">
+                            <span
+                              className="size-1.5 rounded-full"
+                              style={{ backgroundColor: PROJECT_STATUS_COLORS[status] }}
+                            />
+                            {PROJECT_STATUS_LABELS[status]}
+                          </Badge>
+                        </Link>
+                      )),
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard
                 label="Активных проектов"
@@ -204,48 +253,6 @@ export default async function EmployeeProfilePage({
                 icon={AlertTriangle}
               />
             </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Проекты</CardTitle>
-                {canManage ? (
-                  <CardAction>
-                    <AddTaskToProjectDialog
-                      employeeUserId={employee.id}
-                      employeeFullName={employee.fullName}
-                      projects={manageableProjects}
-                    />
-                  </CardAction>
-                ) : null}
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {employee.totalProjectsCount === 0 ? (
-                  <p className="text-sm text-muted-foreground">Пока нет проектов.</p>
-                ) : (
-                  employee.projectsByStatus.map(({ status, projects }) =>
-                    projects.length === 0 ? null : (
-                      <div key={status}>
-                        <p className="mb-2 text-xs font-medium text-muted-foreground uppercase">
-                          {PROJECT_STATUS_LABELS[status]}
-                        </p>
-                        <ul className="space-y-1">
-                          {projects.map((project) => (
-                            <li key={project.id}>
-                              <Link
-                                href={`/projects/${project.id}`}
-                                className="text-sm text-primary hover:underline"
-                              >
-                                {project.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ),
-                  )
-                )}
-              </CardContent>
-            </Card>
 
             <Card>
               <CardHeader>

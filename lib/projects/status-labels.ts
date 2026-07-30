@@ -6,6 +6,16 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   [ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ]: "Завершён полностью",
 };
 
+// Та же статусная палитра, что и в projects-explorer.tsx (STATUS_META) —
+// вынесена сюда, чтобы не дублировать в других местах, где нужен цвет
+// статуса проекта (см. employees/[id]/page.tsx). "В работе" — фирменный
+// золотой (активное, не тревожное состояние), не отдельный статусный цвет.
+export const PROJECT_STATUS_COLORS: Record<ProjectStatus, string> = {
+  [ProjectStatus.В_РАБОТЕ]: "var(--primary)",
+  [ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ]: "#fab219",
+  [ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ]: "#0ca30c",
+};
+
 export const SECTION_STATUS_LABELS: Record<SectionStatus, string> = {
   [SectionStatus.В_РАБОТЕ]: "В работе",
   [SectionStatus.ВЫПОЛНЕНО]: "Выполнено",
