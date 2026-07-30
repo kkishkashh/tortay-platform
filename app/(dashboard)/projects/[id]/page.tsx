@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
-import { ProjectRole } from "@prisma/client";
+import { ProjectRole, SystemRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
@@ -23,9 +23,10 @@ import {
 } from "@/lib/projects/status-labels";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
+import { ArchiveProjectToggle } from "./archive-project-toggle";
 import { AssignGipDialog } from "./assign-gip-dialog";
-import { DeleteProjectDialog } from "./delete-project-dialog";
 import { EditProjectDialog } from "./edit-project-dialog";
+import { HardDeleteProjectDialog } from "./hard-delete-project-dialog";
 import { ProjectOutsourcersSection } from "./project-outsourcers-section";
 import { ProjectStatusSelect } from "./project-status-select";
 import { SectionDatesFields } from "./section-dates-fields";
@@ -111,6 +112,7 @@ export default async function ProjectDetailPage({
   const canChangeStatus = session?.user
     ? canManageOperations(session.user, managesThisProject)
     : false;
+  const isHead = session?.user?.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
   const currentUserId = session?.user?.id;
 
   return (
@@ -121,18 +123,24 @@ export default async function ProjectDetailPage({
           canChangeStatus ? (
             <div className="flex items-center gap-2">
               <EditProjectDialog projectId={project.id} name={project.name} />
-              <DeleteProjectDialog projectId={project.id} name={project.name} />
+              <ArchiveProjectToggle projectId={project.id} isArchived={project.isArchived} />
+              {isHead ? (
+                <HardDeleteProjectDialog projectId={project.id} name={project.name} />
+              ) : null}
             </div>
           ) : undefined
         }
       />
       <div className="p-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          {canChangeStatus ? (
-            <ProjectStatusSelect projectId={project.id} status={project.status} />
-          ) : (
-            <Badge variant="secondary">{PROJECT_STATUS_LABELS[project.status]}</Badge>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {canChangeStatus ? (
+              <ProjectStatusSelect projectId={project.id} status={project.status} />
+            ) : (
+              <Badge variant="secondary">{PROJECT_STATUS_LABELS[project.status]}</Badge>
+            )}
+            {project.isArchived ? <Badge variant="secondary">В архиве</Badge> : null}
+          </div>
 
           <div className="flex items-center gap-3">
             {gipMember ? (

@@ -136,6 +136,12 @@ model Project {
   id          String        @id @default(uuid())
   name        String
   status      ProjectStatus @default(В_РАБОТЕ)
+  // Архивирование (Task 1.2, PRD #3 Phase 2) — обратимая альтернатива
+  // жёсткому удалению: архивный проект скрыт из основного списка
+  // (см. lib/projects/queries.ts), но данные остаются нетронутыми.
+  // Жёсткое удаление (deleteProjectAction) теперь отдельное, admin-only
+  // действие, не связанное с этим полем.
+  isArchived  Boolean       @default(false)
   createdAt   DateTime      @default(now())
   // Фиксируется в момент перехода status → ЗАВЕРШЁН_ПОЛНОСТЬЮ.
   // Нужна отдельно от createdAt для статистики "завершено в этом году" —

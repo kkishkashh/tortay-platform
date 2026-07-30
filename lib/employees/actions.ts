@@ -105,6 +105,58 @@ export async function createEmployeeAction(formData: FormData) {
   }
 }
 
+// Обратимая альтернатива удалению (Task 1.2, PRD #3 Phase 2) — та же
+// проверка прав, что и раньше у deleteEmployeeAction (администратор или
+// руководитель ЭТОГО департамента), но здесь можно и отменить. Задачи
+// деактивированного сотрудника НЕ трогаем (см. deactivateManagerAction —
+// тот же принцип): он просто не может войти, история и назначения
+// остаются как есть.
+async function assertCanArchiveEmployee(
+  sessionUser: { id: string; systemRole: SystemRole },
+  userId: string,
+) {
+  if (sessionUser.id === userId) {
+    throw new Error("Нельзя изменить статус своего собственного аккаунта");
+  }
+  const isAdmin = sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  if (isAdmin) return;
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { homeDepartmentId: true } });
+  const managed = await prisma.department.findFirst({
+    where: { managerId: sessionUser.id },
+    select: { id: true },
+  });
+  if (!user || !managed || user.homeDepartmentId !== managed.id) {
+    throw new Error("Недостаточно прав");
+  }
+}
+
+export async function deactivateEmployeeAction(userId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  await assertCanArchiveEmployee(session.user, userId);
+
+  await prisma.user.update({ where: { id: userId }, data: { isActive: false } });
+
+  revalidatePath("/employees");
+  revalidatePath(`/employees/${userId}`);
+}
+
+export async function reactivateEmployeeAction(userId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  await assertCanArchiveEmployee(session.user, userId);
+
+  await prisma.user.update({ where: { id: userId }, data: { isActive: true } });
+
+  revalidatePath("/employees");
+  revalidatePath(`/employees/${userId}`);
+}
+
 // Жёсткое удаление User заблокировано, если на него ссылаются записи с
 // обязательным (NOT NULL) внешним ключом — Contract.createdByMemberId,
 // DigitalSignature.signedByMemberId (через ProjectMember), а также
@@ -114,6 +166,12 @@ export async function createEmployeeAction(formData: FormData) {
 // понятная ошибка с просьбой сначала разобраться с этими записями.
 // Task.assigneeMemberId — необязательное поле, поэтому не блокирует,
 // просто снимаем назначение.
+//
+// Task 1.2 (PRD #3 Phase 2): раньше это было доступно и руководителю
+// департамента сотрудника — теперь ТОЛЬКО администратору. Обычное
+// "убрать сотрудника" — это деактивация (см. deactivateEmployeeAction
+// выше), жёсткое удаление — редкое, необратимое действие, поэтому уже
+// администратор + запись в аудит-лог.
 export async function deleteEmployeeAction(userId: string) {
   const session = await auth();
   if (!session?.user) {
@@ -122,8 +180,9 @@ export async function deleteEmployeeAction(userId: string) {
   if (session.user.id === userId) {
     throw new Error("Нельзя удалить свой собственный аккаунт");
   }
-
-  const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  if (session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+    throw new Error("Удалять сотрудников безвозвратно может только администратор");
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -140,16 +199,6 @@ export async function deleteEmployeeAction(userId: string) {
   });
   if (!user) {
     throw new Error("Сотрудник не найден");
-  }
-
-  if (!isAdmin) {
-    const managed = await prisma.department.findFirst({
-      where: { managerId: session.user.id },
-      select: { id: true },
-    });
-    if (!managed || user.homeDepartmentId !== managed.id) {
-      throw new Error("Недостаточно прав");
-    }
   }
 
   const contractsCreated = user.projectMemberships.reduce(
@@ -178,6 +227,18 @@ export async function deleteEmployeeAction(userId: string) {
   }
 
   await prisma.$transaction(async (tx) => {
+    // Аудит-лог ДО удаления строки — targetId у AuditLog это свободная
+    // строка (не FK), но actorId ссылается на текущего администратора, а
+    // не на удаляемого пользователя, поэтому порядок здесь не важен для
+    // целостности — просто держим рядом с самим действием.
+    await recordAuditLog(tx, {
+      actorId: session.user.id,
+      action: "hard_delete",
+      targetType: "User",
+      targetId: userId,
+      isOverride: true,
+    });
+
     await tx.task.updateMany({
       where: { assigneeMember: { userId } },
       data: { assigneeMemberId: null },

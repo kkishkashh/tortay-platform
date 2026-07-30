@@ -16,6 +16,10 @@ export type ProjectListItem = {
   // "Задержан" — не отдельный статус в БД (см. обсуждение), а вычисляется
   // на лету: проект в работе, но самый поздний срок раздела уже прошёл.
   isOverdue: boolean;
+  // Task 1.2 (PRD #3 Phase 2) — архивные проекты остаются в этом списке
+  // (не фильтруются в запросе), UI по умолчанию их прячет (см.
+  // projects-explorer.tsx), тот же паттерн, что у getEmployees/isActive.
+  isArchived: boolean;
 };
 
 // РУКОВОДИТЕЛЬ видит все проекты компании, СОТРУДНИК — только те,
@@ -80,6 +84,7 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
         project.status === ProjectStatus.В_РАБОТЕ &&
         deadline !== null &&
         deadline < now,
+      isArchived: project.isArchived,
     };
   });
 }

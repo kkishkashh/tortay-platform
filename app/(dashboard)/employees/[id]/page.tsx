@@ -5,6 +5,7 @@ import { SystemRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { prisma } from "@/lib/prisma";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
@@ -26,8 +27,9 @@ import { ContactForm } from "@/components/employees/contact-form";
 import { DetailsForm } from "@/components/employees/details-form";
 import { PasswordForm } from "@/components/employees/password-form";
 
+import { ArchiveEmployeeToggle } from "./archive-employee-toggle";
 import { CommentsTab } from "./comments-tab";
-import { DeleteEmployeeDialog } from "./delete-employee-dialog";
+import { HardDeleteEmployeeDialog } from "./hard-delete-employee-dialog";
 import { TasksTab } from "./tasks-tab";
 import { TimelineTab } from "./timeline-tab";
 
@@ -123,7 +125,12 @@ export default async function EmployeeProfilePage({
         title={employee.fullName}
         action={
           canManage && !isSelf ? (
-            <DeleteEmployeeDialog userId={employee.id} fullName={employee.fullName} />
+            <div className="flex items-center gap-2">
+              <ArchiveEmployeeToggle userId={employee.id} isActive={employee.isActive} />
+              {isHead ? (
+                <HardDeleteEmployeeDialog userId={employee.id} fullName={employee.fullName} />
+              ) : null}
+            </div>
           ) : undefined
         }
       />
@@ -136,7 +143,10 @@ export default async function EmployeeProfilePage({
             size="lg"
           />
           <div>
-            <p className="text-lg font-medium">{employee.fullName}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-lg font-medium">{employee.fullName}</p>
+              {!employee.isActive ? <Badge variant="secondary">В архиве</Badge> : null}
+            </div>
             <p className="text-sm text-muted-foreground">
               {employee.position ?? "Должность не указана"} ·{" "}
               {SYSTEM_ROLE_LABELS[employee.systemRole]}

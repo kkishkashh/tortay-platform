@@ -2,11 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { PaymentType, ProjectRole, ProjectStatus, SectionStatus, TaskPriority } from "@prisma/client";
+import { PaymentType, ProjectRole, ProjectStatus, SectionStatus, SystemRole, TaskPriority } from "@prisma/client";
 import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
+import { recordAuditLog } from "@/lib/audit/log";
 import { sendGipAssignedEmail, sendTaskAssignedEmail } from "@/lib/email/send";
 import { appendProjectRow, syncProjectField } from "@/lib/google-sheets";
 import { notifyGipAssigned, notifyTaskAssigned } from "@/lib/notifications/notify";
@@ -621,6 +622,44 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
+// Обратимая альтернатива удалению (Task 1.2, PRD #3 Phase 2) — та же
+// аудитория, что раньше могла удалять проект (администратор или
+// руководитель ЭТОГО проекта), но здесь можно и отменить. Данные проекта
+// не трогаем — просто скрываем из основного списка (см. lib/projects/queries.ts).
+export async function archiveProjectAction(projectId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  const managesThisProject = await userManagesDepartmentInProject(session.user, projectId);
+  if (!canManageOperations(session.user, managesThisProject)) {
+    throw new Error("Архивировать проект может только руководитель");
+  }
+
+  await prisma.project.update({ where: { id: projectId }, data: { isArchived: true } });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
+export async function unarchiveProjectAction(projectId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  const managesThisProject = await userManagesDepartmentInProject(session.user, projectId);
+  if (!canManageOperations(session.user, managesThisProject)) {
+    throw new Error("Восстановить проект может только руководитель");
+  }
+
+  await prisma.project.update({ where: { id: projectId }, data: { isArchived: false } });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
 // Каскадное удаление вручную: в схеме нет onDelete: Cascade (см.
 // prisma/schema.prisma), поэтому Postgres запретит удалить проект, пока
 // не удалены все зависимые записи. Порядок — от самых "листовых" таблиц
@@ -632,14 +671,18 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
 // требованию Камилы таблица служит подстраховкой на случай недоступности
 // сайта, и информация в ней никогда не должна удаляться, даже если сам
 // проект удалили в приложении.
+//
+// Task 1.2 (PRD #3 Phase 2): раньше это мог и руководитель департамента
+// проекта — теперь ТОЛЬКО администратор. Обычное "закрыть/убрать проект" —
+// это архивирование (см. archiveProjectAction выше), жёсткое удаление —
+// редкое, необратимое действие, поэтому уже администратор + аудит-лог.
 export async function deleteProjectAction(projectId: string) {
   const session = await auth();
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  const managesThisProject = await userManagesDepartmentInProject(session.user, projectId);
-  if (!canManageOperations(session.user, managesThisProject)) {
-    throw new Error("Удалять проект может только руководитель");
+  if (session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+    throw new Error("Удалять проект безвозвратно может только администратор");
   }
 
   // Файлы в Blob удаляются best-effort уже после коммита транзакции (см.
@@ -651,6 +694,14 @@ export async function deleteProjectAction(projectId: string) {
   });
 
   await prisma.$transaction(async (tx) => {
+    await recordAuditLog(tx, {
+      actorId: session.user.id,
+      action: "hard_delete",
+      targetType: "Project",
+      targetId: projectId,
+      isOverride: true,
+    });
+
     await tx.closingDocument.deleteMany({ where: { contract: { projectId } } });
     await tx.digitalSignature.deleteMany({ where: { contract: { projectId } } });
     await tx.requisites.deleteMany({ where: { contract: { projectId } } });

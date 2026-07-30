@@ -7,6 +7,7 @@ import { ArrowRight, Search } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -59,16 +60,19 @@ function formatDate(date: Date | null) {
 export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | ProjectStatus>("all");
+  const [showArchived, setShowArchived] = useState(false);
+  const archivedCount = useMemo(() => projects.filter((p) => p.isArchived).length, [projects]);
 
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return projects.filter((project) => {
+      if (!showArchived && project.isArchived) return false;
       if (statusFilter !== "all" && project.status !== statusFilter) return false;
       if (!normalizedQuery) return true;
       const haystack = `${project.name} ${project.gipName ?? ""}`.toLowerCase();
       return haystack.includes(normalizedQuery);
     });
-  }, [projects, query, statusFilter]);
+  }, [projects, query, statusFilter, showArchived]);
 
   return (
     <div className="space-y-4">
@@ -82,7 +86,7 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
             className="h-9 pl-9"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {FILTERS.map((filter) => (
             <button
               key={filter.value}
@@ -98,6 +102,15 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
               {filter.label}
             </button>
           ))}
+          {archivedCount > 0 ? (
+            <label className="ml-2 flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+              <Checkbox
+                checked={showArchived}
+                onCheckedChange={(checked) => setShowArchived(checked === true)}
+              />
+              Показать архив ({archivedCount})
+            </label>
+          ) : null}
         </div>
       </div>
 
@@ -175,6 +188,7 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
                           Задержан
                         </Badge>
                       ) : null}
+                      {project.isArchived ? <Badge variant="secondary">В архиве</Badge> : null}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
