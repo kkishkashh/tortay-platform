@@ -130,6 +130,10 @@ export type EmployeeProfile = {
   homeDepartmentId: string | null;
   financeAccess: boolean;
   isActive: boolean;
+  // Task 4.1 (PRD #3 Phase 3) — "кому подчиняется": сам Лид, если назначен
+  // (reportsTo), иначе руководитель домашнего департамента, иначе null
+  // (нет ни того, ни другого — департамент без руководителя).
+  reportsToName: string | null;
   projectsByStatus: { status: ProjectStatus; projects: { id: string; name: string }[] }[];
   activeProjectsCount: number;
   completedProjectsCount: number;
@@ -172,6 +176,8 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       homeDepartmentId: true,
       financeAccess: true,
       isActive: true,
+      reportsTo: { select: { fullName: true } },
+      homeDepartment: { select: { manager: { select: { fullName: true } } } },
       projectMemberships: {
         select: {
           project: { select: { id: true, name: true, status: true } },
@@ -226,6 +232,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     homeDepartmentId: user.homeDepartmentId,
     financeAccess: user.financeAccess,
     isActive: user.isActive,
+    reportsToName: user.reportsTo?.fullName ?? user.homeDepartment?.manager?.fullName ?? null,
     projectsByStatus,
     activeProjectsCount,
     completedProjectsCount,

@@ -30,6 +30,7 @@ import { PasswordForm } from "@/components/employees/password-form";
 import { ArchiveEmployeeToggle } from "./archive-employee-toggle";
 import { CommentsTab } from "./comments-tab";
 import { HardDeleteEmployeeDialog } from "./hard-delete-employee-dialog";
+import { HistoryTab } from "./history-tab";
 import { TasksTab } from "./tasks-tab";
 import { TimelineTab } from "./timeline-tab";
 
@@ -150,6 +151,7 @@ export default async function EmployeeProfilePage({
             <p className="text-sm text-muted-foreground">
               {employee.position ?? "Должность не указана"} ·{" "}
               {SYSTEM_ROLE_LABELS[employee.systemRole]}
+              {employee.reportsToName ? ` · Подчиняется: ${employee.reportsToName}` : ""}
             </p>
           </div>
         </div>
@@ -158,6 +160,7 @@ export default async function EmployeeProfilePage({
           <TabsList>
             <TabsTrigger value="overview">Обзор</TabsTrigger>
             <TabsTrigger value="profile">Личные данные</TabsTrigger>
+            <TabsTrigger value="history">История</TabsTrigger>
             <TabsTrigger value="comments">Комментарии</TabsTrigger>
             <TabsTrigger value="timeline">Таймлайн</TabsTrigger>
           </TabsList>
@@ -240,6 +243,10 @@ export default async function EmployeeProfilePage({
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="history" className="mt-4">
+            <HistoryTab tasks={tasks} />
           </TabsContent>
 
           <TabsContent value="profile" className="mt-4 space-y-6">

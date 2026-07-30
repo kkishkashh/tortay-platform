@@ -50,7 +50,8 @@ export type DepartmentDetail = {
   description: string | null;
   managerId: string | null;
   managerName: string | null;
-  employees: { id: string; fullName: string; position: string | null }[];
+  allowsLeadRole: boolean;
+  employees: { id: string; fullName: string; position: string | null; reportsToId: string | null }[];
 };
 
 export async function getDepartmentById(id: string): Promise<DepartmentDetail | null> {
@@ -59,7 +60,7 @@ export async function getDepartmentById(id: string): Promise<DepartmentDetail | 
     include: {
       manager: { select: { fullName: true } },
       employees: {
-        select: { id: true, fullName: true, position: true },
+        select: { id: true, fullName: true, position: true, reportsToId: true },
         orderBy: { fullName: "asc" },
       },
     },
@@ -75,6 +76,7 @@ export async function getDepartmentById(id: string): Promise<DepartmentDetail | 
     description: department.description,
     managerId: department.managerId,
     managerName: department.manager?.fullName ?? null,
+    allowsLeadRole: department.allowsLeadRole,
     employees: department.employees,
   };
 }

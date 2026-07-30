@@ -3,6 +3,7 @@ import type { DepartmentDetail } from "@/lib/departments/queries";
 
 import { DeleteDepartmentDialog } from "./delete-department-dialog";
 import { EditDepartmentDialog } from "./edit-department-dialog";
+import { LeadRoleToggle } from "./lead-role-toggle";
 
 export function SettingsTab({ department }: { department: DepartmentDetail }) {
   return (
@@ -16,6 +17,20 @@ export function SettingsTab({ department }: { department: DepartmentDetail }) {
             Название, код, цвет, иконка и описание департамента.
           </p>
           <EditDepartmentDialog department={department} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Роль «Лид»</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Промежуточный уровень между руководителем департамента и рядовыми сотрудниками:
+            руководитель сможет назначать Лидов на вкладке «Иерархия», а Лид — назначать задачи
+            только своим подчинённым.
+          </p>
+          <LeadRoleToggle departmentId={department.id} allowsLeadRole={department.allowsLeadRole} />
         </CardContent>
       </Card>
 

@@ -234,6 +234,45 @@ export async function notifyTaskReturned(
   });
 }
 
+// ============================================================
+// PRD #3 Phase 3 — иерархия "Лид".
+// ============================================================
+
+// Получает первого подчинённого — до этого человек был обычным
+// сотрудником департамента, теперь у него появляются свои отчёты (см.
+// lib/leads/actions.ts::setEmployeeLeadAction — "быть Лидом" это чисто
+// производный статус, отдельного флага нет).
+export async function notifyLeadPromoted(
+  db: Db,
+  data: { userId: string; actorId: string; departmentName: string | null },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ЛИД_НАЗНАЧЕН,
+      title: "Вас назначили Лидом",
+      body: data.departmentName
+        ? `Теперь на вас числятся подчинённые сотрудники в департаменте «${data.departmentName}»`
+        : "Теперь на вас числятся подчинённые сотрудники",
+    },
+  });
+}
+
+// Потерял последнего подчинённого (переназначили или сняли) — статус
+// Лида исчезает сам по себе, отдельно снимать нечего.
+export async function notifyLeadDemoted(db: Db, data: { userId: string; actorId: string }) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ЛИД_СНЯТ,
+      title: "Вы больше не Лид",
+      body: "Все сотрудники, которые подчинялись вам, переназначены — подчинённых больше нет.",
+    },
+  });
+}
+
 export async function notifyTaskApproved(
   db: Db,
   data: { userId: string; actorId: string; taskId: string; taskTitle: string; projectName: string },

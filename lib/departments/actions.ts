@@ -109,6 +109,25 @@ export async function deleteDepartmentAction(departmentId: string) {
   redirect("/departments");
 }
 
+// Включает/выключает промежуточную роль "Лид" для департамента (PRD #3
+// Phase 3) — только администратор, как и остальная структура компании
+// (см. canManageDepartments). Выключение НЕ снимает уже назначенных
+// Лидов автоматически — reportsToId у сотрудников остаётся как есть,
+// просто UI назначения новых Лидов скрывается, пока не включат обратно.
+export async function toggleAllowsLeadRoleAction(departmentId: string, enabled: boolean) {
+  const session = await auth();
+  if (!session?.user || !canManageDepartments(session.user)) {
+    throw new Error("Включать роль Лида может только администратор");
+  }
+
+  await prisma.department.update({
+    where: { id: departmentId },
+    data: { allowsLeadRole: enabled },
+  });
+
+  revalidatePath(`/departments/${departmentId}`);
+}
+
 export async function assignDepartmentManagerAction(
   departmentId: string,
   managerId: string | null,

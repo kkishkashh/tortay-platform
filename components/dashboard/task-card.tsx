@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { DepartmentIcon } from "@/components/departments/department-icon";
 import { DeleteTaskDialog } from "@/app/(dashboard)/projects/[id]/delete-task-dialog";
+import { LeadAssigneeControl } from "@/app/(dashboard)/projects/[id]/lead-assignee-control";
 import { TaskCommentsDialog } from "@/app/(dashboard)/projects/[id]/task-comments-dialog";
 import {
   AssigneeTaskStatusControl,
@@ -46,6 +47,7 @@ export function TaskCard({
   canManage,
   isAssignee,
   projectMembers,
+  leadAssignableMembers,
 }: {
   task: TaskListItem;
   comments: TaskCommentItem[];
@@ -54,6 +56,11 @@ export function TaskCard({
   canManage: boolean;
   isAssignee: boolean;
   projectMembers: ProjectMemberOption[];
+  // Task 5.2/5.4 (PRD #3 Phase 3) — только для Лида без полного canManage:
+  // подмножество projectMembers, ограниченное его прямыми подчинёнными
+  // (см. app/(dashboard)/projects/[id]/page.tsx). Пусто/не передано у
+  // всех остальных зрителей.
+  leadAssignableMembers?: { id: string; fullName: string }[];
 }) {
   const isOverdue =
     task.deadline !== null && task.deadline < new Date() && task.status !== TaskStatus.ВЫПОЛНЕНО;
@@ -114,24 +121,32 @@ export function TaskCard({
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-1">
-          <div className="flex min-w-0 flex-col gap-0.5">
-            <div className="flex min-w-0 items-center gap-2">
-              {task.assignee ? (
-                <>
-                  <UserAvatar
-                    avatarUrl={task.assignee.avatarUrl}
-                    fullName={task.assignee.fullName}
-                    seed={task.assignee.userId}
-                    size="sm"
-                  />
-                  <span className="truncate text-xs text-muted-foreground">
-                    {task.assignee.fullName}
-                  </span>
-                </>
-              ) : (
-                <span className="text-xs text-muted-foreground">Не назначена</span>
-              )}
-            </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {!canManage && leadAssignableMembers && leadAssignableMembers.length > 0 ? (
+              <LeadAssigneeControl
+                taskId={task.id}
+                currentAssigneeMemberId={task.assignee?.id ?? null}
+                assignableMembers={leadAssignableMembers}
+              />
+            ) : (
+              <div className="flex min-w-0 items-center gap-2">
+                {task.assignee ? (
+                  <>
+                    <UserAvatar
+                      avatarUrl={task.assignee.avatarUrl}
+                      fullName={task.assignee.fullName}
+                      seed={task.assignee.userId}
+                      size="sm"
+                    />
+                    <span className="truncate text-xs text-muted-foreground">
+                      {task.assignee.fullName}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Не назначена</span>
+                )}
+              </div>
+            )}
             {task.assignedBy ? (
               <span className="truncate text-[11px] text-muted-foreground/70">
                 Назначил(а): {task.assignedBy.fullName}

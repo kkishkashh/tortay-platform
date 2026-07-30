@@ -16,11 +16,13 @@ import {
   getEmployeesForDepartmentAssignment,
   getEmployeesForManagerAssignment,
 } from "@/lib/departments/queries";
+import { getDepartmentHierarchy } from "@/lib/leads/queries";
 
 import { AnalyticsTab } from "./analytics-tab";
 import { DeleteDepartmentDialog } from "./delete-department-dialog";
 import { EditDepartmentDialog } from "./edit-department-dialog";
 import { EmployeesTab } from "./employees-tab";
+import { HierarchyTab } from "./hierarchy-tab";
 import { ProjectsTab } from "./projects-tab";
 import { SettingsTab } from "./settings-tab";
 import { TaskStackTab } from "./task-stack-tab";
@@ -50,19 +52,21 @@ export default async function DepartmentDetailPage({
     redirect("/");
   }
 
-  const [taskStack, allEmployeesRaw, managerCandidates, projects, analyticsStats] = await Promise.all([
-    getDepartmentTaskStack(id),
-    getEmployeesForDepartmentAssignment(),
-    // Список кандидатов в руководители — по компании целиком, поэтому
-    // запрашиваем и передаём в клиентский компонент только для админа:
-    // сам селект скрыт от руководителя департамента (canAssignManager), но
-    // если бы пропс всё равно долетал до его браузера в RSC-payload, это
-    // была бы утечка чужих сотрудников — именно то, чего просил избежать
-    // Камила при разделении сотрудников по департаментам.
-    isAdmin ? getEmployeesForManagerAssignment() : Promise.resolve([]),
-    getDepartmentProjects(id),
-    getDepartmentDashboardStats(id),
-  ]);
+  const [taskStack, allEmployeesRaw, managerCandidates, projects, analyticsStats, hierarchy] =
+    await Promise.all([
+      getDepartmentTaskStack(id),
+      getEmployeesForDepartmentAssignment(),
+      // Список кандидатов в руководители — по компании целиком, поэтому
+      // запрашиваем и передаём в клиентский компонент только для админа:
+      // сам селект скрыт от руководителя департамента (canAssignManager), но
+      // если бы пропс всё равно долетал до его браузера в RSC-payload, это
+      // была бы утечка чужих сотрудников — именно то, чего просил избежать
+      // Камила при разделении сотрудников по департаментам.
+      isAdmin ? getEmployeesForManagerAssignment() : Promise.resolve([]),
+      getDepartmentProjects(id),
+      getDepartmentDashboardStats(id),
+      getDepartmentHierarchy(id),
+    ]);
   // Не-админ (руководитель департамента) может добавить только ещё
   // никуда не привязанного сотрудника — "переманивание" из чужого
   // департамента остаётся решением администратора (см. addEmployeeToDepartmentAction).
@@ -104,6 +108,7 @@ export default async function DepartmentDetailPage({
         <Tabs defaultValue="employees">
           <TabsList>
             <TabsTrigger value="employees">Сотрудники</TabsTrigger>
+            <TabsTrigger value="hierarchy">Иерархия</TabsTrigger>
             <TabsTrigger value="task-stack">Базовый набор задач</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>
@@ -119,6 +124,15 @@ export default async function DepartmentDetailPage({
               managerCandidates={managerCandidates}
               canAssignManager={isAdmin}
               canManageEmployees={canManageDept}
+            />
+          </TabsContent>
+
+          <TabsContent value="hierarchy" className="mt-4">
+            <HierarchyTab
+              allowsLeadRole={department.allowsLeadRole}
+              hierarchy={hierarchy}
+              employees={department.employees}
+              canManage={canManageDept}
             />
           </TabsContent>
 

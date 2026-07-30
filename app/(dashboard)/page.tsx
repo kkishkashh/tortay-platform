@@ -37,6 +37,7 @@ import {
   getCurrentUserRoleTier,
   getDepartmentDashboardStats,
 } from "@/lib/departments/queries";
+import { getLeadDashboardStats, getLeadEmployeeWorkload, getLeadReportIds } from "@/lib/leads/queries";
 import { getWeeklyCommentsCountForAssignee } from "@/lib/comments/queries";
 import { getMyTasks } from "@/lib/tasks/queries";
 import { getUnreadNotificationCount } from "@/lib/notifications/queries";
@@ -85,6 +86,37 @@ export default async function DashboardPage() {
   }
 
   if (roleTier === "employee") {
+    // PRD #3 Phase 3 — Лид получает свой скоуп-дашборд (та же форма, что
+    // и у руководителя департамента, просто по подчинённым, не по всему
+    // департаменту), а не общий сотрудничий. "Быть Лидом" — производный
+    // статус (см. lib/leads/queries.ts::isLead), проверяем прямо здесь по
+    // наличию подчинённых.
+    const reportIds = await getLeadReportIds(session!.user.id);
+    if (reportIds.length > 0) {
+      const me = await prisma.user.findUnique({
+        where: { id: session!.user.id },
+        select: { homeDepartment: { select: { id: true, name: true, color: true, icon: true } } },
+      });
+      if (me?.homeDepartment) {
+        const [stats, workload] = await Promise.all([
+          getLeadDashboardStats(session!.user.id),
+          getLeadEmployeeWorkload(session!.user.id),
+        ]);
+
+        return (
+          <>
+            <PageHeader title="Дашборд" subtitle={formatTodayLabel(today)} action={cabinetButton} />
+            <DepartmentManagerDashboard
+              fullName={session!.user.name ?? "коллега"}
+              department={me.homeDepartment}
+              stats={stats}
+              workload={workload}
+            />
+          </>
+        );
+      }
+    }
+
     const [stats, myTasks, unreadNotificationCount, weeklyCommentsCount] = await Promise.all([
       getDashboardStats(),
       getMyTasks(),

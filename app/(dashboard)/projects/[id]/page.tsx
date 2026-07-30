@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { getProjectOutsourcers, getOutsourcersForPicker } from "@/lib/project-outsourcers/queries";
 import { canManageFinance, canManageOperations, userManagesDepartmentInProject } from "@/lib/projects/permissions";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
+import { getLeadReportIds } from "@/lib/leads/queries";
 import {
   PROJECT_STATUS_LABELS,
   SECTION_STATUS_LABELS,
@@ -69,6 +70,12 @@ export default async function ProjectDetailPage({
   const managesThisProject = session?.user
     ? await userManagesDepartmentInProject(session.user, id)
     : false;
+
+  // Task 5.2/5.4 (PRD #3 Phase 3) — подчинённые Лида среди участников ЭТОГО
+  // проекта. Пусто у всех, кроме Лидов (см. lib/leads/queries.ts::isLead —
+  // производный статус, наличие подчинённых само по себе им и является).
+  const leadReportUserIds = session?.user ? new Set(await getLeadReportIds(session.user.id)) : new Set<string>();
+  const leadAssignableMembers = projectMembers.filter((m) => leadReportUserIds.has(m.userId));
 
   const canManageOutsourcers = session?.user ? await canManageFinance(session.user) : false;
   const [projectOutsourcers, outsourcerPickerOptions] = await Promise.all([
@@ -238,6 +245,7 @@ export default async function ProjectDetailPage({
                         canManage={canManageTasks}
                         isAssignee={task.assignee?.userId === currentUserId}
                         projectMembers={projectMembers}
+                        leadAssignableMembers={leadAssignableMembers}
                       />
                     ))}
                   </div>

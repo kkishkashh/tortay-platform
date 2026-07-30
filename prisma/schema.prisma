@@ -74,6 +74,18 @@ model User {
   // несколькими небольшими департаментами).
   managedDepartments Department[] @relation("DepartmentManager")
 
+  // Иерархия "Лид" (PRD #3 Phase 3, только в департаментах с
+  // Department.allowsLeadRole) — кому подчиняется этот сотрудник, помимо
+  // общего руководителя департамента. "Быть Лидом" НЕ отдельный флаг —
+  // это чисто производный статус: человек — Лид ровно тогда, когда у
+  // кого-то reportsToId указывает на него (см. reports ниже), тот же
+  // принцип, что и у Department.managerId. Специально ограничено 2
+  // уровнями (Лид сам не может кому-то подчиняться, см.
+  // lib/leads/actions.ts) — глубже не усложняем.
+  reportsToId String?
+  reportsTo   User?   @relation("UserReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
+  reports     User[]  @relation("UserReportsTo")
+
   // Во всех проектах, где этот человек участвует (в разных ролях)
   projectMemberships ProjectMember[]
   documentsUploaded  Document[]
@@ -323,6 +335,9 @@ enum NotificationType {
   ЗАДАЧА_ОДОБРЕНА
   ЗАДАЧА_В_РАБОТЕ
   ДОЛЖНОСТЬ_ИЗМЕНЕНА
+  // PRD #3 Phase 3 — иерархия "Лид".
+  ЛИД_НАЗНАЧЕН
+  ЛИД_СНЯТ
 }
 
 model Notification {
@@ -389,6 +404,12 @@ model Department {
 
   managerId String?
   manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id])
+
+  // Включает промежуточную роль "Лид" для этого департамента (PRD #3
+  // Phase 3) — выключено по умолчанию у всех департаментов, руководитель
+  // департамента не может назначать Лидов, пока администратор явно не
+  // включит здесь (см. app/(dashboard)/departments/[id]/settings-tab.tsx).
+  allowsLeadRole Boolean @default(false)
 
   employees         User[]                       @relation("DepartmentEmployees")
   taskTemplateItems DepartmentTaskTemplateItem[]
