@@ -188,6 +188,10 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
       code: true,
       color: true,
       icon: true,
+      // Task "переделка мастера" (2026-07-30) — включает шаг выбора Лида
+      // проекта на шаге "Команда" (см. new-project-dialog.tsx), только
+      // когда департамент это разрешает (см. PRD #3 Phase 3).
+      allowsLeadRole: true,
       manager: { select: { id: true, fullName: true } },
       employees: {
         select: { id: true, fullName: true },

@@ -26,7 +26,11 @@ export default async function ProjectsPage() {
         subtitle={formatTodayLabel(new Date())}
         action={
           canManage ? (
-            <NewProjectDialog employees={employees} departments={departments} />
+            <NewProjectDialog
+              employees={employees}
+              departments={departments}
+              currentUserId={session?.user?.id ?? null}
+            />
           ) : undefined
         }
       />

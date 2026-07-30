@@ -60,6 +60,15 @@ type DepartmentTaskSelection = {
   checkedSubItemIds: string[];
   customTasks: { key: string; title: string }[];
   contactManagerId: string | null;
+  // Шаг "Команда" (2026-07-30, по прямой просьбе Камилы) — необязательные
+  // Лид и команда проекта по этому департаменту. leadUserId получает
+  // ProjectRole.ВЕДУЩИЙ_СПЕЦИАЛИСТ (проектная роль, НЕ то же самое, что
+  // персистентная орг-иерархия "Лид" из PRD #3 Phase 3 — см.
+  // lib/leads/queries.ts). teamMemberIds получают ИНЖЕНЕР. Оба пусты —
+  // как раньше, исполнителя задачи можно назначить кому угодно в
+  // департаменте, без предварительного отбора команды.
+  leadUserId: string | null;
+  teamMemberIds: string[];
   taskAssignments: Record<string, TaskAssignmentInput>;
 };
 
@@ -69,6 +78,8 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
     checkedSubItemIds: [],
     customTasks: [],
     contactManagerId: null,
+    leadUserId: null,
+    teamMemberIds: [],
     taskAssignments: {},
   };
   if (!raw) return empty;
@@ -84,6 +95,8 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
     checkedSubItemIds?: unknown;
     customTasks?: unknown;
     contactManagerId?: unknown;
+    leadUserId?: unknown;
+    teamMemberIds?: unknown;
     taskAssignments?: unknown;
   };
 
@@ -110,6 +123,13 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
       ? obj.contactManagerId.trim()
       : null;
 
+  const leadUserId =
+    typeof obj.leadUserId === "string" && obj.leadUserId.trim() ? obj.leadUserId.trim() : null;
+
+  const teamMemberIds = Array.isArray(obj.teamMemberIds)
+    ? obj.teamMemberIds.filter((v): v is string => typeof v === "string")
+    : [];
+
   const taskAssignments: Record<string, TaskAssignmentInput> = {};
   if (obj.taskAssignments && typeof obj.taskAssignments === "object") {
     for (const [key, value] of Object.entries(obj.taskAssignments as Record<string, unknown>)) {
@@ -123,7 +143,15 @@ function parseDepartmentTaskSelection(raw: string | null): DepartmentTaskSelecti
     }
   }
 
-  return { checkedTemplateItemIds, checkedSubItemIds, customTasks, contactManagerId, taskAssignments };
+  return {
+    checkedTemplateItemIds,
+    checkedSubItemIds,
+    customTasks,
+    contactManagerId,
+    leadUserId,
+    teamMemberIds,
+    taskAssignments,
+  };
 }
 
 // Создать проект может только РУКОВОДИТЕЛЬ — операционная часть
@@ -278,10 +306,20 @@ export async function createProjectAction(formData: FormData) {
       );
     }
 
+    // Лид/команда (шаг "Команда") — та же серверная проверка, что и у
+    // исполнителя задачи: клиентский пикер уже ограничивает выбор
+    // сотрудниками ЭТОГО департамента, но это не замена проверке на сервере.
+    if (selection.leadUserId && !employeeIds.has(selection.leadUserId)) {
+      throw new Error("Лид проекта должен быть сотрудником выбранного департамента");
+    }
+    const teamMemberIds = selection.teamMemberIds.filter((id) => employeeIds.has(id));
+
     return {
       departmentId: department.id,
       name: department.name,
       contactManagerId: selection.contactManagerId,
+      leadUserId: selection.leadUserId,
+      teamMemberIds,
       tasks,
     };
   });
@@ -359,16 +397,38 @@ export async function createProjectAction(formData: FormData) {
             },
           });
 
-    // Шаг 5: каждый отдельно назначенный исполнитель должен стать участником
-    // проекта, чтобы Task.assigneeMemberId на него сослался (см. план, D8).
-    // Роль ИНЖЕНЕР только при реальном создании — если человек уже участник
-    // (например, сам ГИП или создатель), его роль не понижаем.
-    const memberIdByUserId = new Map<string, string>();
+    // Шаг "Команда" + шаг 5: Лид/команда/исполнители — все должны стать
+    // участниками проекта (см. план, D8, и добавление Лида/команды
+    // 2026-07-30). Роль применяется только при РЕАЛЬНОМ создании — если
+    // человек уже участник (например, сам ГИП или создатель), его роль не
+    // понижаем и не переопределяем на ИНЖЕНЕР (см. ensureProjectMember).
+    // Лид получает ВЕДУЩИЙ_СПЕЦИАЛИСТ первым, чтобы не потерять эту роль,
+    // если тот же человек попал ещё и в teamMemberIds/distinctAssigneeUserIds.
+    const memberRoleByUserId = new Map<string, ProjectRole>();
+    for (const plan of sectionPlans) {
+      if (plan.leadUserId) {
+        memberRoleByUserId.set(plan.leadUserId, ProjectRole.ВЕДУЩИЙ_СПЕЦИАЛИСТ);
+      }
+    }
+    for (const plan of sectionPlans) {
+      for (const teamUserId of plan.teamMemberIds) {
+        if (!memberRoleByUserId.has(teamUserId)) {
+          memberRoleByUserId.set(teamUserId, ProjectRole.ИНЖЕНЕР);
+        }
+      }
+    }
     for (const userId of distinctAssigneeUserIds) {
+      if (!memberRoleByUserId.has(userId)) {
+        memberRoleByUserId.set(userId, ProjectRole.ИНЖЕНЕР);
+      }
+    }
+
+    const memberIdByUserId = new Map<string, string>();
+    for (const [userId, role] of memberRoleByUserId) {
       const { member } = await ensureProjectMember(tx, {
         projectId: project.id,
         userId,
-        role: ProjectRole.ИНЖЕНЕР,
+        role,
         actorId: session.user.id,
         projectName: name,
       });

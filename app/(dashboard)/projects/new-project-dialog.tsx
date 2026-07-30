@@ -61,6 +61,7 @@ type DepartmentOption = {
   code: string;
   color: string;
   icon: string;
+  allowsLeadRole: boolean;
   manager: { id: string; fullName: string } | null;
   employees: Employee[];
   taskTemplateItems: TaskTemplateItem[];
@@ -69,6 +70,11 @@ type DepartmentOption = {
 type NewProjectDialogProps = {
   employees: Employee[];
   departments: DepartmentOption[];
+  // По прямой просьбе Камилы (2026-07-30): свой департамент отмечается
+  // галочкой сразу при открытии мастера — руководителю не нужно искать
+  // его среди всех департаментов компании. null у администратора/
+  // бухгалтера — им ничего не предвыбираем.
+  currentUserId: string | null;
 };
 
 // Свои задачи (шаг 4) идентифицируются стабильным клиентским ключом, не
@@ -87,6 +93,16 @@ type DepartmentSelectionState = {
   // "" означает "не переопределено" — сервер получит null и вкладка раздела
   // будет показывать реального руководителя департамента как контакт.
   contactManagerId: string;
+  // "" — Лид на этот проект не назначен (необязательно, см. план 2026-07-30).
+  // Это ПРОЕКТНАЯ роль (ProjectMember.projectRole = ВЕДУЩИЙ_СПЕЦИАЛИСТ),
+  // не то же самое, что персистентная орг-иерархия "Лид" (User.reportsToId,
+  // см. PRD #3 Phase 3) — можно назначить любого сотрудника департамента,
+  // а не только уже действующего орг-Лида.
+  leadUserId: string;
+  // Команда проекта по этому департаменту — если непусто, шаг "Задачи"
+  // предлагает назначать исполнителей ТОЛЬКО из Лида+команды, а не из
+  // всех сотрудников департамента (см. StepTaskAssignments).
+  teamMemberIds: Set<string>;
   taskAssignments: Record<string, TaskAssignment>;
 };
 
@@ -97,6 +113,8 @@ function emptySelection(defaultContactManagerId: string): DepartmentSelectionSta
     subItemIds: new Set(),
     customTasks: [],
     contactManagerId: defaultContactManagerId,
+    leadUserId: "",
+    teamMemberIds: new Set(),
     taskAssignments: {},
   };
 }
@@ -285,6 +303,19 @@ function StepDepartmentTaskPicker({
   );
 }
 
+// Если на шаге "Команда" отметили конкретных людей (Лид/сотрудники) —
+// исполнителя задачи предлагаем выбрать только из них, а не из всего
+// департамента. Никого не отметили — как раньше, весь департамент
+// (не ломаем старый простой сценарий "быстро назначил и пошёл дальше").
+function assignableEmployeesFor(department: DepartmentOption, selection: DepartmentSelectionState) {
+  if (!selection.leadUserId && selection.teamMemberIds.size === 0) {
+    return department.employees;
+  }
+  const allowedIds = new Set(selection.teamMemberIds);
+  if (selection.leadUserId) allowedIds.add(selection.leadUserId);
+  return department.employees.filter((e) => allowedIds.has(e.id));
+}
+
 function StepTaskAssignments({
   department,
   selection,
@@ -295,6 +326,7 @@ function StepTaskAssignments({
   onChange: (next: DepartmentSelectionState) => void;
 }) {
   const slots = taskSlotsFor(department, selection);
+  const assignableEmployees = assignableEmployeesFor(department, selection);
 
   function updateAssignment(key: string, patch: Partial<TaskAssignment>) {
     const current: TaskAssignment = selection.taskAssignments[key] ?? {
@@ -336,13 +368,13 @@ function StepTaskAssignments({
                   onValueChange={(value) =>
                     updateAssignment(slot.key, { assigneeUserId: value ?? "" })
                   }
-                  items={department.employees.map((e) => ({ value: e.id, label: e.fullName }))}
+                  items={assignableEmployees.map((e) => ({ value: e.id, label: e.fullName }))}
                 >
                   <SelectTrigger type="button" className="w-full">
                     <SelectValue placeholder="Не назначен" />
                   </SelectTrigger>
                   <SelectContent>
-                    {department.employees.map((employee) => (
+                    {assignableEmployees.map((employee) => (
                       <SelectItem key={employee.id} value={employee.id}>
                         {employee.fullName}
                       </SelectItem>
@@ -387,17 +419,29 @@ function StepTaskAssignments({
 const STEP_TITLES = [
   "Проект",
   "Департаменты",
-  "Контакты",
+  "Команда",
   "Задачи",
   "Назначения",
 ];
 
-export function NewProjectDialog({ employees, departments }: NewProjectDialogProps) {
+export function NewProjectDialog({ employees, departments, currentUserId }: NewProjectDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [selections, setSelections] = useState<Record<string, DepartmentSelectionState>>({});
+  // По прямой просьбе Камилы: свой департамент(ы) отмечены сразу — не
+  // нужно искать его среди всех департаментов компании на шаге 2.
+  const defaultSelections = () => {
+    if (!currentUserId) return {};
+    const initial: Record<string, DepartmentSelectionState> = {};
+    for (const department of departments) {
+      if (department.manager?.id === currentUserId) {
+        initial[department.id] = { ...emptySelection(department.manager.id), checked: true };
+      }
+    }
+    return initial;
+  };
+  const [selections, setSelections] = useState<Record<string, DepartmentSelectionState>>(defaultSelections);
   const formRef = useRef<HTMLFormElement>(null);
 
   function getSelection(department: DepartmentOption) {
@@ -414,7 +458,7 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
   }
 
   function resetAll() {
-    setSelections({});
+    setSelections(defaultSelections());
     setStep(1);
   }
 
@@ -592,9 +636,13 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
             )}
           </div>
 
-          {/* Шаг 3 — контакт по каждому выбранному департаменту */}
+          {/* Шаг 3 — контакт, Лид (если включён) и команда по каждому
+              выбранному департаменту (по прямой просьбе Камилы, 2026-07-30):
+              выбор Лида и команды необязателен — можно сразу перейти к
+              задачам, тогда исполнителя выбирают из всего департамента,
+              как раньше. */}
           <div className={cn("space-y-3", step !== 3 && "hidden")}>
-            <Label>Контактные лица по департаментам</Label>
+            <Label>Команда по департаментам</Label>
             {checkedDepartments.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Сначала выберите департаменты на предыдущем шаге.
@@ -606,8 +654,16 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
                   ...(department.manager ? [department.manager] : []),
                   ...department.employees.filter((e) => e.id !== department.manager?.id),
                 ];
+
+                function toggleTeamMember(employeeId: string) {
+                  const next = new Set(selection.teamMemberIds);
+                  if (next.has(employeeId)) next.delete(employeeId);
+                  else next.add(employeeId);
+                  setSelection(department.id, { ...selection, teamMemberIds: next });
+                }
+
                 return (
-                  <div key={department.id} className="space-y-2 rounded-lg border p-3">
+                  <div key={department.id} className="space-y-3 rounded-lg border p-3">
                     <div className="flex items-center gap-2">
                       <span
                         className="flex size-6 shrink-0 items-center justify-center rounded-md text-white"
@@ -617,41 +673,103 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
                       </span>
                       <span className="text-sm font-medium">{department.name}</span>
                     </div>
-                    {options.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        В этом департаменте пока некому быть контактом.
-                      </p>
-                    ) : (
-                      <Select
-                        value={selection.contactManagerId || NONE_VALUE}
-                        onValueChange={(value) =>
-                          setSelection(department.id, {
-                            ...selection,
-                            contactManagerId: value && value !== NONE_VALUE ? value : "",
-                          })
-                        }
-                        items={[
-                          { value: NONE_VALUE, label: department.manager ? `${department.manager.fullName} (по умолчанию)` : "Не назначен" },
-                          ...options.map((o) => ({ value: o.id, label: o.fullName })),
-                        ]}
-                      >
-                        <SelectTrigger type="button" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NONE_VALUE}>
-                            {department.manager
-                              ? `${department.manager.fullName} (по умолчанию)`
-                              : "Не назначен"}
-                          </SelectItem>
-                          {options.map((o) => (
-                            <SelectItem key={o.id} value={o.id}>
-                              {o.fullName}
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Контактное лицо</Label>
+                      {options.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          В этом департаменте пока некому быть контактом.
+                        </p>
+                      ) : (
+                        <Select
+                          value={selection.contactManagerId || NONE_VALUE}
+                          onValueChange={(value) =>
+                            setSelection(department.id, {
+                              ...selection,
+                              contactManagerId: value && value !== NONE_VALUE ? value : "",
+                            })
+                          }
+                          items={[
+                            { value: NONE_VALUE, label: department.manager ? `${department.manager.fullName} (по умолчанию)` : "Не назначен" },
+                            ...options.map((o) => ({ value: o.id, label: o.fullName })),
+                          ]}
+                        >
+                          <SelectTrigger type="button" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NONE_VALUE}>
+                              {department.manager
+                                ? `${department.manager.fullName} (по умолчанию)`
+                                : "Не назначен"}
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
+                            {options.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.fullName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+
+                    {department.allowsLeadRole ? (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Лид проекта (необязательно)</Label>
+                        <Select
+                          value={selection.leadUserId || NONE_VALUE}
+                          onValueChange={(value) =>
+                            setSelection(department.id, {
+                              ...selection,
+                              leadUserId: value && value !== NONE_VALUE ? value : "",
+                            })
+                          }
+                          items={[
+                            { value: NONE_VALUE, label: "Не назначен" },
+                            ...department.employees.map((e) => ({ value: e.id, label: e.fullName })),
+                          ]}
+                        >
+                          <SelectTrigger type="button" className="w-full">
+                            <SelectValue placeholder="Не назначен" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NONE_VALUE}>Не назначен</SelectItem>
+                            {department.employees.map((e) => (
+                              <SelectItem key={e.id} value={e.id}>
+                                {e.fullName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Команда (необязательно — иначе исполнителя задач можно выбрать из всех
+                        сотрудников департамента)
+                      </Label>
+                      {department.employees.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">В департаменте пока нет сотрудников.</p>
+                      ) : (
+                        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                          {department.employees
+                            .filter((e) => e.id !== selection.leadUserId)
+                            .map((employee) => (
+                              <label
+                                key={employee.id}
+                                className="flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1.5 text-sm"
+                              >
+                                <Checkbox
+                                  checked={selection.teamMemberIds.has(employee.id)}
+                                  onCheckedChange={() => toggleTeamMember(employee.id)}
+                                />
+                                <span className="min-w-0 flex-1 truncate">{employee.fullName}</span>
+                              </label>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })
@@ -710,6 +828,8 @@ export function NewProjectDialog({ employees, departments }: NewProjectDialogPro
               checkedSubItemIds: Array.from(selection.subItemIds),
               customTasks: selection.customTasks,
               contactManagerId: selection.contactManagerId || null,
+              leadUserId: selection.leadUserId || null,
+              teamMemberIds: Array.from(selection.teamMemberIds),
               taskAssignments: selection.taskAssignments,
             });
             return (
