@@ -25,6 +25,7 @@ function TaskStackRow({
   subItemCount,
   expanded,
   onToggleExpand,
+  weight,
 }: {
   item: DepartmentTaskStackSubItem;
   isFirst: boolean;
@@ -37,6 +38,9 @@ function TaskStackRow({
   subItemCount?: number;
   expanded?: boolean;
   onToggleExpand?: () => void;
+  // Вес для весового прогресса раздела — только у пунктов верхнего уровня
+  // (см. DepartmentTaskStackItem.weight), у подпунктов не передаётся.
+  weight?: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -81,6 +85,21 @@ function TaskStackRow({
       <form action={handleSave} className="space-y-2 rounded-lg border p-3">
         <Input name="title" defaultValue={item.title} required autoFocus />
         <Input name="description" defaultValue={item.description ?? undefined} placeholder="Описание (необязательно)" />
+        {weight !== undefined ? (
+          <div className="flex items-center gap-2">
+            <label htmlFor={`weight-${item.id}`} className="text-xs text-muted-foreground">
+              Вес (для весового прогресса раздела)
+            </label>
+            <Input
+              id={`weight-${item.id}`}
+              name="weight"
+              type="number"
+              min={1}
+              defaultValue={weight}
+              className="w-20"
+            />
+          </div>
+        ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={() => setEditing(false)} disabled={isPending}>
@@ -118,6 +137,9 @@ function TaskStackRow({
               <span className="ml-1.5 text-xs font-normal text-muted-foreground">
                 (подпунктов: {subItemCount})
               </span>
+            ) : null}
+            {weight !== undefined && weight !== 1 ? (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">вес: {weight}</span>
             ) : null}
           </p>
           {item.description ? (
@@ -310,6 +332,7 @@ function TaskStackList({
                   subItemCount={item.subItems.length}
                   expanded={isExpanded}
                   onToggleExpand={() => onToggleExpand(item.id)}
+                  weight={item.weight}
                 />
 
                 {isExpanded ? (
@@ -339,6 +362,12 @@ function TaskStackList({
             <input type="hidden" name="category" value={category} />
             <Input name="title" placeholder="Название задачи" required autoFocus />
             <Input name="description" placeholder="Описание (необязательно)" />
+            <div className="flex items-center gap-2">
+              <label htmlFor={`new-weight-${category}`} className="text-xs text-muted-foreground">
+                Вес (для весового прогресса раздела)
+              </label>
+              <Input id={`new-weight-${category}`} name="weight" type="number" min={1} defaultValue={1} className="w-20" />
+            </div>
             {addError ? <p className="text-sm text-destructive">{addError}</p> : null}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" size="sm" onClick={() => setShowAddForm(false)} disabled={isPending}>

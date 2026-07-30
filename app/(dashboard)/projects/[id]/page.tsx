@@ -6,11 +6,13 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { DepartmentIcon } from "@/components/departments/department-icon";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
+import { computeWeightedProgress } from "@/lib/tasks/progress";
 import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
@@ -125,6 +127,7 @@ export default async function ProjectDetailPage({
       tasksWithComments,
       canManageTasks: session?.user ? canManageProjectTasks(session.user, section) : false,
       canEditDates: isLead && section.department?.id === currentUserHomeDepartmentId,
+      progress: computeWeightedProgress(tasks),
     };
   });
 
@@ -205,7 +208,7 @@ export default async function ProjectDetailPage({
           {sectionsWithTasks.length === 0 ? (
             <p className="text-sm text-muted-foreground">Разделов пока нет.</p>
           ) : (
-            sectionsWithTasks.map(({ section, tasksWithComments, canManageTasks, canEditDates }) => (
+            sectionsWithTasks.map(({ section, tasksWithComments, canManageTasks, canEditDates, progress }) => (
               <div key={section.id} className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 px-4 py-3">
                   <div className="flex items-center gap-2.5">
@@ -225,6 +228,12 @@ export default async function ProjectDetailPage({
                       <p className="text-sm font-medium">{section.name}</p>
                       {!section.department ? (
                         <p className="text-xs text-muted-foreground">Без отдела</p>
+                      ) : null}
+                      {progress !== null ? (
+                        <div className="mt-1 flex items-center gap-2">
+                          <Progress value={progress} className="w-28" />
+                          <span className="text-xs text-muted-foreground tabular-nums">{progress}%</span>
+                        </div>
                       ) : null}
                     </div>
                   </div>

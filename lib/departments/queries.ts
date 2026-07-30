@@ -90,6 +90,11 @@ export type DepartmentTaskStackSubItem = {
 
 export type DepartmentTaskStackItem = DepartmentTaskStackSubItem & {
   category: TaskStackCategory;
+  // Вес для весового прогресса раздела (см. Task.weight) — только у
+  // пунктов верхнего уровня, у подпунктов (DepartmentTaskStackSubItem) нет
+  // своего веса: они становятся чек-листом внутри одной задачи, а не
+  // отдельными весовыми единицами.
+  weight: number;
   subItems: DepartmentTaskStackSubItem[];
 };
 
@@ -110,6 +115,7 @@ export async function getDepartmentTaskStack(
       description: true,
       category: true,
       orderIndex: true,
+      weight: true,
       subItems: {
         select: { id: true, title: true, description: true, orderIndex: true },
         orderBy: { orderIndex: "asc" },

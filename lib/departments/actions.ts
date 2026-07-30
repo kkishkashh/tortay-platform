@@ -279,6 +279,7 @@ export async function createTaskStackItemAction(departmentId: string, formData: 
     categoryRaw === TaskStackCategory.НЕСТАНДАРТНЫЙ
       ? TaskStackCategory.НЕСТАНДАРТНЫЙ
       : TaskStackCategory.БАЗОВЫЙ;
+  const weight = parseWeight(formData.get("weight"));
 
   // parentItemId: null — считаем максимум только среди пунктов ВЕРХНЕГО
   // уровня, иначе высокий orderIndex у чьих-то подпунктов сбил бы порядок
@@ -297,11 +298,21 @@ export async function createTaskStackItemAction(departmentId: string, formData: 
       title,
       description,
       category,
+      weight,
       orderIndex: (maxOrder._max.orderIndex ?? -1) + 1,
     },
   });
 
   revalidatePath(`/departments/${departmentId}`);
+}
+
+// Вес для весового прогресса раздела (см. Task.weight в схеме) — только у
+// пунктов верхнего уровня, минимум 1 (0 или отрицательный вес сделал бы
+// пункт невидимым для прогресса, это не то же самое, что "необязательный").
+function parseWeight(raw: FormDataEntryValue | null): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return 1;
+  return Math.max(1, Math.round(parsed));
 }
 
 // Подпункт (чек-лист внутри пункта верхнего уровня, напр. "АР Альбом" →
@@ -381,10 +392,14 @@ export async function updateTaskStackItemAction(itemId: string, formData: FormDa
   if (!title) {
     throw new Error("Название задачи обязательно");
   }
+  // Подпункты (parentItemId не null) вес не редактируют — форма для них не
+  // отправляет это поле (см. TaskStackRow), тогда просто оставляем как есть.
+  const weightRaw = formData.get("weight");
+  const weight = weightRaw !== null ? parseWeight(weightRaw) : undefined;
 
   await prisma.departmentTaskTemplateItem.update({
     where: { id: itemId },
-    data: { title, description },
+    data: { title, description, ...(weight !== undefined ? { weight } : {}) },
   });
 
   revalidatePath(`/departments/${item.departmentId}`);
@@ -430,6 +445,7 @@ export async function duplicateTaskStackItemAction(itemId: string) {
       description: true,
       category: true,
       orderIndex: true,
+      weight: true,
       department: { select: { id: true, managerId: true } },
       subItems: {
         select: { title: true, description: true },
@@ -464,6 +480,7 @@ export async function duplicateTaskStackItemAction(itemId: string) {
         title: item.title,
         description: item.description,
         category: item.category,
+        weight: item.weight,
         orderIndex: item.orderIndex + 1,
       },
     });

@@ -235,6 +235,7 @@ export async function createProjectAction(formData: FormData) {
                 id: true,
                 title: true,
                 description: true,
+                weight: true,
                 subItems: { select: { id: true, title: true }, orderBy: { orderIndex: "asc" } },
               },
             },
@@ -252,6 +253,10 @@ export async function createProjectAction(formData: FormData) {
     deadline: Date | null;
     priority: TaskPriority;
     checklistTitles: string[];
+    // Весовой прогресс раздела (см. lib/tasks/progress.ts) — унаследован от
+    // DepartmentTaskTemplateItem.weight для пунктов стека, 1 (равный вес)
+    // для произвольных задач, которых нет в стеке.
+    weight: number;
   };
 
   function buildTaskPlan(
@@ -261,6 +266,7 @@ export async function createProjectAction(formData: FormData) {
     assignment: TaskAssignmentInput | undefined,
     employeeIds: Set<string>,
     checklistTitles: string[] = [],
+    weight = 1,
   ): TaskPlan {
     const assigneeUserId = assignment?.assigneeUserId?.trim() || null;
     if (assigneeUserId && !employeeIds.has(assigneeUserId)) {
@@ -279,6 +285,7 @@ export async function createProjectAction(formData: FormData) {
       deadline: deadlineRaw ? new Date(deadlineRaw) : null,
       priority: priorityRaw as TaskPriority,
       checklistTitles,
+      weight,
     };
   }
 
@@ -304,6 +311,7 @@ export async function createProjectAction(formData: FormData) {
             selection.taskAssignments[item.id],
             employeeIds,
             checklistTitles,
+            item.weight,
           ),
         );
       }
@@ -468,6 +476,7 @@ export async function createProjectAction(formData: FormData) {
             deadline: taskPlan.deadline,
             assigneeMemberId,
             assignedByUserId: session.user.id,
+            weight: taskPlan.weight,
           },
         });
 

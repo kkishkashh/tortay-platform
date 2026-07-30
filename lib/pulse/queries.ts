@@ -3,6 +3,7 @@ import { PulseSignal, SectionStatus } from "@prisma/client";
 import { isLeadOfDepartment } from "@/lib/leads/queries";
 import { prisma } from "@/lib/prisma";
 import { currentIsoWeek } from "@/lib/pulse/week";
+import { computeWeightedProgress } from "@/lib/tasks/progress";
 
 export type PulseSectionItem = {
   sectionId: string;
@@ -15,6 +16,9 @@ export type PulseSectionItem = {
   deadline: Date | null;
   pulse: { signal: PulseSignal; note: string | null; authorName: string; createdAt: Date } | null;
   canSetPulse: boolean;
+  // Весовой прогресс раздела (см. lib/tasks/progress.ts) — null, если в
+  // разделе вообще нет задач.
+  progress: number | null;
 };
 
 export type PulseDashboard = {
@@ -80,6 +84,7 @@ export async function getPulseDashboard(user: { id: string }): Promise<PulseDash
         select: { signal: true, note: true, createdAt: true, author: { select: { fullName: true } } },
         take: 1,
       },
+      tasks: { select: { status: true, weight: true } },
     },
     orderBy: [{ deadline: "asc" }, { name: "asc" }],
   });
@@ -127,6 +132,7 @@ export async function getPulseDashboard(user: { id: string }): Promise<PulseDash
             : null,
           canSetPulse:
             managedDepartmentIds.has(section.departmentId) || leadDepartmentIds.has(section.departmentId),
+          progress: computeWeightedProgress(section.tasks),
         };
       }),
   };

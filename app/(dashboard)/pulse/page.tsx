@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { getPulseDashboard, hasPulseAccess } from "@/lib/pulse/queries";
 import { weekLabel } from "@/lib/pulse/week";
 
@@ -65,6 +66,12 @@ export default async function PulsePage() {
                       <p className="truncate text-xs text-muted-foreground">
                         {item.sectionName} · {formatDeadline(item.deadline)}
                       </p>
+                      {item.progress !== null ? (
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <Progress value={item.progress} className="w-28" />
+                          <span className="text-xs text-muted-foreground tabular-nums">{item.progress}%</span>
+                        </div>
+                      ) : null}
                       {item.pulse?.note ? (
                         <p className="mt-1 truncate text-xs text-muted-foreground italic">«{item.pulse.note}»</p>
                       ) : null}

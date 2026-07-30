@@ -11,6 +11,9 @@ export type TaskListItem = {
   priority: TaskPriority;
   deadline: Date | null;
   createdAt: Date;
+  // Весовой прогресс раздела (см. lib/tasks/progress.ts) — копируется из
+  // DepartmentTaskTemplateItem.weight при создании, у обычных задач 1.
+  weight: number;
   assignee: { id: string; userId: string; fullName: string; avatarUrl: string | null } | null;
   // Кто поставил задачу — null у задач, созданных до Phase 13 (надёжного
   // источника для бэкафилла не было, см. план).
@@ -52,6 +55,7 @@ export async function getTasksForSection(sectionId: string): Promise<TaskListIte
     priority: task.priority,
     deadline: task.deadline,
     createdAt: task.createdAt,
+    weight: task.weight,
     assignee: task.assigneeMember
       ? {
           id: task.assigneeMember.id,
@@ -103,6 +107,7 @@ export async function getTasksForSections(sectionIds: string[]): Promise<Map<str
       priority: task.priority,
       deadline: task.deadline,
       createdAt: task.createdAt,
+      weight: task.weight,
       assignee: task.assigneeMember
         ? {
             id: task.assigneeMember.id,
@@ -167,6 +172,7 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
     priority: task.priority,
     deadline: task.deadline,
     createdAt: task.createdAt,
+    weight: task.weight,
     assignee: task.assigneeMember
       ? {
           id: task.assigneeMember.id,

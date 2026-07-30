@@ -191,7 +191,6 @@ model Section {
   project           Project       @relation(fields: [projectId], references: [id])
   name              String
   status            SectionStatus @default(В_РАБОТЕ)
-  completionPercent Int           @default(0)
   startDate         DateTime? // для диаграммы Ганта
   deadline          DateTime?
   orderIndex        Int           @default(0) // для сортировки разделов внутри проекта
@@ -325,6 +324,14 @@ model Task {
   startDate        DateTime? // для диаграммы Ганта
   deadline         DateTime?
   createdAt        DateTime       @default(now())
+  // Весовой прогресс раздела (Phase 2 архитектурного дашборда, 2026-07-30,
+  // из прототипа ProjecTeam — "весовой прогресс ЭП/АР") — копируется из
+  // DepartmentTaskTemplateItem.weight при создании задачи из пункта стека
+  // (см. createProjectAction), у обычных/ручных задач остаётся 1 (равный
+  // вес). Прогресс раздела считается на лету (см. lib/tasks/progress.ts),
+  // нигде не хранится отдельно — заменяет ранее неиспользовавшееся
+  // Section.completionPercent.
+  weight           Int            @default(1)
 
   comments       Comment[]
   notifications  Notification[]
@@ -526,6 +533,11 @@ model DepartmentTaskTemplateItem {
   category     TaskStackCategory @default(БАЗОВЫЙ)
   orderIndex   Int               @default(0)
   createdAt    DateTime          @default(now())
+  // Вес для весового прогресса раздела (см. Task.weight) — имеет смысл
+  // только у пунктов верхнего уровня (parentItemId null), у подпунктов
+  // не используется: подпункты становятся чек-листом ВНУТРИ одной задачи
+  // (TaskChecklistItem), а не отдельными весовыми единицами.
+  weight       Int               @default(1)
 
   // Подпункты пункта стека (напр. "АР Альбом" → его подразделы) — только
   // 2 уровня: у подпункта своих подпунктов не бывает (проверяется в коде,
