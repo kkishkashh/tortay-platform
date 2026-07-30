@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { AvrStage, ContractStatus, PaymentStatus, PaymentType, Prisma, ProjectRole } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { PAYMENT_TYPE_LABELS } from "@/lib/contracts/labels";
+import { notifyPaymentStatusChanged } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { canManageFinance } from "@/lib/projects/permissions";
 
@@ -88,16 +90,71 @@ export async function togglePaymentPaidAction(paymentId: string) {
       ? PaymentStatus.ОЖИДАЕТСЯ
       : PaymentStatus.ОПЛАЧЕНО;
 
-  await prisma.payment.update({
-    where: { id: paymentId },
-    data: {
-      status: nextStatus,
-      paidAt: nextStatus === PaymentStatus.ОПЛАЧЕНО ? new Date() : null,
-    },
+  // Task 7.2 (PRD #3 Phase 4): руководителям департаментов ЭТОГО проекта —
+  // только когда платёж ИМЕННО становится оплаченным (не при отмене
+  // отметки), без сумм в тексте (см. notifyPaymentStatusChanged). Проект
+  // может затрагивать несколько департаментов сразу — уведомляем всех их
+  // руководителей, кроме самого actor'а (та же логика, что у
+  // notifyPositionChanged).
+  const project = await getProjectForPayment(paymentId);
+  const recipientManagerIds =
+    nextStatus === PaymentStatus.ОПЛАЧЕНО
+      ? Array.from(
+          new Set(
+            project.managerIds.filter((id) => id !== session.user.id),
+          ),
+        )
+      : [];
+
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.update({
+      where: { id: paymentId },
+      data: {
+        status: nextStatus,
+        paidAt: nextStatus === PaymentStatus.ОПЛАЧЕНО ? new Date() : null,
+      },
+    });
+
+    for (const managerId of recipientManagerIds) {
+      await notifyPaymentStatusChanged(tx, {
+        userId: managerId,
+        actorId: session.user.id,
+        projectName: project.name,
+        stageLabel: PAYMENT_TYPE_LABELS[payment.paymentType],
+      });
+    }
   });
 
   revalidatePath("/contracts");
   revalidatePath("/");
+  revalidatePath(`/projects/${project.id}`);
+}
+
+async function getProjectForPayment(paymentId: string) {
+  const payment = await prisma.payment.findUniqueOrThrow({
+    where: { id: paymentId },
+    select: {
+      contract: {
+        select: {
+          projectId: true,
+          project: {
+            select: {
+              name: true,
+              sections: { select: { department: { select: { managerId: true } } } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return {
+    id: payment.contract.projectId,
+    name: payment.contract.project.name,
+    managerIds: payment.contract.project.sections
+      .map((s) => s.department?.managerId)
+      .filter((id): id is string => !!id),
+  };
 }
 
 // Каскад вручную — как и в deleteProjectAction (lib/projects/actions.ts):

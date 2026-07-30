@@ -1,6 +1,7 @@
 import { AvrStage, ContractStatus, PaymentStatus, PaymentType } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { PAYMENT_TYPE_LABELS } from "@/lib/contracts/labels";
 import { prisma } from "@/lib/prisma";
 import { canManageFinance } from "@/lib/projects/permissions";
 
@@ -106,6 +107,73 @@ export async function getProjectsForContractSelect() {
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
+}
+
+export type ContractSummaryStage = {
+  // "СЧЁТ" — не реальный PaymentType, а первая ступень прогресс-бара:
+  // сам факт существования договора (см. ниже, всегда isDone: true).
+  key: "СЧЁТ" | PaymentType;
+  label: string;
+  isDone: boolean;
+};
+
+export type ContractSummary = {
+  contractId: string;
+  number: string;
+  status: ContractStatus;
+  avrStage: AvrStage;
+  percentPaid: number;
+  stages: ContractSummaryStage[];
+};
+
+// Task 3.1/3.3 (PRD #3 Phase 4) — краткая, БЕЗ сумм и реквизитов, карточка
+// договора для страницы проекта: видна любому, кто вообще видит проект
+// (та же логика видимости, что и у ProjectOutsourcersSection), в отличие
+// от полной карточки на /contracts (там суммы/реквизиты/ЭЦП, доступ
+// только canManageFinance). Один проект — один активный договор в
+// текущей модели, поэтому просто самый свежий.
+export async function getContractSummaryForProject(projectId: string): Promise<ContractSummary | null> {
+  const contract = await prisma.contract.findFirst({
+    where: { projectId },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      number: true,
+      status: true,
+      avrStage: true,
+      totalAmount: true,
+      payments: { select: { paymentType: true, amount: true, status: true } },
+    },
+  });
+  if (!contract) return null;
+
+  const totalAmount = Number(contract.totalAmount);
+  const paidAmount = contract.payments
+    .filter((p) => p.status === PaymentStatus.ОПЛАЧЕНО)
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const percentPaid = totalAmount > 0 ? Math.round((paidAmount / totalAmount) * 100) : 0;
+
+  const paymentByType = new Map(contract.payments.map((p) => [p.paymentType, p]));
+  const trancheStages: ContractSummaryStage[] = [
+    PaymentType.АВАНС,
+    PaymentType.ТРАНШ_2,
+    PaymentType.ТРАНШ_3,
+  ]
+    .filter((type) => paymentByType.has(type))
+    .map((type) => ({
+      key: type,
+      label: PAYMENT_TYPE_LABELS[type],
+      isDone: paymentByType.get(type)!.status === PaymentStatus.ОПЛАЧЕНО,
+    }));
+
+  return {
+    contractId: contract.id,
+    number: contract.number,
+    status: contract.status,
+    avrStage: contract.avrStage,
+    percentPaid,
+    stages: [{ key: "СЧЁТ", label: "Счёт", isDone: true }, ...trancheStages],
+  };
 }
 
 // Только подсказка для поля номера в форме создания — редактируемая,

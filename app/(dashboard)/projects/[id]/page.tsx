@@ -14,6 +14,7 @@ import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { prisma } from "@/lib/prisma";
+import { getContractSummaryForProject } from "@/lib/contracts/queries";
 import { getProjectOutsourcers, getOutsourcersForPicker } from "@/lib/project-outsourcers/queries";
 import { canManageFinance, canManageOperations, userManagesDepartmentInProject } from "@/lib/projects/permissions";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
@@ -26,6 +27,7 @@ import { getAvatarColor, getInitials } from "@/lib/utils";
 
 import { ArchiveProjectToggle } from "./archive-project-toggle";
 import { AssignGipDialog } from "./assign-gip-dialog";
+import { ContractSummaryCard } from "./contract-summary-card";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { HardDeleteProjectDialog } from "./hard-delete-project-dialog";
 import { ProjectOutsourcersSection } from "./project-outsourcers-section";
@@ -78,12 +80,13 @@ export default async function ProjectDetailPage({
   const leadAssignableMembers = projectMembers.filter((m) => leadReportUserIds.has(m.userId));
 
   const canManageOutsourcers = session?.user ? await canManageFinance(session.user) : false;
-  const [projectOutsourcers, outsourcerPickerOptions] = await Promise.all([
+  const [projectOutsourcers, outsourcerPickerOptions, contractSummary] = await Promise.all([
     getProjectOutsourcers(id),
     // Полный список аутсорсеров компании — только для тех, кто реально
     // может их привязывать (см. урок про getEmployeesForManagerAssignment:
     // не отдавать в RSC-payload то, что UI всё равно скрывает от роли).
     canManageOutsourcers ? getOutsourcersForPicker() : Promise.resolve([]),
+    getContractSummaryForProject(id),
   ]);
 
   // Раньше это был Promise.all(sections.map(async section => ... await
@@ -175,6 +178,12 @@ export default async function ProjectDetailPage({
             ) : null}
           </div>
         </div>
+
+        {contractSummary ? (
+          <div className="mb-6">
+            <ContractSummaryCard summary={contractSummary} />
+          </div>
+        ) : null}
 
         <ProjectOutsourcersSection
           projectId={project.id}

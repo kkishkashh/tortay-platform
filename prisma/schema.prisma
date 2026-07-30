@@ -338,6 +338,8 @@ enum NotificationType {
   // PRD #3 Phase 3 — иерархия "Лид".
   ЛИД_НАЗНАЧЕН
   ЛИД_СНЯТ
+  // PRD #3 Phase 4 (Task 7.2) — оплата транша по договору проекта.
+  ОПЛАТА_ПОЛУЧЕНА
 }
 
 model Notification {

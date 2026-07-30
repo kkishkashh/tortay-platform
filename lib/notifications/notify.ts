@@ -273,6 +273,24 @@ export async function notifyLeadDemoted(db: Db, data: { userId: string; actorId:
   });
 }
 
+// Task 7.2 (PRD #3 Phase 4) — руководителю департамента(ов) проекта, БЕЗ
+// суммы (по прямому требованию брифа: "без сумм") — только какая стадия
+// оплачена, этого достаточно, чтобы понять "можно продолжать работу".
+export async function notifyPaymentStatusChanged(
+  db: Db,
+  data: { userId: string; actorId: string; projectName: string; stageLabel: string },
+) {
+  await db.notification.create({
+    data: {
+      userId: data.userId,
+      actorId: data.actorId,
+      type: NotificationType.ОПЛАТА_ПОЛУЧЕНА,
+      title: "Оплата по договору",
+      body: `«${data.stageLabel}» оплачен по договору проекта «${data.projectName}»`,
+    },
+  });
+}
+
 export async function notifyTaskApproved(
   db: Db,
   data: { userId: string; actorId: string; taskId: string; taskTitle: string; projectName: string },
