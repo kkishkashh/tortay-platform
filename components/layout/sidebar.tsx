@@ -21,6 +21,7 @@ import {
   Calendar,
   ScrollText,
   Activity,
+  GanttChartSquare,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -66,6 +67,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Работа",
     items: [
       { href: "/pulse", label: "Пульс недели", icon: Activity, visibility: "pulse" },
+      { href: "/gantt", label: "Гант", icon: GanttChartSquare, visibility: "pulse" },
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2 },
       { href: "/employees", label: "Сотрудники", icon: Users },

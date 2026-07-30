@@ -33,7 +33,7 @@ export type PulseDashboard = {
 // нужно, сами если захотят добавят себя в архитектуру". Намеренное
 // отступление от canManageOperations (который обычно даёт админу доступ
 // везде) — здесь этого делать НЕ нужно.
-async function getVisibleDepartmentIds(user: { id: string }): Promise<string[]> {
+export async function getVisibleDepartmentIds(user: { id: string }): Promise<string[]> {
   const departments = await prisma.department.findMany({
     where: {
       usesPulseTracking: true,

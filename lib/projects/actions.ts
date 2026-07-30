@@ -953,6 +953,8 @@ export async function updateSectionDatesAction(
     select: {
       projectId: true,
       deadline: true,
+      baselineStartDate: true,
+      baselineDeadline: true,
       department: { select: { id: true, managerId: true } },
     },
   });
@@ -970,6 +972,7 @@ export async function updateSectionDatesAction(
     throw new Error("Менять сроки раздела может только руководитель или Лид этого департамента");
   }
 
+  const newStartDate = startDate ? new Date(startDate) : null;
   const newDeadline = deadline ? new Date(deadline) : null;
   const deadlineChanged = (section.deadline?.getTime() ?? null) !== (newDeadline?.getTime() ?? null);
   const isExtension = Boolean(section.deadline && newDeadline && newDeadline.getTime() > section.deadline.getTime());
@@ -978,12 +981,20 @@ export async function updateSectionDatesAction(
   }
   const trimmedComment = comment?.trim() || null;
 
+  // Гант (Phase 3, 2026-07-30) — базовый срок замораживается ПЕРВЫМ
+  // когда-либо заданным значением и больше никогда не трогается здесь же,
+  // независимо для старта и дедлайна (можно задать старт раньше дедлайна).
+  const baselineStartDate = section.baselineStartDate ?? newStartDate;
+  const baselineDeadline = section.baselineDeadline ?? newDeadline;
+
   await prisma.$transaction(async (tx) => {
     await tx.section.update({
       where: { id: sectionId },
       data: {
-        startDate: startDate ? new Date(startDate) : null,
+        startDate: newStartDate,
         deadline: newDeadline,
+        baselineStartDate,
+        baselineDeadline,
       },
     });
 
