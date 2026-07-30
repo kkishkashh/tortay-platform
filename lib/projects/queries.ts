@@ -1,4 +1,4 @@
-import { ProjectRole, ProjectStatus, SectionStatus, SystemRole } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SectionStatus, ShiftReasonCategory, SystemRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -135,7 +135,8 @@ export type SectionDeadlineChangeItem = {
   id: string;
   previousDeadline: Date | null;
   newDeadline: Date | null;
-  reason: string | null;
+  reasonCategory: ShiftReasonCategory | null;
+  comment: string | null;
   changedByName: string;
   createdAt: Date;
 };
@@ -149,7 +150,8 @@ export async function getSectionDeadlineHistory(sectionId: string): Promise<Sect
       id: true,
       previousDeadline: true,
       newDeadline: true,
-      reason: true,
+      reasonCategory: true,
+      comment: true,
       createdAt: true,
       changedByUser: { select: { fullName: true } },
     },
@@ -160,7 +162,8 @@ export async function getSectionDeadlineHistory(sectionId: string): Promise<Sect
     id: change.id,
     previousDeadline: change.previousDeadline,
     newDeadline: change.newDeadline,
-    reason: change.reason,
+    reasonCategory: change.reasonCategory,
+    comment: change.comment,
     changedByName: change.changedByUser.fullName,
     createdAt: change.createdAt,
   }));

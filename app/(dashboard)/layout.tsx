@@ -11,6 +11,7 @@ import {
 } from "@/lib/notifications/queries";
 import { getPositions } from "@/lib/positions/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
+import { hasPulseAccess } from "@/lib/pulse/queries";
 
 export default async function DashboardLayout({
   children,
@@ -25,19 +26,28 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  const [notifications, unreadNotificationCount, roleTier, profile, hasFinanceAccess, positions, departments] =
-    await Promise.all([
-      getNotificationsForCurrentUser(10),
-      getUnreadNotificationCount(),
-      getCurrentUserRoleTier(session.user),
-      // Свежие данные из БД, а не то, что закэшировано в JWT — иначе,
-      // например, аватар оставался бы старым до следующего входа
-      // (see plan D12: сессия/JWT не обновляются на лету).
-      getEmployeeProfile(session.user.id),
-      canManageFinance(session.user),
-      getPositions(),
-      getDepartments(),
-    ]);
+  const [
+    notifications,
+    unreadNotificationCount,
+    roleTier,
+    profile,
+    hasFinanceAccess,
+    hasPulse,
+    positions,
+    departments,
+  ] = await Promise.all([
+    getNotificationsForCurrentUser(10),
+    getUnreadNotificationCount(),
+    getCurrentUserRoleTier(session.user),
+    // Свежие данные из БД, а не то, что закэшировано в JWT — иначе,
+    // например, аватар оставался бы старым до следующего входа
+    // (see plan D12: сессия/JWT не обновляются на лету).
+    getEmployeeProfile(session.user.id),
+    canManageFinance(session.user),
+    hasPulseAccess(session.user),
+    getPositions(),
+    getDepartments(),
+  ]);
 
   return (
     <div className="flex min-h-screen">
@@ -46,6 +56,7 @@ export default async function DashboardLayout({
         systemRoleLabel={session.user.systemRole}
         roleTier={roleTier}
         canManageFinance={hasFinanceAccess}
+        hasPulseAccess={hasPulse}
         onSignOut={signOutAction}
         notifications={notifications}
         unreadNotificationCount={unreadNotificationCount}

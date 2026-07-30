@@ -20,6 +20,7 @@ import {
   ListTodo,
   Calendar,
   ScrollText,
+  Activity,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -41,7 +42,9 @@ type NavItem = {
   // же департамент); "admin" — только администратору; "admin_or_finance" —
   // администратору и руководителю Административного департамента
   // (аутсорсеры/договоры, см. canManageFinance в lib/projects/permissions.ts).
-  visibility?: "all" | "admin_or_manager" | "admin" | "admin_or_finance";
+  // "pulse" — только тем, у кого есть видимый департамент с "Пульс недели"
+  // (см. hasPulseAccess в lib/pulse/queries.ts) — сейчас это Архитектура.
+  visibility?: "all" | "admin_or_manager" | "admin" | "admin_or_finance" | "pulse";
 };
 
 type NavGroup = {
@@ -62,6 +65,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Работа",
     items: [
+      { href: "/pulse", label: "Пульс недели", icon: Activity, visibility: "pulse" },
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2 },
       { href: "/employees", label: "Сотрудники", icon: Users },
@@ -79,10 +83,16 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-function isNavItemVisible(item: NavItem, roleTier: RoleTier, canManageFinance: boolean) {
+function isNavItemVisible(
+  item: NavItem,
+  roleTier: RoleTier,
+  canManageFinance: boolean,
+  hasPulseAccess: boolean,
+) {
   if (!item.visibility || item.visibility === "all") return true;
   if (item.visibility === "admin") return roleTier === "admin";
   if (item.visibility === "admin_or_finance") return roleTier === "admin" || canManageFinance;
+  if (item.visibility === "pulse") return hasPulseAccess;
   return roleTier === "admin" || roleTier === "department_manager";
 }
 
@@ -93,6 +103,7 @@ type SidebarProps = {
   systemRoleLabel: string;
   roleTier: RoleTier;
   canManageFinance: boolean;
+  hasPulseAccess: boolean;
   onSignOut: () => Promise<void>;
   notifications: NotificationListItem[];
   unreadNotificationCount: number;
@@ -106,6 +117,7 @@ export function Sidebar({
   systemRoleLabel,
   roleTier,
   canManageFinance,
+  hasPulseAccess,
   onSignOut,
   notifications,
   unreadNotificationCount,
@@ -139,7 +151,7 @@ export function Sidebar({
 
   const navGroups = NAV_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter((item) => isNavItemVisible(item, roleTier, canManageFinance)),
+    items: group.items.filter((item) => isNavItemVisible(item, roleTier, canManageFinance, hasPulseAccess)),
   })).filter((group) => group.items.length > 0);
 
   return (

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { getSectionDeadlineHistoryAction } from "@/lib/projects/actions";
 import type { SectionDeadlineChangeItem } from "@/lib/projects/queries";
+import { SHIFT_REASON_META } from "@/lib/projects/shift-reasons";
 
 function formatDate(date: Date | null) {
   if (!date) return "не задан";
@@ -64,7 +65,16 @@ export function SectionDeadlineHistoryButton({ sectionId }: { sectionId: string 
                   {" → "}
                   <span className="font-medium">{formatDate(item.newDeadline)}</span>
                 </p>
-                {item.reason ? <p className="text-sm">Причина: {item.reason}</p> : null}
+                {item.reasonCategory ? (
+                  <p className="text-sm">
+                    Причина: {SHIFT_REASON_META[item.reasonCategory].label}
+                    <span className="text-xs text-muted-foreground">
+                      {" "}
+                      · {SHIFT_REASON_META[item.reasonCategory].external ? "внешняя" : "внутренняя"}
+                    </span>
+                  </p>
+                ) : null}
+                {item.comment ? <p className="text-sm text-muted-foreground">{item.comment}</p> : null}
                 <p className="text-xs text-muted-foreground">
                   {item.changedByName} · {formatDateTime(item.createdAt)}
                 </p>

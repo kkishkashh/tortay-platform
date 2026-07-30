@@ -105,6 +105,7 @@ model User {
   outsourcersAddedToProjects ProjectOutsourcer[]
   auditLogEntriesAsActor   AuditLog[]
   sectionDeadlineChanges   SectionDeadlineChange[]
+  sectionPulses            SectionPulse[]
 
   @@map("users")
 }
@@ -215,29 +216,81 @@ model Section {
   comments          Comment[]
   paymentsTriggered Payment[]
   deadlineChanges   SectionDeadlineChange[]
+  pulses            SectionPulse[]
 
   @@map("sections")
 }
 
+// Причина сдвига срока — из прототипа ProjecTeam департамента Архитектуры
+// (2026-07-30): деление на внешние (срок "съел" не проектировщик — можно
+// предъявить Заказчику при обсуждении переноса) и внутренние (в т.ч.
+// "творческая проработка" — поиск решения, легальная причина, а не
+// простой). Общий для всей компании список — не только для Архитектуры,
+// но остальные разделы им просто не обязаны пользоваться (reasonCategory
+// nullable).
+enum ShiftReasonCategory {
+  ПРАВКИ_ЗАКАЗЧИКА          // внешняя
+  ИЗМЕНЕНИЕ_ПРОГРАММЫ       // внешняя — изменение функциональной программы
+  НЕТ_ИСХОДНЫХ_ДАННЫХ       // внешняя — нет ТУ / ГПЗУ / исходных данных
+  ЗАМЕЧАНИЯ_ЭКСПЕРТИЗЫ      // внешняя
+  СОГЛАСОВАНИЕ_ГОСОРГАНОВ   // внешняя
+  СМЕЖНИКИ_СУБПОДРЯД        // внешняя
+  ТВОРЧЕСКАЯ_ПРОРАБОТКА     // внутренняя — поиск решения, это работа, не простой
+  ВНУТРЕННИЕ_ПРИЧИНЫ        // внутренняя — прочее на стороне команды
+}
+
 // История изменений срока раздела (по просьбе Камилы: "был такой-то срок,
 // не успели, продлили — нужна причина продления"). Пишем запись при КАЖДОМ
-// изменении deadline, но reason обязателен только когда это реально
+// изменении deadline, но reasonCategory обязателен только когда это реально
 // продление (новый срок позже старого) — см. lib/projects/actions.ts::
-// updateSectionDatesAction. reason нужен, чтобы просмотр истории
-// показывал не просто "было/стало", а объяснение.
+// updateSectionDatesAction. comment — свободный текст поверх категории
+// ("что именно произошло"), всегда необязателен.
 model SectionDeadlineChange {
-  id               String   @id @default(uuid())
+  id               String                @id @default(uuid())
   sectionId        String
-  section          Section  @relation(fields: [sectionId], references: [id])
+  section          Section               @relation(fields: [sectionId], references: [id])
   previousDeadline DateTime?
   newDeadline      DateTime?
-  reason           String?
+  reasonCategory   ShiftReasonCategory?
+  comment          String?
   changedByUserId  String
-  changedByUser    User     @relation(fields: [changedByUserId], references: [id])
-  createdAt        DateTime @default(now())
+  changedByUser    User                  @relation(fields: [changedByUserId], references: [id])
+  createdAt        DateTime              @default(now())
 
   @@index([sectionId])
   @@map("section_deadline_changes")
+}
+
+// "Пульс недели" (2026-07-30, департамент Архитектуры, см.
+// Department.usesPulseTracking) — еженедельный сигнал состояния раздела
+// вместо ежедневных отчётов. Один сигнал на раздел за ISO-неделю
+// (@@unique) — повторная отметка на той же неделе просто обновляет
+// запись, не плодит дубли. Отсутствие записи за неделю — НЕ нарушение
+// (см. lib/pulse/queries.ts) — "нет сигнала" считается нейтральным
+// состоянием, не тревожным.
+enum PulseSignal {
+  ЗЕЛЁНЫЙ  // в графике
+  ЖЁЛТЫЙ   // есть трение
+  КРАСНЫЙ  // нужна помощь
+}
+
+model SectionPulse {
+  id        String      @id @default(uuid())
+  sectionId String
+  section   Section     @relation(fields: [sectionId], references: [id])
+  // ISO-неделя вида "2026-W31" — считается на сервере (см. lib/pulse/week.ts),
+  // не полагаемся на часовой пояс браузера.
+  isoWeek   String
+  signal    PulseSignal
+  note      String?
+  authorId  String
+  author    User        @relation(fields: [authorId], references: [id])
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([sectionId, isoWeek])
+  @@index([sectionId])
+  @@map("section_pulses")
 }
 
 enum TaskStatus {
@@ -435,6 +488,14 @@ model Department {
   // департамента не может назначать Лидов, пока администратор явно не
   // включит здесь (см. app/(dashboard)/departments/[id]/settings-tab.tsx).
   allowsLeadRole Boolean @default(false)
+
+  // Включает "Пульс недели" (2026-07-30, по запросу департамента
+  // Архитектуры через готовый прототип ProjecTeam) — еженедельный
+  // сигнал-статус по разделам этого департамента вместо ежедневных
+  // отчётов, см. lib/pulse/*. Выключено по умолчанию — опциональная
+  // фича для департаментов, которые сами её попросили, не навязывается
+  // остальным.
+  usesPulseTracking Boolean @default(false)
 
   employees         User[]                       @relation("DepartmentEmployees")
   taskTemplateItems DepartmentTaskTemplateItem[]

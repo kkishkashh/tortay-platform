@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { ShiftReasonCategory } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,8 +14,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { updateSectionDatesAction } from "@/lib/projects/actions";
+import { SHIFT_REASON_META, SHIFT_REASON_ORDER } from "@/lib/projects/shift-reasons";
 
 import { SectionDeadlineHistoryButton } from "./section-deadline-history-button";
 
@@ -38,7 +47,8 @@ export function SectionDatesFields({
   // пользователь успел ввести в <input type="date">.
   const [currentDeadline, setCurrentDeadline] = useState(deadline);
   const [pendingDeadline, setPendingDeadline] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
+  const [reasonCategory, setReasonCategory] = useState<ShiftReasonCategory | "">("");
+  const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function handleStartDateChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -66,18 +76,25 @@ export function SectionDatesFields({
   }
 
   function handleConfirmExtension() {
-    if (!reason.trim()) {
-      setError("Укажите причину продления");
+    if (!reasonCategory) {
+      setError("Выберите причину продления");
       return;
     }
     setError(null);
     const value = pendingDeadline;
     startTransition(async () => {
       try {
-        await updateSectionDatesAction(sectionId, toDateInputValue(startDate) || null, value, reason.trim());
+        await updateSectionDatesAction(
+          sectionId,
+          toDateInputValue(startDate) || null,
+          value,
+          reasonCategory,
+          comment.trim(),
+        );
         setCurrentDeadline(value ? new Date(value) : null);
         setPendingDeadline(null);
-        setReason("");
+        setReasonCategory("");
+        setComment("");
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Не удалось продлить срок");
       }
@@ -86,7 +103,8 @@ export function SectionDatesFields({
 
   function handleCancelExtension() {
     setPendingDeadline(null);
-    setReason("");
+    setReasonCategory("");
+    setComment("");
     setError(null);
   }
 
@@ -116,18 +134,37 @@ export function SectionDatesFields({
           <DialogHeader>
             <DialogTitle>Причина продления срока</DialogTitle>
             <DialogDescription>
-              Новый срок позже текущего — укажите, почему раздел продлевается, это сохранится в
-              истории.
+              Новый срок позже текущего — укажите причину, это сохранится в истории и в аналитике
+              по внешним/внутренним сдвигам.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
             <Label htmlFor="extension-reason">Причина</Label>
+            <Select
+              value={reasonCategory || null}
+              onValueChange={(value) => setReasonCategory((value as ShiftReasonCategory) ?? "")}
+              items={SHIFT_REASON_ORDER.map((k) => ({ value: k, label: SHIFT_REASON_META[k].label }))}
+            >
+              <SelectTrigger id="extension-reason" className="w-full">
+                <SelectValue placeholder="Выберите причину" />
+              </SelectTrigger>
+              <SelectContent>
+                {SHIFT_REASON_ORDER.map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {SHIFT_REASON_META[k].label}
+                    {SHIFT_REASON_META[k].external ? " · внешняя" : " · внутренняя"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="extension-comment">Что именно произошло (необязательно)</Label>
             <Textarea
-              id="extension-reason"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              id="extension-comment"
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
               rows={3}
-              autoFocus
             />
           </div>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}

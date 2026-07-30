@@ -2,7 +2,15 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { PaymentType, ProjectRole, ProjectStatus, SectionStatus, SystemRole, TaskPriority } from "@prisma/client";
+import {
+  PaymentType,
+  ProjectRole,
+  ProjectStatus,
+  SectionStatus,
+  ShiftReasonCategory,
+  SystemRole,
+  TaskPriority,
+} from "@prisma/client";
 import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
@@ -913,14 +921,18 @@ export async function updateSectionStatusAction(
 //
 // По прямой просьбе Камилы (2026-07-30): менять срок теперь может и Лид
 // ЭТОГО департамента, не только руководитель. Каждое изменение deadline
-// пишется в SectionDeadlineChange — reason обязателен, только если это
-// реально ПРОДЛЕНИЕ (новый срок позже старого, а старый уже был задан);
-// первичная простановка срока или перенос раньше причины не требуют.
+// пишется в SectionDeadlineChange — reasonCategory обязателен, только
+// если это реально ПРОДЛЕНИЕ (новый срок позже старого, а старый уже был
+// задан); первичная простановка срока или перенос раньше категории не
+// требуют. Категория (см. lib/projects/shift-reasons.ts) — из прототипа
+// ProjecTeam департамента Архитектуры: делит причины на внешние/внутренние
+// для аналитики "сколько сдвигов по вине Заказчика".
 export async function updateSectionDatesAction(
   sectionId: string,
   startDate: string | null,
   deadline: string | null,
-  reason?: string,
+  reasonCategory?: ShiftReasonCategory | null,
+  comment?: string,
 ) {
   const session = await auth();
   if (!session?.user) {
@@ -952,10 +964,10 @@ export async function updateSectionDatesAction(
   const newDeadline = deadline ? new Date(deadline) : null;
   const deadlineChanged = (section.deadline?.getTime() ?? null) !== (newDeadline?.getTime() ?? null);
   const isExtension = Boolean(section.deadline && newDeadline && newDeadline.getTime() > section.deadline.getTime());
-  const trimmedReason = reason?.trim() || null;
-  if (isExtension && !trimmedReason) {
+  if (isExtension && !reasonCategory) {
     throw new Error("Укажите причину продления срока");
   }
+  const trimmedComment = comment?.trim() || null;
 
   await prisma.$transaction(async (tx) => {
     await tx.section.update({
@@ -972,7 +984,8 @@ export async function updateSectionDatesAction(
           sectionId,
           previousDeadline: section.deadline,
           newDeadline,
-          reason: trimmedReason,
+          reasonCategory: reasonCategory ?? null,
+          comment: trimmedComment,
           changedByUserId: session.user.id,
         },
       });
