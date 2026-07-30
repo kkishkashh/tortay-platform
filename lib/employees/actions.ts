@@ -280,6 +280,34 @@ async function canActOnEmployee(
   return !!managed;
 }
 
+// Task 1.4 (PRD #3 Phase 6, allow-list hardening): в отличие от
+// canActOnEmployee выше, здесь сознательно НЕТ self-ветки — "кадровые
+// данные" (ФИО/должность/дата рождения/департамент) редактирует
+// администратор, руководитель ЕГО департамента или финансовый
+// руководитель, но НЕ сам сотрудник (UI это уже скрывает — canEditDetails
+// в employees/[id]/page.tsx не включает isSelf, — но до этой правки
+// updateEmployeeDetailsAction по ошибке переиспользовал canActOnEmployee
+// с его self-веткой, так что прямой вызов action в обход UI позволял
+// сотруднику самому себе сменить департамент/ФИО/должность).
+async function canManageEmployeeDetails(
+  sessionUser: { id: string; systemRole: SystemRole },
+  targetUserId: string,
+) {
+  if (sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) return true;
+
+  const target = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { homeDepartmentId: true },
+  });
+  if (!target?.homeDepartmentId) return false;
+
+  const managed = await prisma.department.findFirst({
+    where: { id: target.homeDepartmentId, managerId: sessionUser.id },
+    select: { id: true },
+  });
+  return !!managed;
+}
+
 // Контактные данные (email/телефон) — их может менять сам сотрудник в
 // своём кабинете, администратор, или руководитель его департамента.
 // Остальные, "кадровые", поля — см. updateEmployeeDetailsAction.
@@ -331,7 +359,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
   const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
   const isFinanceManager = await canManageFinance(session.user);
 
-  if (!(await canActOnEmployee(session.user, userId)) && !isFinanceManager) {
+  if (!(await canManageEmployeeDetails(session.user, userId)) && !isFinanceManager) {
     throw new Error("Недостаточно прав");
   }
 
