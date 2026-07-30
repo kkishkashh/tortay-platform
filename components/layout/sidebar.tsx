@@ -22,6 +22,7 @@ import {
   ScrollText,
   Activity,
   GanttChartSquare,
+  Users2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/pulse", label: "Пульс недели", icon: Activity, visibility: "pulse" },
       { href: "/gantt", label: "Гант", icon: GanttChartSquare, visibility: "pulse" },
+      { href: "/team", label: "Команда", icon: Users2, visibility: "pulse" },
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2 },
       { href: "/employees", label: "Сотрудники", icon: Users },
