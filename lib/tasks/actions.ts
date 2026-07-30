@@ -6,6 +6,7 @@ import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { logActivity } from "@/lib/activity/log";
+import { isPrivilegedOverride, recordAuditLog } from "@/lib/audit/log";
 import {
   sendDeadlineChangedEmail,
   sendTaskApprovedEmail,
@@ -160,6 +161,7 @@ async function loadTaskForPermissionCheck(taskId: string) {
       title: true,
       deadline: true,
       assigneeMemberId: true,
+      assignedByUserId: true,
       section: {
         select: {
           id: true,
@@ -204,6 +206,14 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
   const isReassignment =
     fields.assigneeMemberId !== null && fields.assigneeMemberId !== task.assigneeMemberId;
   const newAssignee = isReassignment ? assigneeUser : null;
+  const isUnassignment = fields.assigneeMemberId === null && task.assigneeMemberId !== null;
+  // Task 1.1 (аудит-лог): вмешательство в чужую задачу — исполнителя меняет
+  // администратор/бухгалтер (см. isPrivilegedOverride), а задачу изначально
+  // назначил КТО-ТО ДРУГОЙ (обычно руководитель департамента).
+  const isOverride =
+    isPrivilegedOverride(session.user) &&
+    !!task.assignedByUserId &&
+    task.assignedByUserId !== session.user.id;
 
   // Срок считается "изменённым" только когда исполнитель НЕ меняется в этом
   // же вызове — при реассайне новый исполнитель уже получает
@@ -242,6 +252,16 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
         taskId: task.id,
         taskTitle: fields.title,
         projectName: task.section.project.name,
+      });
+    }
+
+    if (isReassignment || isUnassignment) {
+      await recordAuditLog(tx, {
+        actorId: session.user.id,
+        action: isReassignment ? "task_reassign" : "task_unassign",
+        targetType: "Task",
+        targetId: task.id,
+        isOverride,
       });
     }
   });

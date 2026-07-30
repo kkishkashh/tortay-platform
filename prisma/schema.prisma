@@ -91,6 +91,7 @@ model User {
   tasksAssignedByMe        Task[]         @relation("TaskAssignedBy")
   personalTasks            PersonalTask[]
   outsourcersAddedToProjects ProjectOutsourcer[]
+  auditLogEntriesAsActor   AuditLog[]
 
   @@map("users")
 }
@@ -334,6 +335,32 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// ============================================================
+// БЛОК 1.7: Аудит-лог (PRD #3, Epic 6.1/1.1/6.3) — привилегированные
+// действия (смена системной роли/финансового доступа, переназначение
+// руководителя департамента, вмешательство администратора/бухгалтера в
+// чужую задачу). Только добавочная запись, из кода не редактируется и
+// не удаляется. targetId — свободная строка, НЕ внешний ключ: цель
+// (сотрудник, департамент, задача) может быть позже жёстко удалена
+// (см. Task 1.2), история при этом не должна ломаться.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  // true — это привилегированное вмешательство в чужую зону
+  // ответственности (см. lib/audit/log.ts::isPrivilegedOverride), а не
+  // обычное действие в рамках своих полномочий.
+  isOverride Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_log")
 }
 
 // ============================================================

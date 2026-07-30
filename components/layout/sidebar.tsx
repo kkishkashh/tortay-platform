@@ -19,6 +19,7 @@ import {
   Bell,
   ListTodo,
   Calendar,
+  ScrollText,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -71,6 +72,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Финансы",
     items: [{ href: "/contracts", label: "Договоры", icon: FileText, visibility: "admin_or_finance" }],
+  },
+  {
+    label: "Администрирование",
+    items: [{ href: "/audit-log", label: "Аудит-лог", icon: ScrollText, visibility: "admin" }],
   },
 ];
 

@@ -8,6 +8,7 @@ import { del } from "@vercel/blob";
 
 import { auth } from "@/auth";
 import { generateTemporaryPassword } from "@/lib/auth/generate-temporary-password";
+import { isPrivilegedOverride, recordAuditLog } from "@/lib/audit/log";
 import { sendEmployeeCreatedEmail, sendPasswordResetEmail, sendPositionChangedEmail } from "@/lib/email/send";
 import { notifyEmployeeCreated, notifyPasswordReset, notifyPositionChanged } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
@@ -306,7 +307,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
 
   const previous = await prisma.user.findUnique({
     where: { id: userId },
-    select: { homeDepartmentId: true, position: true, email: true },
+    select: { homeDepartmentId: true, position: true, email: true, systemRole: true, financeAccess: true },
   });
 
   await prisma.$transaction(async (tx) => {
@@ -327,6 +328,28 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
     // null) — там уведомлять не о чем.
     if (position && position !== previous?.position && userId !== session.user.id) {
       await notifyPositionChanged(tx, { userId, actorId: session.user.id, position });
+    }
+
+    // Task 6.3 (аудит-лог): смена системной роли/финансового доступа —
+    // только реальное изменение значения (diff old vs new), не каждое
+    // сохранение формы.
+    if (systemRole !== undefined && systemRole !== previous?.systemRole) {
+      await recordAuditLog(tx, {
+        actorId: session.user.id,
+        action: "employee_role_change",
+        targetType: "User",
+        targetId: userId,
+        isOverride: isPrivilegedOverride(session.user) && userId !== session.user.id,
+      });
+    }
+    if (financeAccess !== undefined && financeAccess !== previous?.financeAccess) {
+      await recordAuditLog(tx, {
+        actorId: session.user.id,
+        action: "employee_finance_access_change",
+        targetType: "User",
+        targetId: userId,
+        isOverride: isPrivilegedOverride(session.user) && userId !== session.user.id,
+      });
     }
   });
 

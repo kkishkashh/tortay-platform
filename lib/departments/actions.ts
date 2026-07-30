@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma, TaskStackCategory } from "@prisma/client";
 
 import { auth } from "@/auth";
+import { isPrivilegedOverride, recordAuditLog } from "@/lib/audit/log";
 import { sendDepartmentAssignedEmail } from "@/lib/email/send";
 import { notifyDepartmentAssigned } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
@@ -117,9 +118,31 @@ export async function assignDepartmentManagerAction(
     throw new Error("Назначать руководителя департамента может только администратор");
   }
 
-  await prisma.department.update({
+  const previous = await prisma.department.findUnique({
     where: { id: departmentId },
-    data: { managerId },
+    select: { managerId: true },
+  });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.department.update({
+      where: { id: departmentId },
+      data: { managerId },
+    });
+
+    // Task 1.1 (аудит-лог): переназначение департамента, у которого уже
+    // был ДРУГОЙ руководитель — не первичное назначение "с нуля".
+    if (previous?.managerId !== managerId) {
+      await recordAuditLog(tx, {
+        actorId: session.user.id,
+        action: "department_manager_reassign",
+        targetType: "Department",
+        targetId: departmentId,
+        isOverride:
+          isPrivilegedOverride(session.user) &&
+          !!previous?.managerId &&
+          previous.managerId !== session.user.id,
+      });
+    }
   });
 
   revalidatePath("/departments");
