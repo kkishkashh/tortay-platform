@@ -12,7 +12,7 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
-import { getDepartments } from "@/lib/departments/queries";
+import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/queries";
 import { getPositions } from "@/lib/positions/queries";
 import { getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
@@ -79,9 +79,17 @@ export default async function EmployeeProfilePage({
     ? await canManageFinance(session.user)
     : false;
 
-  // Личный кабинет — только свой, или (для админа/руководителя его
-  // департамента/финансового руководителя) чужой.
-  if (!isSelf && !isHead && !isDeptManagerOfEmployee && !isFinanceManager) {
+  // Task 2.1/2.2 (PRD #3 Phase 5) — руководитель ЛЮБОГО департамента (не
+  // обязательно этого) тоже может открыть чужой профиль, но только на
+  // просмотр: canManage ниже по-прежнему смотрит на isDeptManagerOfEmployee
+  // (СВОЙ департамент), поэтому кнопки редактирования для чужого
+  // сотрудника не появятся — только рендер страницы разрешён шире.
+  const roleTier = session?.user ? await getCurrentUserRoleTier(session.user) : "employee";
+  const isAnyDeptManager = roleTier === "department_manager";
+
+  // Личный кабинет — свой, или (для админа/руководителя его департамента/
+  // финансового руководителя/любого другого руководителя на просмотр) чужой.
+  if (!isSelf && !isHead && !isDeptManagerOfEmployee && !isFinanceManager && !isAnyDeptManager) {
     redirect("/employees");
   }
 

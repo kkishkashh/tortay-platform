@@ -46,33 +46,7 @@ export type EmployeeListItem = {
 // сузили). Названия ЧУЖИХ департаментов сотрудник по-прежнему видит на
 // /departments (см. department-card.tsx — там для не-руководителей только
 // имя, без состава).
-export async function getEmployees(): Promise<EmployeeListItem[]> {
-  const session = await auth();
-  const tier = await getCurrentUserRoleTier(session?.user);
-
-  let scopeWhere = {};
-  if (tier === "department_manager" && session?.user) {
-    const managed = await getManagedDepartment(session.user.id);
-    scopeWhere = managed
-      ? {
-          OR: [
-            { managedDepartments: { none: {} }, homeDepartmentId: managed.id },
-            { id: session.user.id },
-          ],
-        }
-      : { id: session.user.id };
-  } else if (tier === "employee" && session?.user) {
-    const me = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { homeDepartmentId: true },
-    });
-    scopeWhere = me?.homeDepartmentId
-      ? { managedDepartments: { none: {} }, homeDepartmentId: me.homeDepartmentId }
-      : { id: session.user.id };
-  } else {
-    scopeWhere = { managedDepartments: { none: {} } };
-  }
-
+async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<EmployeeListItem[]> {
   const employees = await prisma.user.findMany({
     where: { userType: UserType.ШТАТНЫЙ, ...scopeWhere },
     select: {
@@ -115,6 +89,47 @@ export async function getEmployees(): Promise<EmployeeListItem[]> {
       workload: workloadLevel(activeProjectsCount),
     };
   });
+}
+
+export async function getEmployees(): Promise<EmployeeListItem[]> {
+  const session = await auth();
+  const tier = await getCurrentUserRoleTier(session?.user);
+
+  let scopeWhere = {};
+  if (tier === "department_manager" && session?.user) {
+    const managed = await getManagedDepartment(session.user.id);
+    scopeWhere = managed
+      ? {
+          OR: [
+            { managedDepartments: { none: {} }, homeDepartmentId: managed.id },
+            { id: session.user.id },
+          ],
+        }
+      : { id: session.user.id };
+  } else if (tier === "employee" && session?.user) {
+    const me = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { homeDepartmentId: true },
+    });
+    scopeWhere = me?.homeDepartmentId
+      ? { managedDepartments: { none: {} }, homeDepartmentId: me.homeDepartmentId }
+      : { id: session.user.id };
+  } else {
+    scopeWhere = { managedDepartments: { none: {} } };
+  }
+
+  return queryEmployeeList(scopeWhere);
+}
+
+// Task 2.1/2.2 (PRD #3 Phase 5) — вкладка "Вся компания" на /employees:
+// та же выборка, что видит администратор в getEmployees(), но доступна
+// ЛЮБОМУ руководителю департамента для ПРОСМОТРА (вызывающий код рендерит
+// её в read-only режиме — без кнопок редактирования/архива/сброса
+// пароля). Рядовым сотрудникам эта функция не вызывается вообще (страница
+// её не запрашивает для их роли) — их видимость остаётся сужена до
+// своего департамента, как и раньше.
+export async function getCompanyWideEmployees(): Promise<EmployeeListItem[]> {
+  return queryEmployeeList({ managedDepartments: { none: {} } });
 }
 
 export type EmployeeProfile = {

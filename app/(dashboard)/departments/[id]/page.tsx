@@ -9,6 +9,7 @@ import {
   canManageDepartments,
 } from "@/lib/departments/permissions";
 import {
+  getCurrentUserRoleTier,
   getDepartmentById,
   getDepartmentDashboardStats,
   getDepartmentProjects,
@@ -45,10 +46,15 @@ export default async function DepartmentDetailPage({
 
   const isAdmin = canManageDepartments(session.user);
   const canManageDept = canManageDepartment(session.user, department);
-  if (!canManageDept) {
-    // Пока сотрудник без роли руководителя департамента не имеет здесь
-    // дела — просмотр департаментов для рядовых сотрудников появится
-    // вместе с 3-уровневым меню (см. финальные фазы плана).
+  // Task 2.1/2.2 (PRD #3 Phase 5) — руководитель ЛЮБОГО департамента (не
+  // обязательно этого) тоже может открыть страницу, но только на
+  // просмотр: canManageDept ниже по-прежнему смотрит именно на ЭТОТ
+  // департамент, поэтому кнопки редактирования/добавления не появятся у
+  // "чужого" руководителя — только рендер страницы разрешён шире. Рядовой
+  // сотрудник по-прежнему не имеет здесь дела.
+  const roleTier = await getCurrentUserRoleTier(session.user);
+  const canView = canManageDept || roleTier === "department_manager";
+  if (!canView) {
     redirect("/");
   }
 

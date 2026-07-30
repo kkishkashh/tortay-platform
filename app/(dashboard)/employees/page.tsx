@@ -2,8 +2,9 @@ import { SystemRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCurrentUserRoleTier } from "@/lib/departments/queries";
-import { getEmployees } from "@/lib/employees/queries";
+import { getCompanyWideEmployees, getEmployees } from "@/lib/employees/queries";
 import { getPositions } from "@/lib/positions/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
@@ -11,13 +12,25 @@ import { EmployeesExplorer } from "./employees-explorer";
 import { NewEmployeeDialog } from "./new-employee-dialog";
 
 export default async function EmployeesPage() {
-  const [session, employees, positions] = await Promise.all([auth(), getEmployees(), getPositions()]);
+  const session = await auth();
   const roleTier = await getCurrentUserRoleTier(session?.user);
 
   // Руководитель департамента тоже может добавлять сотрудников — но только
   // в свой департамент (см. lib/employees/actions.ts::createEmployeeAction).
   const isAdmin = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
   const canAddEmployees = isAdmin || roleTier === "department_manager";
+
+  // Task 2.1/2.2 (PRD #3 Phase 5) — "Вся компания" только для руководителей
+  // департаментов (не рядовых сотрудников, см. project-prd3 memory: это
+  // деление сознательно НЕ трогаем для employee-уровня). Админ и так видит
+  // всех через обычный getEmployees(), вторая вкладка ему не нужна.
+  const showCompanyWideTab = roleTier === "department_manager";
+
+  const [employees, companyWideEmployees, positions] = await Promise.all([
+    getEmployees(),
+    showCompanyWideTab ? getCompanyWideEmployees() : Promise.resolve([]),
+    getPositions(),
+  ]);
 
   return (
     <>
@@ -27,7 +40,28 @@ export default async function EmployeesPage() {
         action={canAddEmployees ? <NewEmployeeDialog isAdmin={isAdmin} positions={positions} /> : undefined}
       />
       <div className="p-8">
-        {employees.length === 0 ? (
+        {showCompanyWideTab ? (
+          <Tabs defaultValue="mine">
+            <TabsList>
+              <TabsTrigger value="mine">Мой отдел</TabsTrigger>
+              <TabsTrigger value="company">Вся компания</TabsTrigger>
+            </TabsList>
+            <TabsContent value="mine" className="mt-4">
+              {employees.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Сотрудников пока нет.</p>
+              ) : (
+                <EmployeesExplorer employees={employees} />
+              )}
+            </TabsContent>
+            <TabsContent value="company" className="mt-4">
+              {companyWideEmployees.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Сотрудников пока нет.</p>
+              ) : (
+                <EmployeesExplorer employees={companyWideEmployees} />
+              )}
+            </TabsContent>
+          </Tabs>
+        ) : employees.length === 0 ? (
           <p className="text-sm text-muted-foreground">Сотрудников пока нет.</p>
         ) : (
           <EmployeesExplorer employees={employees} />
