@@ -28,7 +28,7 @@ export async function getTeamWorkload(user: { id: string }): Promise<TeamWorkloa
 
   const employees = await prisma.user.findMany({
     where: { homeDepartmentId: { in: departmentIds } },
-    select: { id: true, fullName: true },
+    select: { id: true, fullName: true, homeDepartment: { select: { code: true } } },
     orderBy: { fullName: "asc" },
   });
   if (employees.length === 0) return [];
@@ -87,7 +87,7 @@ export async function getTeamWorkload(user: { id: string }): Promise<TeamWorkloa
         id: employee.id,
         fullName: employee.fullName,
         activeProjectsCount,
-        level: workloadLevel(activeProjectsCount),
+        level: workloadLevel(activeProjectsCount, employee.homeDepartment?.code),
         pulse,
       };
     })

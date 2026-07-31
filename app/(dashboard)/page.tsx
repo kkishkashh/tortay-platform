@@ -61,7 +61,7 @@ export default async function DashboardPage() {
   if (roleTier === "department_manager") {
     const department = await prisma.department.findFirst({
       where: { managers: { some: { id: session!.user.id } } },
-      select: { id: true, name: true, color: true, icon: true },
+      select: { id: true, name: true, color: true, icon: true, code: true },
     });
     if (!department) {
       notFound();
@@ -69,7 +69,7 @@ export default async function DashboardPage() {
 
     const [stats, workload] = await Promise.all([
       getDepartmentDashboardStats(department.id),
-      getDepartmentEmployeeWorkload(department.id),
+      getDepartmentEmployeeWorkload(department.id, department.code),
     ]);
 
     return (
@@ -95,12 +95,14 @@ export default async function DashboardPage() {
     if (reportIds.length > 0) {
       const me = await prisma.user.findUnique({
         where: { id: session!.user.id },
-        select: { homeDepartment: { select: { id: true, name: true, color: true, icon: true } } },
+        select: {
+          homeDepartment: { select: { id: true, name: true, color: true, icon: true, code: true } },
+        },
       });
       if (me?.homeDepartment) {
         const [stats, workload] = await Promise.all([
           getLeadDashboardStats(session!.user.id),
-          getLeadEmployeeWorkload(session!.user.id),
+          getLeadEmployeeWorkload(session!.user.id, me.homeDepartment.code),
         ]);
 
         return (

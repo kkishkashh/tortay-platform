@@ -8,9 +8,19 @@ export type WorkloadLevel = "low" | "medium" | "high";
 // считаться и раскрашиваться одинаково в обоих местах.
 const WORKLOAD_THRESHOLDS = { medium: 2, high: 4 } as const;
 
-export function workloadLevel(activeProjectsCount: number): WorkloadLevel {
-  if (activeProjectsCount >= WORKLOAD_THRESHOLDS.high) return "high";
-  if (activeProjectsCount >= WORKLOAD_THRESHOLDS.medium) return "medium";
+// Департамент Архитектуры работает по более строгому порогу — по прямой
+// просьбе Камилы (2026-07-31): "для ведущего и архитектора — 1 проект это
+// норма, 2 уже загружен", без промежуточной "средней" загрузки — сразу
+// "Перегружен". Только для АР, остальные департаменты — на общем пороге.
+const AR_WORKLOAD_THRESHOLDS = { medium: 2, high: 2 } as const;
+
+export function workloadLevel(
+  activeProjectsCount: number,
+  departmentCode?: string | null,
+): WorkloadLevel {
+  const thresholds = departmentCode === "AR" ? AR_WORKLOAD_THRESHOLDS : WORKLOAD_THRESHOLDS;
+  if (activeProjectsCount >= thresholds.high) return "high";
+  if (activeProjectsCount >= thresholds.medium) return "medium";
   return "low";
 }
 

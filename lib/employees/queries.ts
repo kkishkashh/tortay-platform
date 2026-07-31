@@ -58,6 +58,7 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       position: true,
       avatarUrl: true,
       isActive: true,
+      homeDepartment: { select: { code: true } },
       projectMemberships: {
         select: { project: { select: { status: true } } },
       },
@@ -86,7 +87,7 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       activeProjectsCount,
       completedProjectsCount,
       totalProjectsCount: statuses.length,
-      workload: workloadLevel(activeProjectsCount),
+      workload: workloadLevel(activeProjectsCount, employee.homeDepartment?.code),
     };
   });
 }
@@ -192,7 +193,12 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       financeAccess: true,
       isActive: true,
       reportsTo: { select: { fullName: true } },
-      homeDepartment: { select: { managers: { select: { fullName: true }, orderBy: { fullName: "asc" } } } },
+      homeDepartment: {
+        select: {
+          code: true,
+          managers: { select: { fullName: true }, orderBy: { fullName: "asc" } },
+        },
+      },
       projectMemberships: {
         select: {
           project: { select: { id: true, name: true, status: true } },
@@ -260,7 +266,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       totalProjectsCount === 0
         ? 0
         : Math.round((completedProjectsCount / totalProjectsCount) * 100),
-    workload: workloadLevel(activeProjectsCount),
+    workload: workloadLevel(activeProjectsCount, user.homeDepartment?.code),
     activeTaskCount,
     lateTaskCount,
     taskWorkload: taskWorkloadLevel(activeTaskCount),

@@ -105,7 +105,7 @@ export async function getEmployeeWorkload(): Promise<EmployeeWorkload[]> {
   const [employees, activeMemberships] = await Promise.all([
     prisma.user.findMany({
       where: { userType: UserType.ШТАТНЫЙ },
-      select: { id: true, fullName: true },
+      select: { id: true, fullName: true, homeDepartment: { select: { code: true } } },
     }),
     prisma.projectMember.findMany({
       where: { project: { status: ProjectStatus.В_РАБОТЕ } },
@@ -125,7 +125,7 @@ export async function getEmployeeWorkload(): Promise<EmployeeWorkload[]> {
         id: employee.id,
         fullName: employee.fullName,
         activeProjectsCount,
-        level: workloadLevel(activeProjectsCount),
+        level: workloadLevel(activeProjectsCount, employee.homeDepartment?.code),
       };
     })
     .sort((a, b) => b.activeProjectsCount - a.activeProjectsCount);
@@ -136,6 +136,7 @@ export async function getEmployeeWorkload(): Promise<EmployeeWorkload[]> {
 // Phase 7), чтобы переиспользовать компонент WorkloadBoard без изменений.
 export async function getDepartmentEmployeeWorkload(
   departmentId: string,
+  departmentCode?: string | null,
 ): Promise<EmployeeWorkload[]> {
   const [employees, activeMemberships] = await Promise.all([
     prisma.user.findMany({
@@ -160,7 +161,7 @@ export async function getDepartmentEmployeeWorkload(
         id: employee.id,
         fullName: employee.fullName,
         activeProjectsCount,
-        level: workloadLevel(activeProjectsCount),
+        level: workloadLevel(activeProjectsCount, departmentCode),
       };
     })
     .sort((a, b) => b.activeProjectsCount - a.activeProjectsCount);

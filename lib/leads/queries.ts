@@ -207,7 +207,7 @@ export async function getLeadDashboardStats(leadUserId: string): Promise<Departm
 
 // Аналог lib/dashboard/queries.ts::getDepartmentEmployeeWorkload, но
 // скоупится по подчинённым Лида, а не по департаменту целиком.
-export async function getLeadEmployeeWorkload(leadUserId: string) {
+export async function getLeadEmployeeWorkload(leadUserId: string, departmentCode?: string | null) {
   const reportIds = await getLeadReportIds(leadUserId);
   if (reportIds.length === 0) return [];
 
@@ -231,7 +231,7 @@ export async function getLeadEmployeeWorkload(leadUserId: string) {
         id: employee.id,
         fullName: employee.fullName,
         activeProjectsCount,
-        level: workloadLevel(activeProjectsCount),
+        level: workloadLevel(activeProjectsCount, departmentCode),
       };
     })
     .sort((a, b) => b.activeProjectsCount - a.activeProjectsCount);
