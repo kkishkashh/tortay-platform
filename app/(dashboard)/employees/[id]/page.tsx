@@ -22,6 +22,7 @@ import { getTasksForUser } from "@/lib/tasks/queries";
 import { UserAvatar } from "@/components/ui/user-avatar";
 import { WORKLOAD_META } from "@/lib/workload";
 import { AlertTriangle, FolderKanban, Gauge, ListChecks, ListTodo, Percent } from "lucide-react";
+import { DepartmentIcon } from "@/components/departments/department-icon";
 
 import { ContactForm } from "@/components/employees/contact-form";
 import { DetailsForm } from "@/components/employees/details-form";
@@ -102,6 +103,7 @@ export default async function EmployeeProfilePage({
   const canEditSystemRole = isHead;
   const workloadMeta = WORKLOAD_META[employee.workload];
   const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
+  const employeeDepartment = departments.find((d) => d.id === employee.homeDepartmentId) ?? null;
 
   const [tasks, comments, timeline, manageableProjects] = await Promise.all([
     getTasksForUser(employee.id),
@@ -157,6 +159,17 @@ export default async function EmployeeProfilePage({
             <div className="flex items-center gap-2">
               <p className="text-lg font-medium">{employee.fullName}</p>
               {!employee.isActive ? <Badge variant="secondary">В архиве</Badge> : null}
+              {employeeDepartment ? (
+                <Link href={`/departments/${employeeDepartment.id}`}>
+                  <span
+                    className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: employeeDepartment.color }}
+                  >
+                    <DepartmentIcon name={employeeDepartment.icon} className="size-3" />
+                    {employeeDepartment.name}
+                  </span>
+                </Link>
+              ) : null}
             </div>
             <p className="text-sm text-muted-foreground">
               {employee.position ?? "Должность не указана"} ·{" "}
