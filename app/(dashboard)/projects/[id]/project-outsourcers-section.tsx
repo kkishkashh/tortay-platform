@@ -35,7 +35,10 @@ import type { OutsourcerPickerItem } from "@/lib/project-outsourcers/queries";
 import type { ProjectOutsourcerItem } from "@/lib/project-outsourcers/queries";
 import { cn, formatTenge } from "@/lib/utils";
 
+// 40/40/20 — самая частая разбивка на практике, поэтому идёт первой в
+// списке пресетов и используется по умолчанию.
 const PAYMENT_PRESETS: { label: string; percents: [number, number, number] }[] = [
+  { label: "40 / 40 / 20", percents: [40, 40, 20] },
   { label: "60 / 20 / 20", percents: [60, 20, 20] },
   { label: "40 / 30 / 30", percents: [40, 30, 30] },
 ];
@@ -52,8 +55,8 @@ function AddOutsourcerDialog({
   const [open, setOpen] = useState(false);
   const [state, formAction, isPending] = useActionState(addOutsourcerToProjectAction, initialAddState);
   const lastHandledSuccessCount = useRef(state.successCount);
-  const [percent1, setPercent1] = useState(60);
-  const [percent2, setPercent2] = useState(20);
+  const [percent1, setPercent1] = useState(40);
+  const [percent2, setPercent2] = useState(40);
   const [percent3, setPercent3] = useState(20);
   const percentSum = percent1 + percent2 + percent3;
   const sumIsValid = percentSum === 100;

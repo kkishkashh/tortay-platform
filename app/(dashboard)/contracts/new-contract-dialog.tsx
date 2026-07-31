@@ -49,6 +49,19 @@ export function NewContractDialog({
   const totalNumber = Number(totalAmount) || 0;
   const sumMatches = totalNumber > 0 && Math.round(trancheSum * 100) === Math.round(totalNumber * 100);
 
+  // 40/40/20 — самая частая на практике разбивка по траншам, поэтому
+  // кнопка быстрого заполнения считает её от введённой суммы договора;
+  // остаток округления уходит в последний транш (см. тот же принцип в
+  // lib/projects/actions.ts::splitIntoTranches).
+  function applyStandardSplit() {
+    const avans = Math.round(totalNumber * 0.4);
+    const tranche2 = Math.round(totalNumber * 0.4);
+    const tranche3 = Math.round(totalNumber - avans - tranche2);
+    setAvansAmount(String(avans));
+    setTranche2Amount(String(tranche2));
+    setTranche3Amount(String(tranche3));
+  }
+
   function handleSubmit(formData: FormData) {
     setError(null);
     startTransition(async () => {
@@ -165,6 +178,17 @@ export function NewContractDialog({
                   Сумма траншей: {formatTenge(trancheSum)}
                   {totalNumber > 0 ? (sumMatches ? " ✓" : ` (нужно ${formatTenge(totalNumber)})`) : ""}
                 </span>
+              </div>
+              <div className="mb-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={applyStandardSplit}
+                  disabled={totalNumber <= 0}
+                >
+                  40 / 40 / 20
+                </Button>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="space-y-2 rounded-lg border p-3">

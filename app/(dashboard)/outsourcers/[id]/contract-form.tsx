@@ -36,7 +36,10 @@ function toDateInputValue(date: Date | null) {
   return date.toISOString().slice(0, 10);
 }
 
+// 40/40/20 — самая частая разбивка на практике, поэтому идёт первой в
+// списке пресетов и используется по умолчанию.
 const PAYMENT_PRESETS: { label: string; percents: [number, number, number] }[] = [
+  { label: "40 / 40 / 20", percents: [40, 40, 20] },
   { label: "60 / 20 / 20", percents: [60, 20, 20] },
   { label: "40 / 30 / 30", percents: [40, 30, 30] },
 ];
@@ -48,8 +51,8 @@ const PAYMENT_PRESETS: { label: string; percents: [number, number, number] }[] =
 export function OutsourcerContractForm({ outsourcer }: { outsourcer: OutsourcerContractInitial }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [percent1, setPercent1] = useState(outsourcer.paymentPercent1 ?? 60);
-  const [percent2, setPercent2] = useState(outsourcer.paymentPercent2 ?? 20);
+  const [percent1, setPercent1] = useState(outsourcer.paymentPercent1 ?? 40);
+  const [percent2, setPercent2] = useState(outsourcer.paymentPercent2 ?? 40);
   const [percent3, setPercent3] = useState(outsourcer.paymentPercent3 ?? 20);
   const percentSum = percent1 + percent2 + percent3;
   const sumIsValid = percentSum === 100;
