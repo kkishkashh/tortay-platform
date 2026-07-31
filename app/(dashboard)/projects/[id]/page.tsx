@@ -91,7 +91,13 @@ export default async function ProjectDetailPage({
 
   const canManageOutsourcers = session?.user ? await canManageFinance(session.user) : false;
   const [projectOutsourcers, outsourcerPickerOptions, contractSummary] = await Promise.all([
-    getProjectOutsourcers(id),
+    // Аутсорсеры проекта (контрагенты, суммы, транши) — видны только тем,
+    // кто их может привязывать/редактировать: раньше эти данные всегда
+    // отдавались в RSC-payload, а компонент скрывал карточку только когда
+    // список пуст, из-за чего любой участник проекта видел уже привязанных
+    // аутсорсеров. Теперь как и с getOutsourcersForPicker ниже — не отдаём
+    // то, что UI всё равно скрывает от роли.
+    canManageOutsourcers ? getProjectOutsourcers(id) : Promise.resolve([]),
     // Полный список аутсорсеров компании — только для тех, кто реально
     // может их привязывать (см. урок про getEmployeesForManagerAssignment:
     // не отдавать в RSC-payload то, что UI всё равно скрывает от роли).

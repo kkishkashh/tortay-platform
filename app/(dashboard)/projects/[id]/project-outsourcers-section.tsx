@@ -355,7 +355,11 @@ export function ProjectOutsourcersSection({
   pickerOptions: OutsourcerPickerItem[];
   canManage: boolean;
 }) {
-  if (outsourcers.length === 0 && !canManage) return null;
+  // Видимость всей секции — только для тех, кто реально может управлять
+  // аутсорсерами (canManageFinance), а не в зависимости от того, есть ли
+  // уже привязанные записи: раньше при непустом списке карточка была
+  // видна ЛЮБОМУ участнику проекта, независимо от роли.
+  if (!canManage) return null;
 
   return (
     <Card className="mt-6">
