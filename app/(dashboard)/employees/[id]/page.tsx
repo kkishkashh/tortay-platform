@@ -174,7 +174,7 @@ export default async function EmployeeProfilePage({
             <p className="text-sm text-muted-foreground">
               {employee.position ?? "Должность не указана"} ·{" "}
               {SYSTEM_ROLE_LABELS[employee.systemRole]}
-              {employee.reportsToName ? ` · Подчиняется: ${employee.reportsToName}` : ""}
+              {employee.reportsToName ? ` · Руководитель: ${employee.reportsToName}` : ""}
             </p>
           </div>
         </div>

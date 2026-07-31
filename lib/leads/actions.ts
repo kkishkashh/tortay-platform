@@ -42,7 +42,7 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
     throw new Error("В этом департаменте роль Лида не включена");
   }
   if (leadUserId === employeeId) {
-    throw new Error("Сотрудник не может подчиняться самому себе");
+    throw new Error("Сотрудник не может быть собственным Лидом");
   }
 
   if (leadUserId) {
@@ -57,14 +57,14 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
     // не может кому-то подчиняться, иначе иерархия усложняется без
     // реальной необходимости (см. план).
     if (lead.reportsToId) {
-      throw new Error("Этот сотрудник сам кому-то подчиняется — не может одновременно быть Лидом");
+      throw new Error("У этого сотрудника уже назначен свой Лид — он не может одновременно быть Лидом");
     }
     // Обратная сторона того же ограничения: сотрудника, у которого уже
-    // ЕСТЬ свои подчинённые (сам Лид), нельзя назначить чьим-то
-    // подчинённым — сначала нужно снять с него всех его подчинённых.
+    // ЕСТЬ своя команда (сам Лид), нельзя назначить в чью-то команду —
+    // сначала нужно переназначить всех сотрудников его команды.
     const employeeHasReports = await prisma.user.count({ where: { reportsToId: employeeId } });
     if (employeeHasReports > 0) {
-      throw new Error("Этот сотрудник сам руководит другими — сначала переназначьте его подчинённых");
+      throw new Error("Этот сотрудник сам руководит другими — сначала переназначьте сотрудников его команды");
     }
   }
 
@@ -159,7 +159,7 @@ export async function leadAssignTaskAction(taskId: string, assigneeMemberId: str
         select: { projectId: true, userId: true },
       });
       if (!member || member.projectId !== task.section.projectId || !reportIds.has(member.userId)) {
-        throw new Error("Можно назначать только своим подчинённым");
+        throw new Error("Можно назначать только сотрудникам своей команды");
       }
     } else {
       // Снимать назначение Лид может только со СВОЕГО подчинённого — не с
@@ -171,7 +171,7 @@ export async function leadAssignTaskAction(taskId: string, assigneeMemberId: str
           })
         : null;
       if (!currentAssignee || !reportIds.has(currentAssignee.userId)) {
-        throw new Error("Можно снимать назначение только со своих подчинённых");
+        throw new Error("Можно снимать назначение только у сотрудников своей команды");
       }
     }
   }

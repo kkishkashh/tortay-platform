@@ -114,7 +114,7 @@ export default async function DepartmentDetailPage({
         <Tabs defaultValue="employees">
           <TabsList>
             <TabsTrigger value="employees">Сотрудники</TabsTrigger>
-            <TabsTrigger value="hierarchy">Иерархия</TabsTrigger>
+            <TabsTrigger value="hierarchy">Структура</TabsTrigger>
             <TabsTrigger value="task-stack">Базовый набор задач</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>

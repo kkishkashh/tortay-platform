@@ -253,8 +253,8 @@ export async function notifyLeadPromoted(
       type: NotificationType.ЛИД_НАЗНАЧЕН,
       title: "Вас назначили Лидом",
       body: data.departmentName
-        ? `Теперь на вас числятся подчинённые сотрудники в департаменте «${data.departmentName}»`
-        : "Теперь на вас числятся подчинённые сотрудники",
+        ? `Теперь за вами закреплены сотрудники в департаменте «${data.departmentName}»`
+        : "Теперь за вами закреплены сотрудники",
     },
   });
 }
@@ -268,7 +268,7 @@ export async function notifyLeadDemoted(db: Db, data: { userId: string; actorId:
       actorId: data.actorId,
       type: NotificationType.ЛИД_СНЯТ,
       title: "Вы больше не Лид",
-      body: "Все сотрудники, которые подчинялись вам, переназначены — подчинённых больше нет.",
+      body: "Сотрудники, которые были закреплены за вами, переназначены — в вашей команде больше никого нет.",
     },
   });
 }

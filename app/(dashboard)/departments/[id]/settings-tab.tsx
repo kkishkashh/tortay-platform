@@ -27,8 +27,8 @@ export function SettingsTab({ department }: { department: DepartmentDetail }) {
         <CardContent>
           <p className="mb-4 text-sm text-muted-foreground">
             Промежуточный уровень между руководителем департамента и рядовыми сотрудниками:
-            руководитель сможет назначать Лидов на вкладке «Иерархия», а Лид — назначать задачи
-            только своим подчинённым.
+            руководитель сможет назначать Лидов на вкладке «Структура», а Лид — назначать задачи
+            только сотрудникам своей команды.
           </p>
           <LeadRoleToggle departmentId={department.id} allowsLeadRole={department.allowsLeadRole} />
         </CardContent>
