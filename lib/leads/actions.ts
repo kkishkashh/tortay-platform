@@ -44,6 +44,17 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
   if (leadUserId === employeeId) {
     throw new Error("Сотрудник не может быть собственным Лидом");
   }
+  // Руководитель департамента — тот, кто сам назначает Лидов, а не Лид сам
+  // по себе (по прямой просьбе Камилы, 2026-07-31): ни назначить
+  // руководителя чьим-то Лидом, ни переназначить самого руководителя
+  // подчинённым Лида нельзя через этот экшен.
+  const managerIds = new Set(department.managers.map((m) => m.id));
+  if (managerIds.has(employeeId)) {
+    throw new Error("Руководитель департамента не может быть чьим-то подчинённым");
+  }
+  if (leadUserId && managerIds.has(leadUserId)) {
+    throw new Error("Руководитель департамента не может быть Лидом — он сам назначает Лидов");
+  }
 
   if (leadUserId) {
     const lead = await prisma.user.findUnique({

@@ -73,13 +73,24 @@ export async function getDepartmentHierarchy(departmentId: string): Promise<Depa
     return { managers: [], leads: [], unassigned: [] };
   }
 
-  const employeeById = new Map(department.employees.map((e) => [e.id, e]));
+  // Руководитель департамента не может быть Лидом (по прямой просьбе
+  // Камилы, 2026-07-31: руководитель сам назначает Лидов и распределяет
+  // сотрудников по их командам, а не становится Лидом сам) — исключаем
+  // руководителей из пула рядовых сотрудников этого раздела: они уже
+  // показаны отдельным блоком выше, а старые reportsToId, указывающие на
+  // руководителя (назначенные до этого правила), считаем как "напрямую
+  // под руководителем", а не как Лидство.
+  const managerIds = new Set(department.managers.map((m) => m.id));
+  const rankAndFile = department.employees.filter((e) => !managerIds.has(e.id));
+  const employeeById = new Map(rankAndFile.map((e) => [e.id, e]));
   // Лид этого департамента — сотрудник, на которого указывает reportsToId
   // хотя бы одного другого сотрудника ЭТОГО ЖЕ департамента (сам Лид
   // сам ни на кого не указывает — см. ограничение 2 уровней в
   // setEmployeeLeadAction).
   const leadIds = new Set(
-    department.employees.map((e) => e.reportsToId).filter((id): id is string => id !== null),
+    rankAndFile
+      .map((e) => e.reportsToId)
+      .filter((id): id is string => id !== null && !managerIds.has(id)),
   );
 
   const leads = Array.from(leadIds)
@@ -89,13 +100,13 @@ export async function getDepartmentHierarchy(departmentId: string): Promise<Depa
       id: lead.id,
       fullName: lead.fullName,
       position: lead.position,
-      reports: department.employees
+      reports: rankAndFile
         .filter((e) => e.reportsToId === lead.id)
         .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position })),
     }));
 
-  const unassigned = department.employees
-    .filter((e) => e.reportsToId === null && !leadIds.has(e.id))
+  const unassigned = rankAndFile
+    .filter((e) => (e.reportsToId === null || managerIds.has(e.reportsToId)) && !leadIds.has(e.id))
     .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position }));
 
   return {

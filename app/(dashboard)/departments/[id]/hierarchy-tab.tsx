@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { ChevronDown, Crown } from "lucide-react";
+import { ChevronDown, Crown, ShieldCheck } from "lucide-react";
 
 import { setEmployeeLeadAction } from "@/lib/leads/actions";
 import { Badge } from "@/components/ui/badge";
@@ -141,36 +141,70 @@ export function HierarchyTab({
     });
   }
 
-  // Кандидаты "Подчиняется" для конкретного сотрудника — любой другой
-  // сотрудник департамента, который сам ни на кого не указывает
-  // reportsToId (2-уровневое ограничение, см. lib/leads/actions.ts).
+  const managerIds = new Set(hierarchy.managers.map((m) => m.id));
+
+  // Кандидаты в Лиды для конкретного сотрудника — любой другой сотрудник
+  // департамента, который сам ни на кого не указывает reportsToId
+  // (2-уровневое ограничение, см. lib/leads/actions.ts), КРОМЕ
+  // руководителей департамента — руководитель сам назначает Лидов, а не
+  // становится им (по прямой просьбе Камилы, 2026-07-31).
   function candidatesFor(employeeId: string) {
-    return employees.filter((e) => e.id !== employeeId && e.reportsToId === null);
+    return employees.filter(
+      (e) => e.id !== employeeId && e.reportsToId === null && !managerIds.has(e.id),
+    );
   }
 
   return (
     <div className="space-y-6">
-      {hierarchy.managers.map((manager) => (
-        <div key={manager.id} className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
-          <span
-            className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ backgroundColor: getAvatarColor(manager.id) }}
-          >
-            {getInitials(manager.fullName)}
-          </span>
-          <div>
-            <p className="text-sm font-medium">{manager.fullName}</p>
-            <p className="text-xs text-muted-foreground">Руководитель департамента</p>
+      {hierarchy.managers.length > 0 ? (
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {hierarchy.managers.length > 1 ? "Руководители" : "Руководитель"} — назначают Лидов и
+            распределяют сотрудников
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {hierarchy.managers.map((manager) => (
+              <div
+                key={manager.id}
+                className="overflow-hidden rounded-xl border bg-card shadow-card transition-all duration-200 hover:shadow-card-hover"
+              >
+                <div className="h-1.5 bg-linear-to-r from-[#f0ac3d] to-[#c47a12]" />
+                <div className="flex items-center gap-3 p-4">
+                  <span
+                    className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                    style={{ backgroundColor: getAvatarColor(manager.id) }}
+                  >
+                    {getInitials(manager.fullName)}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-sm font-medium">{manager.fullName}</p>
+                      <Badge variant="outline" className="gap-1">
+                        <ShieldCheck className="size-3" />
+                        Руководитель
+                      </Badge>
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {manager.position ?? "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      ))}
+      ) : null}
 
       {hierarchy.leads.length === 0 && hierarchy.unassigned.length === 0 ? (
         <p className="text-sm text-muted-foreground">В этом департаменте пока нет сотрудников.</p>
       ) : null}
 
       {hierarchy.leads.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Лиды и их команды
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {hierarchy.leads.map((lead, index) => {
             const isExpanded = expandedLeadIds.has(lead.id);
             return (
@@ -258,28 +292,29 @@ export function HierarchyTab({
               </div>
             );
           })}
+          </div>
         </div>
       ) : null}
 
       {hierarchy.unassigned.length > 0 ? (
-        <div className="space-y-2 pl-4">
-          {hierarchy.leads.length > 0 ? (
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Напрямую под руководством руководителя департамента
-            </p>
-          ) : null}
-          {hierarchy.unassigned.map((employee) => (
-            <EmployeeRow
-              key={employee.id}
-              employee={employee}
-              isLead={false}
-              currentReportsToId={null}
-              candidateLeads={candidatesFor(employee.id)}
-              canManage={canManage}
-              isPending={isPending}
-              onChange={handleChange}
-            />
-          ))}
+        <div>
+          <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Без Лида — напрямую под руководителем департамента
+          </p>
+          <div className="space-y-2 rounded-xl border bg-card p-3 shadow-card">
+            {hierarchy.unassigned.map((employee) => (
+              <EmployeeRow
+                key={employee.id}
+                employee={employee}
+                isLead={false}
+                currentReportsToId={null}
+                candidateLeads={candidatesFor(employee.id)}
+                canManage={canManage}
+                isPending={isPending}
+                onChange={handleChange}
+              />
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
