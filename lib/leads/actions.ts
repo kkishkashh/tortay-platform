@@ -44,19 +44,23 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
   if (leadUserId === employeeId) {
     throw new Error("Сотрудник не может быть собственным Лидом");
   }
-  // Руководитель департамента — тот, кто сам назначает Лидов, а не Лид сам
-  // по себе (по прямой просьбе Камилы, 2026-07-31): ни назначить
-  // руководителя чьим-то Лидом, ни переназначить самого руководителя
-  // подчинённым Лида нельзя через этот экшен.
+  // Руководитель департамента сам назначает Лидов и распределяет команду —
+  // он никогда не подчиняется кому-то другому в этом же экшене (по прямой
+  // просьбе Камилы, 2026-07-31). Но "подчиняется руководителю" для ОБЫЧНОГО
+  // сотрудника — это ровно то, как сотрудник/Лид "прикрепляется" к ветке
+  // конкретного руководителя (см. targetIsManager ниже), это НЕ то же
+  // самое, что "стать Лидом", и должно быть разрешено.
   const managerIds = new Set(department.managers.map((m) => m.id));
   if (managerIds.has(employeeId)) {
     throw new Error("Руководитель департамента не может быть чьим-то подчинённым");
   }
-  if (leadUserId && managerIds.has(leadUserId)) {
-    throw new Error("Руководитель департамента не может быть Лидом — он сам назначает Лидов");
-  }
 
-  if (leadUserId) {
+  // Выбранная цель — либо конкретный руководитель (сотрудник "прикрепляется"
+  // к его ветке и может позже стать Лидом, если ему назначат команду), либо
+  // уже действующий Лид (сотрудник входит в его команду).
+  const targetIsManager = leadUserId ? managerIds.has(leadUserId) : false;
+
+  if (leadUserId && !targetIsManager) {
     const lead = await prisma.user.findUnique({
       where: { id: leadUserId },
       select: { homeDepartmentId: true, reportsToId: true },
@@ -64,15 +68,20 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
     if (!lead || lead.homeDepartmentId !== department.id) {
       throw new Error("Лид должен состоять в том же департаменте");
     }
-    // Ограничение в 2 уровня (Руководитель → Лид → Сотрудник) — Лид сам
-    // не может кому-то подчиняться, иначе иерархия усложняется без
-    // реальной необходимости (см. план).
-    if (lead.reportsToId) {
-      throw new Error("У этого сотрудника уже назначен свой Лид — он не может одновременно быть Лидом");
+    // Ограничение в 2 уровня (Руководитель → Лид → Сотрудник) — Лидом
+    // можно назначить только того, кто сам уже закреплён за одним из
+    // руководителей (см. выше), а не за другим Лидом — иначе цепочка
+    // получилась бы длиннее 2 уровней.
+    if (!lead.reportsToId || !managerIds.has(lead.reportsToId)) {
+      throw new Error(
+        "Сначала закрепите этого сотрудника за руководителем — Лидом можно сделать только того, кто уже подчиняется руководителю напрямую",
+      );
     }
     // Обратная сторона того же ограничения: сотрудника, у которого уже
-    // ЕСТЬ своя команда (сам Лид), нельзя назначить в чью-то команду —
-    // сначала нужно переназначить всех сотрудников его команды.
+    // ЕСТЬ своя команда (сам Лид), нельзя перевести в команду ДРУГОГО
+    // Лида — сначала нужно переназначить всех сотрудников его команды
+    // (переподчинить его самого руководителю — можно, он просто останется
+    // Лидом, но уже у другого руководителя).
     const employeeHasReports = await prisma.user.count({ where: { reportsToId: employeeId } });
     if (employeeHasReports > 0) {
       throw new Error("Этот сотрудник сам руководит другими — сначала переназначьте сотрудников его команды");
@@ -95,7 +104,10 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
         !department.managers.some((manager) => manager.id === session.user.id),
     });
 
-    if (leadUserId) {
+    // Уведомления "вы назначены/сняты с Лида" — только про настоящих
+    // Лидов, не про руководителей (прикрепление сотрудника напрямую к
+    // руководителю — не повышение в Лиды).
+    if (leadUserId && !targetIsManager) {
       const existingReports = await tx.user.count({
         where: { reportsToId: leadUserId, id: { not: employeeId } },
       });
@@ -108,7 +120,7 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
       }
     }
 
-    if (previousLeadId) {
+    if (previousLeadId && !managerIds.has(previousLeadId)) {
       const remainingReports = await tx.user.count({ where: { reportsToId: previousLeadId } });
       if (remainingReports === 0) {
         await notifyLeadDemoted(tx, { userId: previousLeadId, actorId: session.user.id });

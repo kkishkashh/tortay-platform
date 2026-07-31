@@ -38,18 +38,34 @@ export type DepartmentHierarchyNode = {
   position: string | null;
 };
 
+export type DepartmentHierarchyLead = DepartmentHierarchyNode & {
+  reports: DepartmentHierarchyNode[];
+};
+
+export type DepartmentHierarchyManager = DepartmentHierarchyNode & {
+  // Лиды, которые подчиняются ИМЕННО этому руководителю (reportsToId = id
+  // этого руководителя, и у самого Лида есть хотя бы один подчинённый).
+  leads: DepartmentHierarchyLead[];
+  // Сотрудники, подчиняющиеся напрямую этому руководителю, минуя Лида
+  // (reportsToId = id этого руководителя, но своих подчинённых у них нет).
+  directReports: DepartmentHierarchyNode[];
+};
+
 export type DepartmentHierarchy = {
-  // С 2026-07-31 может быть несколько руководителей департамента.
-  managers: DepartmentHierarchyNode[];
-  leads: (DepartmentHierarchyNode & { reports: DepartmentHierarchyNode[] })[];
-  // Сотрудники департамента без назначенного Лида — подчиняются
-  // напрямую руководителю департамента.
+  // С 2026-07-31 у департамента может быть несколько руководителей, и у
+  // каждого — СВОИ Лиды и своя команда (не общий пул на весь департамент).
+  managers: DepartmentHierarchyManager[];
+  // Сотрудники, которых ещё не привязали ни к одному руководителю
+  // (reportsToId === null) — ждут, когда их распределят.
   unassigned: DepartmentHierarchyNode[];
 };
 
-// Вкладка "Структура" на странице департамента (Task 5.1) — Руководители →
-// Лиды → их подчинённые, плюс отдельно те, кто пока ни к какому Лиду не
-// привязан (см. app/(dashboard)/departments/[id]/hierarchy-tab.tsx).
+// Вкладка "Структура" на странице департамента (Task 5.1, переработано
+// 2026-07-31 по прямой просьбе Камилы: "у каждого из 3 руководителей может
+// быть по несколько Лидов, и под Лидами — сотрудники", а не общий для
+// всего департамента пул Лидов) — Руководители → СВОИ Лиды → их команды,
+// плюс отдельно те, кого ещё не распределили (см.
+// app/(dashboard)/departments/[id]/hierarchy-tab.tsx).
 export async function getDepartmentHierarchy(departmentId: string): Promise<DepartmentHierarchy> {
   const department = await prisma.department.findUnique({
     where: { id: departmentId },
@@ -70,48 +86,52 @@ export async function getDepartmentHierarchy(departmentId: string): Promise<Depa
     },
   });
   if (!department) {
-    return { managers: [], leads: [], unassigned: [] };
+    return { managers: [], unassigned: [] };
   }
 
   // Руководитель департамента не может быть Лидом (по прямой просьбе
-  // Камилы, 2026-07-31: руководитель сам назначает Лидов и распределяет
-  // сотрудников по их командам, а не становится Лидом сам) — исключаем
-  // руководителей из пула рядовых сотрудников этого раздела: они уже
-  // показаны отдельным блоком выше, а старые reportsToId, указывающие на
-  // руководителя (назначенные до этого правила), считаем как "напрямую
-  // под руководителем", а не как Лидство.
+  // Камилы, 2026-07-31: руководитель САМ выбирает Лидов и распределяет по
+  // ним сотрудников, а не становится Лидом) — исключаем руководителей из
+  // пула рядовых сотрудников: они уже показаны отдельными блоками выше.
   const managerIds = new Set(department.managers.map((m) => m.id));
   const rankAndFile = department.employees.filter((e) => !managerIds.has(e.id));
-  const employeeById = new Map(rankAndFile.map((e) => [e.id, e]));
-  // Лид этого департамента — сотрудник, на которого указывает reportsToId
-  // хотя бы одного другого сотрудника ЭТОГО ЖЕ департамента (сам Лид
-  // сам ни на кого не указывает — см. ограничение 2 уровней в
-  // setEmployeeLeadAction).
-  const leadIds = new Set(
-    rankAndFile
-      .map((e) => e.reportsToId)
-      .filter((id): id is string => id !== null && !managerIds.has(id)),
-  );
 
-  const leads = Array.from(leadIds)
-    .map((leadId) => employeeById.get(leadId))
-    .filter((lead): lead is NonNullable<typeof lead> => lead !== undefined)
-    .map((lead) => ({
-      id: lead.id,
-      fullName: lead.fullName,
-      position: lead.position,
-      reports: rankAndFile
-        .filter((e) => e.reportsToId === lead.id)
-        .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position })),
-    }));
+  // Кто кому подчиняется — один проход, группировка по reportsToId. Лид
+  // "принадлежит" конкретному руководителю через СВОЙ reportsToId (Лид
+  // подчиняется руководителю, а не департаменту вообще) — 2 уровня глубины:
+  // Руководитель → Лид → Сотрудник (см. lib/leads/actions.ts).
+  const reportsByParentId = new Map<string, typeof rankAndFile>();
+  for (const e of rankAndFile) {
+    if (e.reportsToId === null) continue;
+    const arr = reportsByParentId.get(e.reportsToId) ?? [];
+    arr.push(e);
+    reportsByParentId.set(e.reportsToId, arr);
+  }
+  const toNode = (e: (typeof rankAndFile)[number]): DepartmentHierarchyNode => ({
+    id: e.id,
+    fullName: e.fullName,
+    position: e.position,
+  });
 
-  const unassigned = rankAndFile
-    .filter((e) => (e.reportsToId === null || managerIds.has(e.reportsToId)) && !leadIds.has(e.id))
-    .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position }));
+  const managers: DepartmentHierarchyManager[] = department.managers.map((manager) => {
+    const directChildren = reportsByParentId.get(manager.id) ?? [];
+    const leads: DepartmentHierarchyLead[] = [];
+    const directReports: DepartmentHierarchyNode[] = [];
+    for (const child of directChildren) {
+      const childReports = reportsByParentId.get(child.id) ?? [];
+      if (childReports.length > 0) {
+        leads.push({ ...toNode(child), reports: childReports.map(toNode) });
+      } else {
+        directReports.push(toNode(child));
+      }
+    }
+    return { id: manager.id, fullName: manager.fullName, position: manager.position, leads, directReports };
+  });
+
+  const unassigned = rankAndFile.filter((e) => e.reportsToId === null).map(toNode);
 
   return {
-    managers: department.managers,
-    leads,
+    managers,
     unassigned,
   };
 }

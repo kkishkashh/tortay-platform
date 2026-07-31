@@ -2,6 +2,7 @@ import { TaskPriority, TaskStatus } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { taskWorkloadLevel, type WorkloadLevel } from "@/lib/workload";
 
 export type TaskListItem = {
   id: string;
@@ -208,6 +209,66 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
     sectionName: task.section.name,
     departmentManagerIds: task.section.department?.managers.map((m) => m.id) ?? [],
   }));
+}
+
+export type UserTaskWorkload = {
+  activeCount: number;
+  lateCount: number;
+  workload: WorkloadLevel;
+  // Самая срочная активная задача — для компактного бейджа "сейчас делает"
+  // в блоках структуры департамента (app/(dashboard)/departments/[id]/
+  // hierarchy-tab.tsx), без похода на профиль сотрудника за полным списком.
+  currentTask: { id: string; title: string; status: TaskStatus } | null;
+};
+
+// Один пакетный запрос на весь список id — карточки структуры департамента
+// (Лиды/команды) показывают компактный статус загрузки каждого сотрудника
+// сразу, без N+1 запросов на человека (тот же принцип, что и в
+// getCommentsForTasksBatch/getDocumentsForTasksBatch).
+export async function getTaskWorkloadForUsers(
+  userIds: string[],
+): Promise<Map<string, UserTaskWorkload>> {
+  if (userIds.length === 0) return new Map();
+
+  const tasks = await prisma.task.findMany({
+    where: { assigneeMember: { userId: { in: userIds } } },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      deadline: true,
+      createdAt: true,
+      assigneeMember: { select: { userId: true } },
+    },
+    orderBy: [{ deadline: "asc" }, { createdAt: "asc" }],
+  });
+
+  const byUser = new Map<string, typeof tasks>();
+  for (const task of tasks) {
+    const userId = task.assigneeMember!.userId;
+    const arr = byUser.get(userId) ?? [];
+    arr.push(task);
+    byUser.set(userId, arr);
+  }
+
+  const now = new Date();
+  const result = new Map<string, UserTaskWorkload>();
+  for (const userId of userIds) {
+    const userTasks = byUser.get(userId) ?? [];
+    const activeTasks = userTasks.filter((t) => t.status !== TaskStatus.ВЫПОЛНЕНО);
+    const lateCount = activeTasks.filter(
+      (t) => t.deadline !== null && t.deadline < now,
+    ).length;
+    result.set(userId, {
+      activeCount: activeTasks.length,
+      lateCount,
+      workload: taskWorkloadLevel(activeTasks.length),
+      currentTask: activeTasks[0]
+        ? { id: activeTasks[0].id, title: activeTasks[0].title, status: activeTasks[0].status }
+        : null,
+    });
+  }
+  return result;
 }
 
 // Задачи, назначенные текущему пользователю — источник для "Мои задачи"

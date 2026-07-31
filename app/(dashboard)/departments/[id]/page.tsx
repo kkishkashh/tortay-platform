@@ -18,6 +18,7 @@ import {
   getEmployeesForManagerAssignment,
 } from "@/lib/departments/queries";
 import { getDepartmentHierarchy } from "@/lib/leads/queries";
+import { getTaskWorkloadForUsers } from "@/lib/tasks/queries";
 
 import { AnalyticsTab } from "./analytics-tab";
 import { DeleteDepartmentDialog } from "./delete-department-dialog";
@@ -73,6 +74,11 @@ export default async function DepartmentDetailPage({
       getDepartmentDashboardStats(id),
       getDepartmentHierarchy(id),
     ]);
+  // Компактный статус загрузки по задачам для каждого сотрудника — один
+  // пакетный запрос на весь департамент, показывается прямо в блоках
+  // вкладки "Структура" (см. hierarchy-tab.tsx), без похода на профиль
+  // каждого сотрудника по отдельности.
+  const workloadByUserId = await getTaskWorkloadForUsers(department.employees.map((e) => e.id));
   // Не-админ (руководитель департамента) может добавить только ещё
   // никуда не привязанного сотрудника — "переманивание" из чужого
   // департамента остаётся решением администратора (см. addEmployeeToDepartmentAction).
@@ -142,6 +148,7 @@ export default async function DepartmentDetailPage({
               allowsLeadRole={department.allowsLeadRole}
               hierarchy={hierarchy}
               employees={department.employees}
+              workloadByUserId={workloadByUserId}
               canManage={canManageDept}
             />
           </TabsContent>
