@@ -145,6 +145,7 @@ export default async function DepartmentDetailPage({
 
           <TabsContent value="hierarchy" className="mt-4">
             <HierarchyTab
+              departmentId={department.id}
               allowsLeadRole={department.allowsLeadRole}
               hierarchy={hierarchy}
               employees={department.employees}

@@ -271,6 +271,57 @@ export async function getTaskWorkloadForUsers(
   return result;
 }
 
+export type UserActiveTask = {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  projectName: string;
+};
+
+// Полный список АКТИВНЫХ (не ВЫПОЛНЕНО) задач на сотрудника — в отличие от
+// getTaskWorkloadForUsers выше (только агрегат + одна самая срочная
+// задача), здесь нужен весь список для карточки "сотрудник → задачи →
+// статус" на странице команды руководителя (см. app/(dashboard)/
+// departments/[id]/teams/[managerId]/page.tsx). Один пакетный запрос на
+// весь список id, тот же принцип, что и в getTaskWorkloadForUsers.
+export async function getActiveTasksForUsers(
+  userIds: string[],
+): Promise<Map<string, UserActiveTask[]>> {
+  if (userIds.length === 0) return new Map();
+
+  const tasks = await prisma.task.findMany({
+    where: {
+      assigneeMember: { userId: { in: userIds } },
+      status: { not: TaskStatus.ВЫПОЛНЕНО },
+    },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      deadline: true,
+      createdAt: true,
+      assigneeMember: {
+        select: { userId: true, project: { select: { name: true } } },
+      },
+    },
+    orderBy: [{ deadline: "asc" }, { createdAt: "asc" }],
+  });
+
+  const result = new Map<string, UserActiveTask[]>();
+  for (const task of tasks) {
+    const userId = task.assigneeMember!.userId;
+    const arr = result.get(userId) ?? [];
+    arr.push({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      projectName: task.assigneeMember!.project.name,
+    });
+    result.set(userId, arr);
+  }
+  return result;
+}
+
 // Задачи, назначенные текущему пользователю — источник для "Мои задачи"
 // на упрощённом дашборде сотрудника.
 export async function getMyTasks(): Promise<MyTaskItem[]> {

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { AlertTriangle, ChevronDown, Crown, ShieldCheck } from "lucide-react";
+import { useTransition } from "react";
+import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { setEmployeeLeadAction } from "@/lib/leads/actions";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -13,24 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TeamCard, getTeamCardColor } from "@/components/departments/team-card";
 import type { DepartmentHierarchy, DepartmentHierarchyNode } from "@/lib/leads/queries";
 import type { UserTaskWorkload } from "@/lib/tasks/queries";
 import { WORKLOAD_META } from "@/lib/workload";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 const REPORTS_TO_NONE = "__none__";
-
-// Тот же набор цветов, что и у StatCard на дашборде (components/dashboard/
-// stat-card.tsx) — блоки Лидов и руководителей должны читаться как отдельные
-// карточки, а не сливаться в один список: цветной акцент + приподнятая
-// карточка с тенью.
-const LEAD_CARD_ACCENTS = [
-  "from-[#2563eb] to-[#1741a6]",
-  "from-[#16a34a] to-[#0d7a37]",
-  "from-[#7c3aed] to-[#5423ab]",
-  "from-[#159c46] to-[#0d7a37]",
-];
-const MANAGER_CARD_ACCENT = "from-[#f0ac3d] to-[#c47a12]";
 
 type FlatEmployee = { id: string; fullName: string; position: string | null; reportsToId: string | null };
 
@@ -127,30 +116,22 @@ function EmployeeRow({
 }
 
 export function HierarchyTab({
+  departmentId,
   allowsLeadRole,
   hierarchy,
   employees,
   workloadByUserId,
   canManage,
 }: {
+  departmentId: string;
   allowsLeadRole: boolean;
   hierarchy: DepartmentHierarchy;
   employees: FlatEmployee[];
   workloadByUserId: Map<string, UserTaskWorkload>;
   canManage: boolean;
 }) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [expandedManagerIds, setExpandedManagerIds] = useState<Set<string>>(new Set());
-  const [expandedLeadIds, setExpandedLeadIds] = useState<Set<string>>(new Set());
-
-  function toggleSet(setter: typeof setExpandedManagerIds, id: string) {
-    setter((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   if (!allowsLeadRole) {
     return (
@@ -170,11 +151,6 @@ export function HierarchyTab({
   }
 
   const managerIds = new Set(hierarchy.managers.map((m) => m.id));
-  const managerOptionsBase: DepartmentHierarchyNode[] = hierarchy.managers.map((m) => ({
-    id: m.id,
-    fullName: m.fullName,
-    position: m.position,
-  }));
 
   // Лид — сотрудник, чей reportsToId уже указывает на одного из
   // руководителей (см. lib/leads/actions.ts — 2 уровня: Руководитель →
@@ -184,6 +160,11 @@ export function HierarchyTab({
   const leadOptionsBase: DepartmentHierarchyNode[] = employees
     .filter((e) => e.reportsToId !== null && managerIds.has(e.reportsToId))
     .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position }));
+  const managerOptionsBase: DepartmentHierarchyNode[] = hierarchy.managers.map((m) => ({
+    id: m.id,
+    fullName: m.fullName,
+    position: m.position,
+  }));
 
   function optionsFor(employeeId: string) {
     return {
@@ -202,175 +183,19 @@ export function HierarchyTab({
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {hierarchy.managers.map((manager) => {
-            const isExpanded = expandedManagerIds.has(manager.id);
             const teamSize =
               manager.leads.reduce((sum, l) => sum + l.reports.length, 0) +
               manager.leads.length +
               manager.directReports.length;
             return (
-              <div
+              <TeamCard
                 key={manager.id}
-                className={`overflow-hidden rounded-xl border bg-card shadow-card transition-all duration-200 hover:shadow-card-hover ${
-                  isExpanded ? "sm:col-span-2 lg:col-span-3" : ""
-                }`}
-              >
-                <div className={`h-1.5 bg-linear-to-r ${MANAGER_CARD_ACCENT}`} />
-                <button
-                  type="button"
-                  onClick={() => toggleSet(setExpandedManagerIds, manager.id)}
-                  className="flex w-full items-center justify-between gap-3 p-4 text-left"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className="flex size-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-                      style={{ backgroundColor: getAvatarColor(manager.id) }}
-                    >
-                      {getInitials(manager.fullName)}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-medium">{manager.fullName}</p>
-                        <Badge variant="outline" className="gap-1">
-                          <ShieldCheck className="size-3" />
-                          Руководитель
-                        </Badge>
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        Лидов: {manager.leads.length} · в команде: {teamSize}
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronDown
-                    className={`size-4 shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {isExpanded ? (
-                  <div className="space-y-3 border-t bg-muted/30 p-3">
-                    {manager.leads.length === 0 && manager.directReports.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">
-                        У этого руководителя пока никого не закреплено.
-                      </p>
-                    ) : null}
-
-                    {manager.leads.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        {manager.leads.map((lead, index) => {
-                          const leadExpanded = expandedLeadIds.has(lead.id);
-                          return (
-                        <div
-                          key={lead.id}
-                          className={`overflow-hidden rounded-lg border bg-card shadow-card ${leadExpanded ? "md:col-span-2" : ""}`}
-                        >
-                          <div
-                            className={`h-1 bg-linear-to-r ${LEAD_CARD_ACCENTS[index % LEAD_CARD_ACCENTS.length]}`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => toggleSet(setExpandedLeadIds, lead.id)}
-                            className="flex w-full items-center justify-between gap-3 p-3 text-left"
-                          >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <span
-                                className="flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                                style={{ backgroundColor: getAvatarColor(lead.id) }}
-                              >
-                                {getInitials(lead.fullName)}
-                              </span>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <p className="truncate text-sm font-medium">{lead.fullName}</p>
-                                  <Badge variant="outline" className="gap-1">
-                                    <Crown className="size-3" />
-                                    Лид
-                                  </Badge>
-                                </div>
-                                <p className="truncate text-xs text-muted-foreground">
-                                  в команде: {lead.reports.length}
-                                </p>
-                              </div>
-                            </div>
-                            <ChevronDown
-                              className={`size-4 shrink-0 text-muted-foreground transition-transform ${leadExpanded ? "rotate-180" : ""}`}
-                            />
-                          </button>
-                          {leadExpanded ? (
-                            <div className="space-y-2 border-t bg-muted/40 p-2.5">
-                              {canManage ? (
-                                <div className="flex items-center gap-2">
-                                  <p className="shrink-0 text-xs text-muted-foreground">Подчиняется:</p>
-                                  <Select
-                                    value={manager.id}
-                                    items={managerOptionsBase.map((m) => ({ value: m.id, label: m.fullName }))}
-                                    onValueChange={(value) => {
-                                      if (value && value !== manager.id) handleChange(lead.id, value);
-                                    }}
-                                    disabled={isPending}
-                                  >
-                                    <SelectTrigger size="sm" className="w-full">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {managerOptionsBase.map((m) => (
-                                        <SelectItem key={m.id} value={m.id}>
-                                          {m.fullName}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              ) : null}
-                              {lead.reports.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">В команде пока никого нет.</p>
-                              ) : (
-                                lead.reports.map((report) => (
-                                  <EmployeeRow
-                                    key={report.id}
-                                    employee={report}
-                                    currentReportsToId={lead.id}
-                                    managerOptions={managerOptionsBase.filter((m) => m.id !== report.id)}
-                                    leadOptions={leadOptionsBase.filter((l) => l.id !== report.id)}
-                                    workload={workloadByUserId.get(report.id)}
-                                    canManage={canManage}
-                                    isPending={isPending}
-                                    onChange={handleChange}
-                                  />
-                                ))
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                          );
-                        })}
-                      </div>
-                    ) : null}
-
-                    {manager.directReports.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                          Без Лида — напрямую у {manager.fullName.split(" ")[0]}
-                        </p>
-                        {manager.directReports.map((employee) => {
-                          const { managerOptions, leadOptions } = optionsFor(employee.id);
-                          return (
-                            <EmployeeRow
-                              key={employee.id}
-                              employee={employee}
-                              currentReportsToId={manager.id}
-                              managerOptions={managerOptions}
-                              leadOptions={leadOptions}
-                              workload={workloadByUserId.get(employee.id)}
-                              canManage={canManage}
-                              isPending={isPending}
-                              onChange={handleChange}
-                            />
-                          );
-                        })}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+                manager={manager}
+                leads={manager.leads.map((l) => l.fullName)}
+                employeeCount={teamSize}
+                color={getTeamCardColor(manager.id)}
+                onClick={() => router.push(`/departments/${departmentId}/teams/${manager.id}`)}
+              />
             );
           })}
         </div>
