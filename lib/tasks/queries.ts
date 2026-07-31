@@ -136,8 +136,9 @@ export type MyTaskItem = TaskListItem & {
   sectionName: string;
   // Для проверки canManageProjectTasks на странице профиля сотрудника
   // (там задачи могут быть из разных проектов/департаментов, поэтому
-  // права считаются по каждой задаче отдельно).
-  departmentManagerId: string | null;
+  // права считаются по каждой задаче отдельно). Список id — у департамента
+  // может быть несколько руководителей одновременно.
+  departmentManagerIds: string[];
 };
 
 // Задачи, назначенные КОНКРЕТНОМУ пользователю — не обязательно текущему.
@@ -155,7 +156,15 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
       section: {
         include: {
           project: { select: { id: true, name: true } },
-          department: { select: { id: true, name: true, color: true, icon: true, managerId: true } },
+          department: {
+            select: {
+              id: true,
+              name: true,
+              color: true,
+              icon: true,
+              managers: { select: { id: true } },
+            },
+          },
         },
       },
       checklistItems: { orderBy: { orderIndex: "asc" } },
@@ -197,7 +206,7 @@ export async function getTasksForUser(userId: string): Promise<MyTaskItem[]> {
     projectName: task.section.project.name,
     sectionId: task.section.id,
     sectionName: task.section.name,
-    departmentManagerId: task.section.department?.managerId ?? null,
+    departmentManagerIds: task.section.department?.managers.map((m) => m.id) ?? [],
   }));
 }
 

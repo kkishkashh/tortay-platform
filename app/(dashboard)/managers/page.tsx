@@ -4,7 +4,7 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { ManagersTab } from "@/components/employees/managers-tab";
 import { canManageDepartments } from "@/lib/departments/permissions";
-import { getDepartments } from "@/lib/departments/queries";
+import { getDepartments, getEmployeesForManagerAssignment } from "@/lib/departments/queries";
 import { getManagers } from "@/lib/managers/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
@@ -21,13 +21,26 @@ export default async function ManagersPage() {
   }
   const isAdmin = canManageDepartments(session.user);
 
-  const [managers, departments] = await Promise.all([getManagers(), getDepartments()]);
+  const [managers, departments, employeeCandidates] = await Promise.all([
+    getManagers(),
+    getDepartments(),
+    // Только админу — тот же список, что и на странице департамента, для
+    // пикера "Назначить руководителя" (см. lib/departments/queries.ts::
+    // getEmployeesForManagerAssignment: без этого RSC-payload утекал бы
+    // компании целиком не-админам).
+    isAdmin ? getEmployeesForManagerAssignment() : Promise.resolve([]),
+  ]);
 
   return (
     <>
       <PageHeader title="Руководители" subtitle={formatTodayLabel(new Date())} />
       <div className="p-8">
-        <ManagersTab managers={managers} departments={departments} isAdmin={isAdmin} />
+        <ManagersTab
+          managers={managers}
+          departments={departments}
+          employeeCandidates={employeeCandidates}
+          isAdmin={isAdmin}
+        />
       </div>
     </>
   );

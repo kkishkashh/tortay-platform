@@ -3,6 +3,8 @@ import { ProjectStatus, SystemRole, TaskStackCategory, TaskStatus, UserType } fr
 import { prisma } from "@/lib/prisma";
 import { canManageDepartments } from "@/lib/departments/permissions";
 
+export type DepartmentManagerItem = { id: string; fullName: string };
+
 export type DepartmentListItem = {
   id: string;
   name: string;
@@ -10,8 +12,7 @@ export type DepartmentListItem = {
   color: string;
   icon: string;
   description: string | null;
-  managerId: string | null;
-  managerName: string | null;
+  managers: DepartmentManagerItem[];
   employeesCount: number;
   sectionsCount: number;
   taskStackCount: number;
@@ -21,7 +22,7 @@ export async function getDepartments(): Promise<DepartmentListItem[]> {
   const departments = await prisma.department.findMany({
     orderBy: { orderIndex: "asc" },
     include: {
-      manager: { select: { fullName: true } },
+      managers: { select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
       _count: { select: { employees: true, sections: true, taskTemplateItems: true } },
     },
   });
@@ -33,8 +34,7 @@ export async function getDepartments(): Promise<DepartmentListItem[]> {
     color: department.color,
     icon: department.icon,
     description: department.description,
-    managerId: department.managerId,
-    managerName: department.manager?.fullName ?? null,
+    managers: department.managers,
     employeesCount: department._count.employees,
     sectionsCount: department._count.sections,
     taskStackCount: department._count.taskTemplateItems,
@@ -48,8 +48,7 @@ export type DepartmentDetail = {
   color: string;
   icon: string;
   description: string | null;
-  managerId: string | null;
-  managerName: string | null;
+  managers: DepartmentManagerItem[];
   allowsLeadRole: boolean;
   employees: { id: string; fullName: string; position: string | null; reportsToId: string | null }[];
 };
@@ -58,7 +57,7 @@ export async function getDepartmentById(id: string): Promise<DepartmentDetail | 
   const department = await prisma.department.findUnique({
     where: { id },
     include: {
-      manager: { select: { fullName: true } },
+      managers: { select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
       employees: {
         select: { id: true, fullName: true, position: true, reportsToId: true },
         orderBy: { fullName: "asc" },
@@ -74,8 +73,7 @@ export async function getDepartmentById(id: string): Promise<DepartmentDetail | 
     color: department.color,
     icon: department.icon,
     description: department.description,
-    managerId: department.managerId,
-    managerName: department.manager?.fullName ?? null,
+    managers: department.managers,
     allowsLeadRole: department.allowsLeadRole,
     employees: department.employees,
   };
@@ -198,7 +196,7 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
       // проекта на шаге "Команда" (см. new-project-dialog.tsx), только
       // когда департамент это разрешает (см. PRD #3 Phase 3).
       allowsLeadRole: true,
-      manager: { select: { id: true, fullName: true } },
+      managers: { select: { id: true, fullName: true }, orderBy: { fullName: "asc" } },
       employees: {
         select: { id: true, fullName: true },
         orderBy: { fullName: "asc" },
@@ -229,7 +227,7 @@ export async function getDepartmentsWithTaskStackForProjectCreation() {
 // "полный контроль над своим департаментом").
 export async function getManagedDepartment(userId: string) {
   return prisma.department.findFirst({
-    where: { managerId: userId },
+    where: { managers: { some: { id: userId } } },
     select: { id: true, name: true },
   });
 }
@@ -239,8 +237,8 @@ export type RoleTier = "admin" | "department_manager" | "employee";
 // Определяет, какой из трёх дашбордов/меню показать (см. app/(dashboard)/
 // page.tsx и components/layout/sidebar.tsx). "Руководитель департамента" —
 // это не отдельная SystemRole (см. lib/departments/permissions.ts), а
-// производный статус: есть ли департамент, где managerId = этот
-// пользователь.
+// производный статус: есть ли департамент, где этот пользователь состоит
+// в managers.
 export async function getCurrentUserRoleTier(
   user: { id: string; systemRole: SystemRole } | undefined,
 ): Promise<RoleTier> {
@@ -248,7 +246,7 @@ export async function getCurrentUserRoleTier(
   if (canManageDepartments(user)) return "admin";
 
   const managed = await prisma.department.findFirst({
-    where: { managerId: user.id },
+    where: { managers: { some: { id: user.id } } },
     select: { id: true },
   });
   return managed ? "department_manager" : "employee";

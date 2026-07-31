@@ -150,20 +150,20 @@ export function HierarchyTab({
 
   return (
     <div className="space-y-6">
-      {hierarchy.manager ? (
-        <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+      {hierarchy.managers.map((manager) => (
+        <div key={manager.id} className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
           <span
             className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ backgroundColor: getAvatarColor(hierarchy.manager.id) }}
+            style={{ backgroundColor: getAvatarColor(manager.id) }}
           >
-            {getInitials(hierarchy.manager.fullName)}
+            {getInitials(manager.fullName)}
           </span>
           <div>
-            <p className="text-sm font-medium">{hierarchy.manager.fullName}</p>
+            <p className="text-sm font-medium">{manager.fullName}</p>
             <p className="text-xs text-muted-foreground">Руководитель департамента</p>
           </div>
         </div>
-      ) : null}
+      ))}
 
       {hierarchy.leads.length === 0 && hierarchy.unassigned.length === 0 ? (
         <p className="text-sm text-muted-foreground">В этом департаменте пока нет сотрудников.</p>

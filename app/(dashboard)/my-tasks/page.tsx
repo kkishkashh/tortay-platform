@@ -77,7 +77,9 @@ export default async function MyTasksPage() {
                     canManage={
                       session?.user
                         ? canManageProjectTasks(session.user, {
-                            department: { managerId: task.departmentManagerId },
+                            department: {
+                              managers: task.departmentManagerIds.map((id) => ({ id })),
+                            },
                           })
                         : false
                     }

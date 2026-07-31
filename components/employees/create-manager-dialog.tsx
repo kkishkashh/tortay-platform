@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useState, useTransition } from "react";
 import { CheckCircle2, UserPlus } from "lucide-react";
 
-import { createManagerAction, type ManagerFormState } from "@/lib/managers/actions";
-import type { DepartmentListItem } from "@/lib/departments/queries";
+import { addDepartmentManagerAction } from "@/lib/departments/actions";
+import type { DepartmentListItem, ManagerCandidate } from "@/lib/departments/queries";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,8 +14,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import {
+  Combobox,
+  ComboboxClear,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxGroup,
+  ComboboxGroupLabel,
+  ComboboxInput,
+  ComboboxInputGroup,
+  ComboboxItem,
+} from "@/components/ui/combobox";
 import {
   Select,
   SelectContent,
@@ -24,101 +33,154 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Пароль администратор не вводит и не видит — он генерируется на сервере
-// и уходит новому руководителю письмом (см. lib/managers/actions.ts).
-const initialState: ManagerFormState = { error: null, successCount: 0 };
+type PickerItem = { value: string; label: string; sublabel?: string };
+type PickerGroup = { label: string | null; items: PickerItem[] };
 
-export function CreateManagerDialog({ departments }: { departments: DepartmentListItem[] }) {
+function comboboxFilter(item: PickerItem, query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return item.label.toLowerCase().includes(q) || (item.sublabel?.toLowerCase().includes(q) ?? false);
+}
+
+// Назначает руководителем СУЩЕСТВУЮЩЕГО сотрудника — не создаёт нового
+// человека (см. lib/managers/actions.ts::createManagerAction, который
+// раньше и делал именно это: заводил нового User с логином/паролем по
+// email, даже когда нужно было просто повысить уже работающего сотрудника).
+// Для реально нового человека — обычная форма "Новый сотрудник" на
+// странице /employees, а сюда он попадает уже существующим кандидатом.
+export function CreateManagerDialog({
+  departments,
+  employeeCandidates,
+}: {
+  departments: DepartmentListItem[];
+  employeeCandidates: ManagerCandidate[];
+}) {
   const [open, setOpen] = useState(false);
   const [showToast, setShowToast] = useState(false);
-  const [state, formAction, isPending] = useActionState(createManagerAction, initialState);
-  const lastHandledSuccessCount = useRef(state.successCount);
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [employeeId, setEmployeeId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [pickerResetKey, setPickerResetKey] = useState(0);
 
-  useEffect(() => {
-    if (!showToast) return;
-    const timer = setTimeout(() => setShowToast(false), 3000);
-    return () => clearTimeout(timer);
-  }, [showToast]);
+  const alreadyManaging = employeeCandidates.filter((c) => c.managedDepartmentNames.length > 0);
+  const plainStaff = employeeCandidates.filter((c) => c.managedDepartmentNames.length === 0);
 
-  useEffect(() => {
-    if (state.successCount === lastHandledSuccessCount.current) return;
-    lastHandledSuccessCount.current = state.successCount;
-    setOpen(false);
-    setShowToast(true);
-  }, [state.successCount]);
+  const toPickerItem = (c: ManagerCandidate): PickerItem => ({
+    value: c.id,
+    label: c.fullName,
+    sublabel:
+      c.managedDepartmentNames.length > 0
+        ? `Руководит: ${c.managedDepartmentNames.join(", ")}`
+        : (c.position ?? undefined),
+  });
+
+  const employeeGroups: PickerGroup[] = [
+    ...(alreadyManaging.length > 0
+      ? [{ label: "Уже руководят департаментом", items: alreadyManaging.map(toPickerItem) }]
+      : []),
+    ...(plainStaff.length > 0 ? [{ label: "Сотрудники", items: plainStaff.map(toPickerItem) }] : []),
+  ];
+
+  function handleSubmit() {
+    if (!employeeId || !departmentId) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await addDepartmentManagerAction(departmentId, employeeId);
+        setOpen(false);
+        setShowToast(true);
+        setEmployeeId("");
+        setDepartmentId("");
+        setPickerResetKey((key) => key + 1);
+        setTimeout(() => setShowToast(false), 3000);
+      } catch (submitError) {
+        setError(
+          submitError instanceof Error ? submitError.message : "Не удалось назначить руководителя",
+        );
+      }
+    });
+  }
 
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogTrigger render={<Button size="sm" />}>
           <UserPlus className="size-4" />
-          Новый руководитель
+          Назначить руководителя
         </DialogTrigger>
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>Новый руководитель</DialogTitle>
+            <DialogTitle>Назначить руководителя</DialogTitle>
             <DialogDescription>
-              Временный пароль сгенерируется автоматически и придёт на указанный email.
+              Выберите существующего сотрудника и департамент, которым он будет руководить. У
+              департамента может быть несколько руководителей одновременно.
             </DialogDescription>
           </DialogHeader>
-          <form action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="manager-fullName">ФИО</Label>
-              <Input
-                id="manager-fullName"
-                name="fullName"
-                placeholder="Иванов Иван Иванович"
-                required
-                autoFocus
-              />
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Сотрудник</p>
+              <Combobox
+                key={pickerResetKey}
+                items={employeeGroups}
+                onValueChange={(item) => setEmployeeId(item?.value ?? "")}
+                itemToStringLabel={(item) => item.label}
+                filter={comboboxFilter}
+                disabled={isPending}
+              >
+                <ComboboxInputGroup className="w-full">
+                  <ComboboxInput placeholder="Найти сотрудника…" />
+                  <ComboboxClear />
+                </ComboboxInputGroup>
+                <ComboboxContent emptyMessage="Никого не нашлось">
+                  {(group: PickerGroup) => (
+                    <ComboboxGroup key={group.label ?? "__unlabeled__"} items={group.items}>
+                      {group.label ? <ComboboxGroupLabel>{group.label}</ComboboxGroupLabel> : null}
+                      <ComboboxCollection>
+                        {(item: PickerItem) => (
+                          <ComboboxItem key={item.value} value={item}>
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate">{item.label}</span>
+                              {item.sublabel ? (
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {item.sublabel}
+                                </span>
+                              ) : null}
+                            </div>
+                          </ComboboxItem>
+                        )}
+                      </ComboboxCollection>
+                    </ComboboxGroup>
+                  )}
+                </ComboboxContent>
+              </Combobox>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="manager-email">Email</Label>
-              <Input
-                id="manager-email"
-                name="email"
-                type="email"
-                placeholder="name@company.kz"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="manager-phone">Телефон</Label>
-              <Input id="manager-phone" name="phone" type="tel" placeholder="+7 700 123 45 67" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="manager-position">Должность</Label>
-              <Input id="manager-position" name="position" placeholder="Руководитель отдела" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="manager-username">Логин (необязательно)</Label>
-              <Input id="manager-username" name="username" placeholder="ivanov" />
-            </div>
-
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="manager-departmentId">Департамент (необязательно)</Label>
-              <Select name="departmentId" items={departments.map((d) => ({ value: d.id, label: d.name }))}>
-                <SelectTrigger id="manager-departmentId" className="w-full">
-                  <SelectValue placeholder="Без департамента" />
+              <p className="text-sm font-medium">Департамент</p>
+              <Select
+                value={departmentId || undefined}
+                onValueChange={(value) => setDepartmentId(value ?? "")}
+                items={departments.map((d) => ({ value: d.id, label: d.name }))}
+                disabled={isPending}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Выберите департамент" />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.map((department) => (
                     <SelectItem key={department.id} value={department.id}>
                       {department.name}
-                      {department.managerName ? ` (сейчас: ${department.managerName})` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {state.error ? <p className="text-sm text-destructive sm:col-span-2">{state.error}</p> : null}
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-            <div className="flex justify-end gap-2 sm:col-span-2">
+            <div className="flex justify-end gap-2">
               <Button
                 type="button"
                 variant="secondary"
@@ -127,18 +189,22 @@ export function CreateManagerDialog({ departments }: { departments: DepartmentLi
               >
                 Отмена
               </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? "Создаём…" : "Создать"}
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isPending || !employeeId || !departmentId}
+              >
+                {isPending ? "Назначаем…" : "Назначить"}
               </Button>
             </div>
-          </form>
+          </div>
         </DialogContent>
       </Dialog>
 
       {showToast ? (
         <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2 rounded-lg bg-foreground px-4 py-3 text-sm font-medium text-background shadow-lg">
           <CheckCircle2 className="size-4" />
-          Руководитель создан, письмо с паролем отправлено
+          Руководитель назначен
         </div>
       ) : null}
     </>

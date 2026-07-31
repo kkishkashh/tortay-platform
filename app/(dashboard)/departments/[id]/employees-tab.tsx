@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import { UserMinus, UserPlus } from "lucide-react";
 
 import {
+  addDepartmentManagerAction,
   addEmployeeToDepartmentAction,
-  assignDepartmentManagerAction,
+  removeDepartmentManagerAction,
   removeEmployeeFromDepartmentAction,
 } from "@/lib/departments/actions";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,7 @@ import {
   ComboboxInputGroup,
   ComboboxItem,
 } from "@/components/ui/combobox";
-import type { ManagerCandidate } from "@/lib/departments/queries";
+import type { DepartmentManagerItem, ManagerCandidate } from "@/lib/departments/queries";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
 type Employee = { id: string; fullName: string; position?: string | null };
@@ -42,11 +43,9 @@ function comboboxFilter(item: PickerItem, query: string) {
   );
 }
 
-const NO_MANAGER = "__none__";
-
 export function EmployeesTab({
   departmentId,
-  managerId,
+  managers,
   employees,
   allEmployees,
   managerCandidates,
@@ -54,7 +53,7 @@ export function EmployeesTab({
   canManageEmployees,
 }: {
   departmentId: string;
-  managerId: string | null;
+  managers: DepartmentManagerItem[];
   employees: Employee[];
   allEmployees: { id: string; fullName: string; homeDepartmentId: string | null; position: string | null }[];
   // Все штатные сотрудники компании — НЕ ограничено сотрудниками этого
@@ -75,11 +74,21 @@ export function EmployeesTab({
   // очистил введённый текст поиска — у него нет отдельного пропа для сброса
   // введённого текста без сброса выбранного значения.
   const [addPickerResetKey, setAddPickerResetKey] = useState(0);
+  const [addManagerId, setAddManagerId] = useState<string>("");
+  const [addManagerPickerResetKey, setAddManagerPickerResetKey] = useState(0);
 
   const availableToAdd = allEmployees.filter((e) => e.homeDepartmentId !== departmentId);
 
-  const currentManagers = managerCandidates.filter((c) => c.managedDepartmentNames.length > 0);
-  const plainStaff = managerCandidates.filter((c) => c.managedDepartmentNames.length === 0);
+  // С 2026-07-31 у департамента может быть несколько руководителей — пикер
+  // "добавить руководителя" исключает тех, кто УЖЕ руководит ЭТИМ
+  // департаментом (остальные кандидаты остаются, включая руководителей
+  // других департаментов — один человек может руководить несколькими сразу).
+  const managerIds = new Set(managers.map((m) => m.id));
+  const eligibleManagerCandidates = managerCandidates.filter((c) => !managerIds.has(c.id));
+  const currentManagersElsewhere = eligibleManagerCandidates.filter(
+    (c) => c.managedDepartmentNames.length > 0,
+  );
+  const plainStaff = eligibleManagerCandidates.filter((c) => c.managedDepartmentNames.length === 0);
 
   const toPickerItem = (c: ManagerCandidate): PickerItem => ({
     value: c.id,
@@ -90,17 +99,14 @@ export function EmployeesTab({
         : (c.position ?? undefined),
   });
 
-  const managerGroups: PickerGroup[] = [
-    { label: null, items: [{ value: NO_MANAGER, label: "Не назначен" }] },
-    ...(currentManagers.length > 0
-      ? [{ label: "Уже руководят департаментом", items: currentManagers.map(toPickerItem) }]
+  const addManagerGroups: PickerGroup[] = [
+    ...(currentManagersElsewhere.length > 0
+      ? [{ label: "Уже руководят другим департаментом", items: currentManagersElsewhere.map(toPickerItem) }]
       : []),
     ...(plainStaff.length > 0
       ? [{ label: "Сотрудники", items: plainStaff.map(toPickerItem) }]
       : []),
   ];
-  const managerItems: PickerItem[] = managerGroups.flatMap((group) => group.items);
-  const selectedManagerItem = managerItems.find((i) => i.value === (managerId ?? NO_MANAGER)) ?? null;
 
   const addEmployeeItems: PickerItem[] = availableToAdd.map((e) => ({
     value: e.id,
@@ -108,14 +114,30 @@ export function EmployeesTab({
     sublabel: e.position ?? undefined,
   }));
 
-  function handleAssignManager(value: string | null) {
+  function handleAddManager() {
+    if (!addManagerId) return;
     setError(null);
     startTransition(async () => {
       try {
-        await assignDepartmentManagerAction(departmentId, value === NO_MANAGER || !value ? null : value);
+        await addDepartmentManagerAction(departmentId, addManagerId);
+        setAddManagerId("");
+        setAddManagerPickerResetKey((key) => key + 1);
       } catch (submitError) {
         setError(
           submitError instanceof Error ? submitError.message : "Не удалось назначить руководителя",
+        );
+      }
+    });
+  }
+
+  function handleRemoveManager(userId: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await removeDepartmentManagerAction(departmentId, userId);
+      } catch (submitError) {
+        setError(
+          submitError instanceof Error ? submitError.message : "Не удалось снять руководителя",
         );
       }
     });
@@ -154,42 +176,88 @@ export function EmployeesTab({
     <div className="space-y-6">
       {canAssignManager ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium">Руководитель департамента</p>
-          <Combobox
-            items={managerGroups}
-            value={selectedManagerItem}
-            onValueChange={(item) => handleAssignManager(item?.value ?? null)}
-            isItemEqualToValue={(a, b) => a.value === b.value}
-            itemToStringLabel={(item) => item.label}
-            filter={comboboxFilter}
-            disabled={isPending}
-          >
-            <ComboboxInputGroup className="w-full sm:w-80">
-              <ComboboxInput placeholder="Найти сотрудника…" />
-              <ComboboxClear />
-            </ComboboxInputGroup>
-            <ComboboxContent emptyMessage="Никого не нашлось">
-              {(group: PickerGroup) => (
-                <ComboboxGroup key={group.label ?? "__unlabeled__"} items={group.items}>
-                  {group.label ? <ComboboxGroupLabel>{group.label}</ComboboxGroupLabel> : null}
-                  <ComboboxCollection>
-                    {(item: PickerItem) => (
-                      <ComboboxItem key={item.value} value={item}>
-                        <div className="flex min-w-0 flex-col">
-                          <span className="truncate">{item.label}</span>
-                          {item.sublabel ? (
-                            <span className="truncate text-xs text-muted-foreground">{item.sublabel}</span>
-                          ) : null}
-                        </div>
-                      </ComboboxItem>
-                    )}
-                  </ComboboxCollection>
-                </ComboboxGroup>
-              )}
-            </ComboboxContent>
-          </Combobox>
+          <p className="text-sm font-medium">
+            {managers.length > 1 ? "Руководители департамента" : "Руководитель департамента"}
+          </p>
+
+          {managers.length > 0 ? (
+            <div className="space-y-2">
+              {managers.map((manager) => (
+                <div
+                  key={manager.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      className="flex size-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style={{ backgroundColor: getAvatarColor(manager.id) }}
+                    >
+                      {getInitials(manager.fullName)}
+                    </span>
+                    <p className="truncate text-sm font-medium">{manager.fullName}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => handleRemoveManager(manager.id)}
+                    disabled={isPending}
+                    title="Снять с руководства"
+                  >
+                    <UserMinus className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Руководитель не назначен.</p>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-2">
+              <Combobox
+                key={addManagerPickerResetKey}
+                items={addManagerGroups}
+                onValueChange={(item) => setAddManagerId(item?.value ?? "")}
+                itemToStringLabel={(item) => item.label}
+                filter={comboboxFilter}
+                disabled={isPending}
+              >
+                <ComboboxInputGroup className="w-full sm:w-80">
+                  <ComboboxInput placeholder="Найти сотрудника…" />
+                  <ComboboxClear />
+                </ComboboxInputGroup>
+                <ComboboxContent emptyMessage="Никого не нашлось">
+                  {(group: PickerGroup) => (
+                    <ComboboxGroup key={group.label ?? "__unlabeled__"} items={group.items}>
+                      {group.label ? <ComboboxGroupLabel>{group.label}</ComboboxGroupLabel> : null}
+                      <ComboboxCollection>
+                        {(item: PickerItem) => (
+                          <ComboboxItem key={item.value} value={item}>
+                            <div className="flex min-w-0 flex-col">
+                              <span className="truncate">{item.label}</span>
+                              {item.sublabel ? (
+                                <span className="truncate text-xs text-muted-foreground">{item.sublabel}</span>
+                              ) : null}
+                            </div>
+                          </ComboboxItem>
+                        )}
+                      </ComboboxCollection>
+                    </ComboboxGroup>
+                  )}
+                </ComboboxContent>
+              </Combobox>
+            </div>
+            <Button type="button" onClick={handleAddManager} disabled={isPending || !addManagerId}>
+              <UserPlus className="size-4" />
+              Назначить руководителем
+            </Button>
+          </div>
+
           <p className="text-xs text-muted-foreground">
-            Руководитель управляет только этим департаментом: сотрудниками, базовым стеком задач и задачами по проектам в его разделах.
+            Руководитель управляет только этим департаментом: сотрудниками, базовым стеком задач и
+            задачами по проектам в его разделах. У департамента может быть несколько руководителей —
+            у всех одинаковые права.
           </p>
         </div>
       ) : null}
@@ -257,7 +325,7 @@ export function EmployeesTab({
                   <p className="truncate text-sm font-medium">{employee.fullName}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {employee.position ?? "—"}
-                    {employee.id === managerId ? " · Руководитель" : ""}
+                    {managerIds.has(employee.id) ? " · Руководитель" : ""}
                   </p>
                 </div>
               </div>

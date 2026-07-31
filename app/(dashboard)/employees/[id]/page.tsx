@@ -67,7 +67,7 @@ export default async function EmployeeProfilePage({
   let isDeptManagerOfEmployee = false;
   if (!isSelf && !isHead && session?.user && employee.homeDepartmentId) {
     const managed = await prisma.department.findFirst({
-      where: { id: employee.homeDepartmentId, managerId: session.user.id },
+      where: { id: employee.homeDepartmentId, managers: { some: { id: session.user.id } } },
       select: { id: true },
     });
     isDeptManagerOfEmployee = !!managed;
@@ -127,7 +127,9 @@ export default async function EmployeeProfilePage({
     tasks.map((task) => [
       task.id,
       session?.user
-        ? canManageProjectTasks(session.user, { department: { managerId: task.departmentManagerId } })
+        ? canManageProjectTasks(session.user, {
+            department: { managers: task.departmentManagerIds.map((id) => ({ id })) },
+          })
         : false,
     ]),
   );

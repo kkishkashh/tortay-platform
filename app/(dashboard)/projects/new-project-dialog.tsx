@@ -62,7 +62,7 @@ type DepartmentOption = {
   color: string;
   icon: string;
   allowsLeadRole: boolean;
-  manager: { id: string; fullName: string } | null;
+  managers: { id: string; fullName: string }[];
   employees: Employee[];
   taskTemplateItems: TaskTemplateItem[];
 };
@@ -435,8 +435,8 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
     if (!currentUserId) return {};
     const initial: Record<string, DepartmentSelectionState> = {};
     for (const department of departments) {
-      if (department.manager?.id === currentUserId) {
-        initial[department.id] = { ...emptySelection(department.manager.id), checked: true };
+      if (department.managers.some((m) => m.id === currentUserId)) {
+        initial[department.id] = { ...emptySelection(currentUserId), checked: true };
       }
     }
     return initial;
@@ -445,7 +445,7 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
   const formRef = useRef<HTMLFormElement>(null);
 
   function getSelection(department: DepartmentOption) {
-    return selections[department.id] ?? emptySelection(department.manager?.id ?? "");
+    return selections[department.id] ?? emptySelection(department.managers[0]?.id ?? "");
   }
 
   function setSelection(departmentId: string, next: DepartmentSelectionState) {
@@ -650,10 +650,15 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
             ) : (
               checkedDepartments.map((department) => {
                 const selection = getSelection(department);
+                const managerIds = new Set(department.managers.map((m) => m.id));
                 const options = [
-                  ...(department.manager ? [department.manager] : []),
-                  ...department.employees.filter((e) => e.id !== department.manager?.id),
+                  ...department.managers,
+                  ...department.employees.filter((e) => !managerIds.has(e.id)),
                 ];
+                const defaultContactLabel =
+                  department.managers.length > 0
+                    ? `${department.managers.map((m) => m.fullName).join(", ")} (по умолчанию)`
+                    : "Не назначен";
 
                 function toggleTeamMember(employeeId: string) {
                   const next = new Set(selection.teamMemberIds);
@@ -690,7 +695,7 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
                             })
                           }
                           items={[
-                            { value: NONE_VALUE, label: department.manager ? `${department.manager.fullName} (по умолчанию)` : "Не назначен" },
+                            { value: NONE_VALUE, label: defaultContactLabel },
                             ...options.map((o) => ({ value: o.id, label: o.fullName })),
                           ]}
                         >
@@ -698,11 +703,7 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={NONE_VALUE}>
-                              {department.manager
-                                ? `${department.manager.fullName} (по умолчанию)`
-                                : "Не назначен"}
-                            </SelectItem>
+                            <SelectItem value={NONE_VALUE}>{defaultContactLabel}</SelectItem>
                             {options.map((o) => (
                               <SelectItem key={o.id} value={o.id}>
                                 {o.fullName}

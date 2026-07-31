@@ -33,7 +33,7 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
 
   const department = await prisma.department.findUnique({
     where: { id: employee.homeDepartmentId },
-    select: { id: true, name: true, managerId: true, allowsLeadRole: true },
+    select: { id: true, name: true, managers: { select: { id: true } }, allowsLeadRole: true },
   });
   if (!department || !canManageDepartment(session.user, department)) {
     throw new Error("Недостаточно прав");
@@ -79,7 +79,9 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
       action: leadUserId ? "lead_assign" : "lead_unassign",
       targetType: "User",
       targetId: employeeId,
-      isOverride: isPrivilegedOverride(session.user) && department.managerId !== session.user.id,
+      isOverride:
+        isPrivilegedOverride(session.user) &&
+        !department.managers.some((manager) => manager.id === session.user.id),
     });
 
     if (leadUserId) {
@@ -132,7 +134,7 @@ export async function leadAssignTaskAction(taskId: string, assigneeMemberId: str
         select: {
           projectId: true,
           project: { select: { name: true } },
-          department: { select: { id: true, managerId: true } },
+          department: { select: { id: true, managers: { select: { id: true } } } },
         },
       },
     },

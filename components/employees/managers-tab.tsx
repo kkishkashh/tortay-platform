@@ -8,7 +8,7 @@ import {
   reactivateManagerAction,
   resetManagerPasswordAction,
 } from "@/lib/managers/actions";
-import type { DepartmentListItem } from "@/lib/departments/queries";
+import type { DepartmentListItem, ManagerCandidate } from "@/lib/departments/queries";
 import type { ManagerListItem } from "@/lib/managers/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,17 +75,19 @@ function ManagerRowActions({ manager }: { manager: ManagerListItem }) {
 export function ManagersTab({
   managers,
   departments,
+  employeeCandidates,
   isAdmin,
 }: {
   managers: ManagerListItem[];
   departments: DepartmentListItem[];
+  employeeCandidates: ManagerCandidate[];
   isAdmin: boolean;
 }) {
   return (
     <div className="space-y-4">
       {isAdmin ? (
         <div className="flex justify-end">
-          <CreateManagerDialog departments={departments} />
+          <CreateManagerDialog departments={departments} employeeCandidates={employeeCandidates} />
         </div>
       ) : null}
 
@@ -119,8 +121,14 @@ export function ManagersTab({
                   </div>
                 </TableCell>
                 <TableCell>
-                  {manager.departmentName ? (
-                    <Badge variant="outline">{manager.departmentName}</Badge>
+                  {manager.managedDepartments.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {manager.managedDepartments.map((department) => (
+                        <Badge key={department.id} variant="outline">
+                          {department.name}
+                        </Badge>
+                      ))}
+                    </div>
                   ) : (
                     <span className="text-xs text-muted-foreground">Не назначен</span>
                   )}
@@ -133,7 +141,7 @@ export function ManagersTab({
                 {isAdmin ? (
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <EditManagerDialog manager={manager} departments={departments} />
+                      <EditManagerDialog manager={manager} />
                       <ManagerRowActions manager={manager} />
                       <DeleteManagerDialog userId={manager.id} fullName={manager.fullName} />
                     </div>

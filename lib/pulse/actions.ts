@@ -25,7 +25,13 @@ export async function setPulseAction(sectionId: string, signal: PulseSignal, not
     where: { id: sectionId },
     select: {
       projectId: true,
-      department: { select: { id: true, managerId: true, usesPulseTracking: true } },
+      department: {
+        select: {
+          id: true,
+          managers: { select: { id: true } },
+          usesPulseTracking: true,
+        },
+      },
     },
   });
   if (!section || !section.department) {
@@ -35,7 +41,7 @@ export async function setPulseAction(sectionId: string, signal: PulseSignal, not
     throw new Error("У этого департамента не включён Пульс недели");
   }
 
-  const isManager = section.department.managerId === session.user.id;
+  const isManager = section.department.managers.some((manager) => manager.id === session.user.id);
   const isLeadOfDept = !isManager && (await isLeadOfDepartment(session.user.id, section.department.id));
   if (!isManager && !isLeadOfDept) {
     throw new Error("Проставлять пульс может только руководитель или Лид этого департамента");

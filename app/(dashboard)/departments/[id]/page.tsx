@@ -106,7 +106,11 @@ export default async function DepartmentDetailPage({
             <p className="text-lg font-medium">{department.name}</p>
             <p className="text-sm text-muted-foreground">
               Код: {department.code}
-              {department.managerName ? ` · Руководитель: ${department.managerName}` : ""}
+              {department.managers.length > 0
+                ? ` · ${department.managers.length > 1 ? "Руководители" : "Руководитель"}: ${department.managers
+                    .map((m) => m.fullName)
+                    .join(", ")}`
+                : ""}
             </p>
           </div>
         </div>
@@ -124,7 +128,7 @@ export default async function DepartmentDetailPage({
           <TabsContent value="employees" className="mt-4">
             <EmployeesTab
               departmentId={department.id}
-              managerId={department.managerId}
+              managers={department.managers}
               employees={department.employees}
               allEmployees={allEmployees}
               managerCandidates={managerCandidates}

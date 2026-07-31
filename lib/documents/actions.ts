@@ -15,7 +15,7 @@ async function loadTaskSectionForAttachments(taskId: string) {
       section: {
         select: {
           projectId: true,
-          department: { select: { id: true, managerId: true } },
+          department: { select: { id: true, managers: { select: { id: true } } } },
         },
       },
     },
@@ -80,7 +80,7 @@ export async function deleteTaskAttachmentAction(documentId: string) {
           section: {
             select: {
               projectId: true,
-              department: { select: { id: true, managerId: true } },
+              department: { select: { id: true, managers: { select: { id: true } } } },
             },
           },
         },

@@ -37,7 +37,7 @@ export async function getVisibleDepartmentIds(user: { id: string }): Promise<str
   const departments = await prisma.department.findMany({
     where: {
       usesPulseTracking: true,
-      OR: [{ managerId: user.id }, { employees: { some: { id: user.id } } }],
+      OR: [{ managers: { some: { id: user.id } } }, { employees: { some: { id: user.id } } }],
     },
     select: { id: true },
   });
@@ -93,7 +93,12 @@ export async function getPulseDashboard(user: { id: string }): Promise<PulseDash
   // или его Лид (isLeadOfDepartment сам проверяет homeDepartmentId) —
   // считаем один раз на пользователя, не на каждый раздел.
   const managedDepartmentIds = new Set(
-    (await prisma.department.findMany({ where: { managerId: user.id }, select: { id: true } })).map((d) => d.id),
+    (
+      await prisma.department.findMany({
+        where: { managers: { some: { id: user.id } } },
+        select: { id: true },
+      })
+    ).map((d) => d.id),
   );
 
   const leadDepartmentIds = new Set<string>();

@@ -51,8 +51,13 @@ export function DepartmentCard({
             </div>
 
             <div className="border-t pt-3 text-xs text-muted-foreground">
-              {department.managerName ? (
-                <>Руководитель: <span className="text-foreground">{department.managerName}</span></>
+              {department.managers.length > 0 ? (
+                <>
+                  {department.managers.length > 1 ? "Руководители" : "Руководитель"}:{" "}
+                  <span className="text-foreground">
+                    {department.managers.map((m) => m.fullName).join(", ")}
+                  </span>
+                </>
               ) : (
                 "Руководитель не назначен"
               )}

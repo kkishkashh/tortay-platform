@@ -128,44 +128,59 @@ export async function toggleAllowsLeadRoleAction(departmentId: string, enabled: 
   revalidatePath(`/departments/${departmentId}`);
 }
 
-export async function assignDepartmentManagerAction(
-  departmentId: string,
-  managerId: string | null,
-) {
+// С 2026-07-31 у департамента может быть несколько руководителей
+// одновременно (все с одинаковыми правами) — вместо одного "set" теперь
+// две отдельные операции add/remove над списком (Department.managers).
+export async function addDepartmentManagerAction(departmentId: string, userId: string) {
   const session = await auth();
   if (!session?.user || !canManageDepartments(session.user)) {
     throw new Error("Назначать руководителя департамента может только администратор");
   }
 
-  const previous = await prisma.department.findUnique({
-    where: { id: departmentId },
-    select: { managerId: true },
-  });
-
   await prisma.$transaction(async (tx) => {
     await tx.department.update({
       where: { id: departmentId },
-      data: { managerId },
+      data: { managers: { connect: { id: userId } } },
     });
 
-    // Task 1.1 (аудит-лог): переназначение департамента, у которого уже
-    // был ДРУГОЙ руководитель — не первичное назначение "с нуля".
-    if (previous?.managerId !== managerId) {
-      await recordAuditLog(tx, {
-        actorId: session.user.id,
-        action: "department_manager_reassign",
-        targetType: "Department",
-        targetId: departmentId,
-        isOverride:
-          isPrivilegedOverride(session.user) &&
-          !!previous?.managerId &&
-          previous.managerId !== session.user.id,
-      });
-    }
+    await recordAuditLog(tx, {
+      actorId: session.user.id,
+      action: "department_manager_reassign",
+      targetType: "Department",
+      targetId: departmentId,
+      isOverride: isPrivilegedOverride(session.user),
+    });
   });
 
   revalidatePath("/departments");
   revalidatePath(`/departments/${departmentId}`);
+  revalidatePath(`/employees/${userId}`);
+}
+
+export async function removeDepartmentManagerAction(departmentId: string, userId: string) {
+  const session = await auth();
+  if (!session?.user || !canManageDepartments(session.user)) {
+    throw new Error("Снимать руководителя департамента может только администратор");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.department.update({
+      where: { id: departmentId },
+      data: { managers: { disconnect: { id: userId } } },
+    });
+
+    await recordAuditLog(tx, {
+      actorId: session.user.id,
+      action: "department_manager_reassign",
+      targetType: "Department",
+      targetId: departmentId,
+      isOverride: isPrivilegedOverride(session.user),
+    });
+  });
+
+  revalidatePath("/departments");
+  revalidatePath(`/departments/${departmentId}`);
+  revalidatePath(`/employees/${userId}`);
 }
 
 // В отличие от назначения руководителя (структурное решение, только
@@ -245,13 +260,13 @@ export async function removeEmployeeFromDepartmentAction(userId: string, departm
 // Базовый стек задач — здесь право на запись уже не только у
 // администратора, но и у руководителя ЭТОГО департамента
 // (canManageTaskStack), поэтому каждое действие сначала грузит
-// департамент и проверяет managerId, а не просто systemRole.
+// департамент и проверяет managers, а не просто systemRole.
 // ============================================================
 
 async function loadDepartmentOrThrow(departmentId: string) {
   const department = await prisma.department.findUnique({
     where: { id: departmentId },
-    select: { id: true, managerId: true, name: true },
+    select: { id: true, managers: { select: { id: true } }, name: true },
   });
   if (!department) {
     throw new Error("Департамент не найден");
@@ -330,7 +345,7 @@ export async function createTaskStackSubItemAction(parentItemId: string, formDat
       departmentId: true,
       parentItemId: true,
       category: true,
-      department: { select: { id: true, managerId: true } },
+      department: { select: { id: true, managers: { select: { id: true } } } },
     },
   });
   if (!parentItem) {
@@ -378,7 +393,7 @@ export async function updateTaskStackItemAction(itemId: string, formData: FormDa
 
   const item = await prisma.departmentTaskTemplateItem.findUnique({
     where: { id: itemId },
-    select: { departmentId: true, department: { select: { id: true, managerId: true } } },
+    select: { departmentId: true, department: { select: { id: true, managers: { select: { id: true } } } } },
   });
   if (!item) {
     throw new Error("Пункт базового стека не найден");
@@ -413,7 +428,7 @@ export async function deleteTaskStackItemAction(itemId: string) {
 
   const item = await prisma.departmentTaskTemplateItem.findUnique({
     where: { id: itemId },
-    select: { departmentId: true, department: { select: { id: true, managerId: true } } },
+    select: { departmentId: true, department: { select: { id: true, managers: { select: { id: true } } } } },
   });
   if (!item) {
     throw new Error("Пункт базового стека не найден");
@@ -446,7 +461,7 @@ export async function duplicateTaskStackItemAction(itemId: string) {
       category: true,
       orderIndex: true,
       weight: true,
-      department: { select: { id: true, managerId: true } },
+      department: { select: { id: true, managers: { select: { id: true } } } },
       subItems: {
         select: { title: true, description: true },
         orderBy: { orderIndex: "asc" },

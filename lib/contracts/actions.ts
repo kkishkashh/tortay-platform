@@ -140,7 +140,7 @@ async function getProjectForPayment(paymentId: string) {
           project: {
             select: {
               name: true,
-              sections: { select: { department: { select: { managerId: true } } } },
+              sections: { select: { department: { select: { managers: { select: { id: true } } } } } },
             },
           },
         },
@@ -151,9 +151,9 @@ async function getProjectForPayment(paymentId: string) {
   return {
     id: payment.contract.projectId,
     name: payment.contract.project.name,
-    managerIds: payment.contract.project.sections
-      .map((s) => s.department?.managerId)
-      .filter((id): id is string => !!id),
+    managerIds: payment.contract.project.sections.flatMap(
+      (s) => s.department?.managers.map((m) => m.id) ?? [],
+    ),
   };
 }
 

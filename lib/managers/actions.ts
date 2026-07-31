@@ -3,14 +3,14 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
-import { Prisma, SystemRole, UserType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageDepartments } from "@/lib/departments/permissions";
 import { generateTemporaryPassword } from "@/lib/auth/generate-temporary-password";
-import { notifyManagerCreated, notifyPasswordReset } from "@/lib/notifications/notify";
-import { sendManagerCreatedEmail, sendPasswordResetEmail } from "@/lib/email/send";
+import { notifyPasswordReset } from "@/lib/notifications/notify";
+import { sendPasswordResetEmail } from "@/lib/email/send";
 
 function parseManagerFields(formData: FormData) {
   const fullName = (formData.get("fullName") as string | null)?.trim();
@@ -19,112 +19,18 @@ function parseManagerFields(formData: FormData) {
   const position = (formData.get("position") as string | null)?.trim() || null;
   const usernameRaw = (formData.get("username") as string | null)?.trim();
   const username = usernameRaw || null;
-  const departmentId = (formData.get("departmentId") as string | null)?.trim() || null;
 
   if (!fullName || !email) {
     throw new Error("ФИО и email обязательны");
   }
 
-  return { fullName, email, phone, position, username, departmentId };
+  return { fullName, email, phone, position, username };
 }
 
-// Next.js в проде обрезает сообщение любой ошибки, брошенной из Server
-// Action, до общего "An error occurred in the Server Components render..."
-// (см. node_modules/next/dist/docs/01-app/01-getting-started/10-error-handling.md
-// — "avoid using try/catch blocks and throw errors, instead model expected
-// errors as return values"). Поэтому ожидаемые ошибки (дубликат email,
-// нет прав) возвращаются значением через useActionState, а не throw —
-// иначе администратор вместо "email уже существует" видит бессмысленный digest.
-export type ManagerFormState = { error: string | null; successCount: number };
-
-// Создаёт руководителя как обычного User (systemRole: СОТРУДНИК, см. D2 —
-// "руководитель" целиком выводится из Department.managerId, отдельного
-// системного значения роли для этого нет). Пароль генерируется на сервере
-// и никогда не вводится администратором — уходит только письмом.
-export async function createManagerAction(
-  prevState: ManagerFormState,
-  formData: FormData,
-): Promise<ManagerFormState> {
-  const session = await auth();
-  if (!session?.user || !canManageDepartments(session.user)) {
-    return { error: "Создавать руководителей может только администратор", successCount: prevState.successCount };
-  }
-
-  let fields;
-  try {
-    fields = parseManagerFields(formData);
-  } catch (error) {
-    return {
-      error: error instanceof Error ? error.message : "Некорректные данные",
-      successCount: prevState.successCount,
-    };
-  }
-
-  const temporaryPassword = generateTemporaryPassword();
-  const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-
-  let departmentName: string | null = null;
-
-  try {
-    const user = await prisma.$transaction(async (tx) => {
-      const created = await tx.user.create({
-        data: {
-          fullName: fields.fullName,
-          email: fields.email,
-          username: fields.username,
-          passwordHash,
-          systemRole: SystemRole.СОТРУДНИК,
-          userType: UserType.ШТАТНЫЙ,
-          phone: fields.phone,
-          position: fields.position,
-        },
-      });
-
-      if (fields.departmentId) {
-        const department = await tx.department.update({
-          where: { id: fields.departmentId },
-          data: { managerId: created.id },
-          select: { name: true },
-        });
-        departmentName = department.name;
-      }
-
-      await notifyManagerCreated(tx, {
-        userId: created.id,
-        actorId: session.user.id,
-        departmentName,
-      });
-
-      return created;
-    });
-
-    sendManagerCreatedEmail({
-      to: user.email,
-      employeeName: user.fullName,
-      username: user.username,
-      temporaryPassword,
-      departmentName,
-    }).catch(console.error);
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      const target = (error.meta?.target as string[] | undefined)?.join(", ");
-      return {
-        error: target?.includes("username")
-          ? "Этот логин уже используется"
-          : "Сотрудник с таким email уже существует",
-        successCount: prevState.successCount,
-      };
-    }
-    throw error;
-  }
-
-  revalidatePath("/departments");
-  revalidatePath("/employees");
-  revalidatePath("/");
-
-  return { error: null, successCount: prevState.successCount + 1 };
-}
-
+// Только контактные данные — какими департаментами этот человек руководит
+// теперь редактируется на странице самого департамента (вкладка
+// "Сотрудники"), где сразу видно ВСЕХ его руководителей, а не только
+// одного (см. addDepartmentManagerAction/removeDepartmentManagerAction).
 export async function updateManagerAction(userId: string, formData: FormData) {
   const session = await auth();
   if (!session?.user || !canManageDepartments(session.user)) {
@@ -134,30 +40,15 @@ export async function updateManagerAction(userId: string, formData: FormData) {
   const fields = parseManagerFields(formData);
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: userId },
-        data: {
-          fullName: fields.fullName,
-          email: fields.email,
-          username: fields.username,
-          phone: fields.phone,
-          position: fields.position,
-        },
-      });
-
-      // Один и тот же managerId может стоять только на одном департаменте —
-      // сначала снимаем со всех текущих, потом ставим на выбранный.
-      await tx.department.updateMany({
-        where: { managerId: userId },
-        data: { managerId: null },
-      });
-      if (fields.departmentId) {
-        await tx.department.update({
-          where: { id: fields.departmentId },
-          data: { managerId: userId },
-        });
-      }
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        fullName: fields.fullName,
+        email: fields.email,
+        username: fields.username,
+        phone: fields.phone,
+        position: fields.position,
+      },
     });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -178,9 +69,9 @@ export async function updateManagerAction(userId: string, formData: FormData) {
 
 // Тот же принцип блокировки, что и deleteEmployeeAction (lib/employees/actions.ts):
 // жёсткое удаление запрещено, если на пользователя ссылаются записи с
-// обязательным внешним ключом. Department.managerId — необязательный (см.
-// migration.sql: ON DELETE SET NULL), поэтому руководство департаментом
-// само по себе не блокирует удаление.
+// обязательным внешним ключом. Department.managers —m2m с ON DELETE CASCADE
+// только на join-таблице (см. миграцию add_multiple_department_managers),
+// поэтому руководство департаментом(-ами) само по себе не блокирует удаление.
 export async function deleteManagerAction(userId: string) {
   const session = await auth();
   if (!session?.user || !canManageDepartments(session.user)) {

@@ -59,7 +59,17 @@ export default async function ProjectDetailPage({
     prisma.section.findMany({
       where: { projectId: id },
       orderBy: { orderIndex: "asc" },
-      include: { department: { select: { id: true, name: true, color: true, icon: true, managerId: true } } },
+      include: {
+        department: {
+          select: {
+            id: true,
+            name: true,
+            color: true,
+            icon: true,
+            managers: { select: { id: true } },
+          },
+        },
+      },
     }),
     prisma.projectMember.findFirst({
       where: { projectId: id, projectRole: ProjectRole.ГИП },

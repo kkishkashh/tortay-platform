@@ -60,7 +60,7 @@ export default async function DashboardPage() {
 
   if (roleTier === "department_manager") {
     const department = await prisma.department.findFirst({
-      where: { managerId: session!.user.id },
+      where: { managers: { some: { id: session!.user.id } } },
       select: { id: true, name: true, color: true, icon: true },
     });
     if (!department) {

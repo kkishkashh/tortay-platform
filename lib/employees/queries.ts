@@ -192,7 +192,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       financeAccess: true,
       isActive: true,
       reportsTo: { select: { fullName: true } },
-      homeDepartment: { select: { manager: { select: { fullName: true } } } },
+      homeDepartment: { select: { managers: { select: { fullName: true }, orderBy: { fullName: "asc" } } } },
       projectMemberships: {
         select: {
           project: { select: { id: true, name: true, status: true } },
@@ -247,7 +247,11 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     homeDepartmentId: user.homeDepartmentId,
     financeAccess: user.financeAccess,
     isActive: user.isActive,
-    reportsToName: user.reportsTo?.fullName ?? user.homeDepartment?.manager?.fullName ?? null,
+    reportsToName:
+      user.reportsTo?.fullName ??
+      (user.homeDepartment && user.homeDepartment.managers.length > 0
+        ? user.homeDepartment.managers.map((m) => m.fullName).join(", ")
+        : null),
     projectsByStatus,
     activeProjectsCount,
     completedProjectsCount,

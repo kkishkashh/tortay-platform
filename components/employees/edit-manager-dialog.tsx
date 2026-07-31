@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Pencil } from "lucide-react";
 
 import { updateManagerAction } from "@/lib/managers/actions";
-import type { DepartmentListItem } from "@/lib/departments/queries";
 import type { ManagerListItem } from "@/lib/managers/queries";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,21 +15,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
-export function EditManagerDialog({
-  manager,
-  departments,
-}: {
-  manager: ManagerListItem;
-  departments: DepartmentListItem[];
-}) {
+// Только контактные данные — какими департаментами руководит этот человек
+// теперь редактируется на странице самого департамента (вкладка
+// "Сотрудники"), где сразу видно весь список руководителей, а не только
+// одного (см. lib/managers/actions.ts::updateManagerAction).
+export function EditManagerDialog({ manager }: { manager: ManagerListItem }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -106,26 +96,6 @@ export function EditManagerDialog({
               name="username"
               defaultValue={manager.username ?? ""}
             />
-          </div>
-
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor={`edit-manager-departmentId-${manager.id}`}>Департамент</Label>
-            <Select
-              name="departmentId"
-              defaultValue={manager.departmentId ?? undefined}
-              items={departments.map((d) => ({ value: d.id, label: d.name }))}
-            >
-              <SelectTrigger id={`edit-manager-departmentId-${manager.id}`} className="w-full">
-                <SelectValue placeholder="Без департамента" />
-              </SelectTrigger>
-              <SelectContent>
-                {departments.map((department) => (
-                  <SelectItem key={department.id} value={department.id}>
-                    {department.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {error ? <p className="text-sm text-destructive sm:col-span-2">{error}</p> : null}

@@ -190,12 +190,14 @@ export async function getManageableProjectsForTaskCreation(user: {
   const seesAll = canManageOperations(user);
 
   const projects = await prisma.project.findMany({
-    where: seesAll ? undefined : { sections: { some: { department: { managerId: user.id } } } },
+    where: seesAll
+      ? undefined
+      : { sections: { some: { department: { managers: { some: { id: user.id } } } } } },
     select: {
       id: true,
       name: true,
       sections: {
-        select: { id: true, name: true, department: { select: { managerId: true } } },
+        select: { id: true, name: true, department: { select: { managers: { select: { id: true } } } } },
         orderBy: { orderIndex: "asc" },
       },
     },
@@ -208,7 +210,7 @@ export async function getManageableProjectsForTaskCreation(user: {
       name: project.name,
       sections: (seesAll
         ? project.sections
-        : project.sections.filter((s) => s.department?.managerId === user.id)
+        : project.sections.filter((s) => s.department?.managers.some((m) => m.id === user.id))
       ).map((s) => ({ id: s.id, name: s.name })),
     }))
     .filter((project) => project.sections.length > 0);

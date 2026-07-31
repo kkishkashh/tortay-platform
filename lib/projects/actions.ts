@@ -893,14 +893,14 @@ export async function updateSectionStatusAction(
     where: { id: sectionId },
     include: {
       project: { select: { id: true, name: true } },
-      department: { select: { managerId: true } },
+      department: { select: { managers: { select: { id: true } } } },
     },
   });
   if (!section) {
     throw new Error("Раздел не найден");
   }
 
-  const managesThisSection = section.department?.managerId === session.user.id;
+  const managesThisSection = !!section.department?.managers.some((m) => m.id === session.user.id);
   if (!canManageOperations(session.user, managesThisSection)) {
     throw new Error("Менять статус раздела может только руководитель");
   }
@@ -955,14 +955,14 @@ export async function updateSectionDatesAction(
       deadline: true,
       baselineStartDate: true,
       baselineDeadline: true,
-      department: { select: { id: true, managerId: true } },
+      department: { select: { id: true, managers: { select: { id: true } } } },
     },
   });
   if (!section) {
     throw new Error("Раздел не найден");
   }
 
-  const managesThisSection = section.department?.managerId === session.user.id;
+  const managesThisSection = !!section.department?.managers.some((m) => m.id === session.user.id);
   const isManager = canManageOperations(session.user, managesThisSection);
   const isLeadOfDept =
     !isManager && section.department

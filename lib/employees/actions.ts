@@ -30,7 +30,7 @@ export async function createEmployeeAction(formData: FormData) {
   let scopedDepartmentName: string | null = null;
   if (!isAdmin) {
     const managed = await prisma.department.findFirst({
-      where: { managerId: session.user.id },
+      where: { managers: { some: { id: session.user.id } } },
       select: { id: true, name: true },
     });
     if (!managed) {
@@ -123,7 +123,7 @@ async function assertCanArchiveEmployee(
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { homeDepartmentId: true } });
   const managed = await prisma.department.findFirst({
-    where: { managerId: sessionUser.id },
+    where: { managers: { some: { id: sessionUser.id } } },
     select: { id: true },
   });
   if (!user || !managed || user.homeDepartmentId !== managed.id) {
@@ -274,7 +274,7 @@ async function canActOnEmployee(
   if (!target?.homeDepartmentId) return false;
 
   const managed = await prisma.department.findFirst({
-    where: { id: target.homeDepartmentId, managerId: sessionUser.id },
+    where: { id: target.homeDepartmentId, managers: { some: { id: sessionUser.id } } },
     select: { id: true },
   });
   return !!managed;
@@ -302,7 +302,7 @@ async function canManageEmployeeDetails(
   if (!target?.homeDepartmentId) return false;
 
   const managed = await prisma.department.findFirst({
-    where: { id: target.homeDepartmentId, managerId: sessionUser.id },
+    where: { id: target.homeDepartmentId, managers: { some: { id: sessionUser.id } } },
     select: { id: true },
   });
   return !!managed;

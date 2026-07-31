@@ -39,7 +39,7 @@ async function loadSectionForPermissionCheck(sectionId: string) {
       id: true,
       projectId: true,
       project: { select: { name: true } },
-      department: { select: { id: true, managerId: true } },
+      department: { select: { id: true, managers: { select: { id: true } } } },
     },
   });
   if (!section) {
@@ -254,7 +254,7 @@ async function loadTaskForPermissionCheck(taskId: string) {
           id: true,
           projectId: true,
           project: { select: { name: true } },
-          department: { select: { id: true, managerId: true } },
+          department: { select: { id: true, managers: { select: { id: true } } } },
         },
       },
       assigneeMember: {
@@ -577,18 +577,17 @@ export async function deleteTaskAction(taskId: string) {
   revalidatePath(`/projects/${task.section.projectId}`);
 }
 
-// Кому уходит уведомление "задача на проверке" — руководителю ЭТОГО
-// департамента, а если он не назначен (или у раздела вообще нет
-// департамента, см. D4 "Без отдела"), то всем администраторам компании,
-// чтобы событие не потерялось (см. план, Phase 5: "или admin, если не
-// задан").
-async function resolveReviewRecipients(department: { managerId: string | null } | null) {
-  if (department?.managerId) {
-    const manager = await prisma.user.findUnique({
-      where: { id: department.managerId },
+// Кому уходит уведомление "задача на проверке" — ВСЕМ руководителям ЭТОГО
+// департамента (с 2026-07-31 их может быть несколько), а если ни одного не
+// назначено (или у раздела вообще нет департамента, см. D4 "Без отдела"),
+// то всем администраторам компании, чтобы событие не потерялось (см. план,
+// Phase 5: "или admin, если не задан").
+async function resolveReviewRecipients(department: { managers: { id: string }[] } | null) {
+  if (department && department.managers.length > 0) {
+    return prisma.user.findMany({
+      where: { id: { in: department.managers.map((m) => m.id) } },
       select: { id: true, email: true, fullName: true },
     });
-    return manager ? [manager] : [];
   }
 
   return prisma.user.findMany({
@@ -616,7 +615,7 @@ export async function toggleTaskChecklistItemAction(itemId: string, isDone: bool
           section: {
             select: {
               projectId: true,
-              department: { select: { id: true, managerId: true } },
+              department: { select: { id: true, managers: { select: { id: true } } } },
             },
           },
           assigneeMember: { select: { userId: true } },

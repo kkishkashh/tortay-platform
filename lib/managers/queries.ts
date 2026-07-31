@@ -9,13 +9,15 @@ export type ManagerListItem = {
   position: string | null;
   avatarUrl: string | null;
   isActive: boolean;
-  departmentId: string | null;
-  departmentName: string | null;
+  managedDepartments: { id: string; name: string }[];
 };
 
 // "Руководитель" — производное понятие (см. D2, lib/departments/permissions.ts):
 // это любой User, управляющий хотя бы одним департаментом (managedDepartments).
-// Отдельного признака "менеджер" в схеме нет и не будет.
+// Отдельного признака "менеджер" в схеме нет и не будет. С 2026-07-31 один
+// человек может руководить несколькими департаментами (как и раньше), И
+// один департамент может иметь несколько руководителей (новое) — поэтому
+// здесь возвращается полный список, а не только первый (было take: 1).
 export async function getManagers(): Promise<ManagerListItem[]> {
   const managers = await prisma.user.findMany({
     where: { managedDepartments: { some: {} } },
@@ -28,7 +30,7 @@ export async function getManagers(): Promise<ManagerListItem[]> {
       position: true,
       avatarUrl: true,
       isActive: true,
-      managedDepartments: { select: { id: true, name: true }, take: 1 },
+      managedDepartments: { select: { id: true, name: true }, orderBy: { orderIndex: "asc" } },
     },
     orderBy: { fullName: "asc" },
   });
@@ -42,7 +44,6 @@ export async function getManagers(): Promise<ManagerListItem[]> {
     position: manager.position,
     avatarUrl: manager.avatarUrl,
     isActive: manager.isActive,
-    departmentId: manager.managedDepartments[0]?.id ?? null,
-    departmentName: manager.managedDepartments[0]?.name ?? null,
+    managedDepartments: manager.managedDepartments,
   }));
 }

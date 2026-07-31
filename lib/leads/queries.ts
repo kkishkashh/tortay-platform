@@ -39,21 +39,25 @@ export type DepartmentHierarchyNode = {
 };
 
 export type DepartmentHierarchy = {
-  manager: DepartmentHierarchyNode | null;
+  // С 2026-07-31 может быть несколько руководителей департамента.
+  managers: DepartmentHierarchyNode[];
   leads: (DepartmentHierarchyNode & { reports: DepartmentHierarchyNode[] })[];
   // Сотрудники департамента без назначенного Лида — подчиняются
   // напрямую руководителю департамента.
   unassigned: DepartmentHierarchyNode[];
 };
 
-// Вкладка "Иерархия" на странице департамента (Task 5.1) — Руководитель →
+// Вкладка "Структура" на странице департамента (Task 5.1) — Руководители →
 // Лиды → их подчинённые, плюс отдельно те, кто пока ни к какому Лиду не
 // привязан (см. app/(dashboard)/departments/[id]/hierarchy-tab.tsx).
 export async function getDepartmentHierarchy(departmentId: string): Promise<DepartmentHierarchy> {
   const department = await prisma.department.findUnique({
     where: { id: departmentId },
     select: {
-      manager: { select: { id: true, fullName: true, position: true } },
+      managers: {
+        select: { id: true, fullName: true, position: true },
+        orderBy: { fullName: "asc" },
+      },
       employees: {
         select: {
           id: true,
@@ -66,7 +70,7 @@ export async function getDepartmentHierarchy(departmentId: string): Promise<Depa
     },
   });
   if (!department) {
-    return { manager: null, leads: [], unassigned: [] };
+    return { managers: [], leads: [], unassigned: [] };
   }
 
   const employeeById = new Map(department.employees.map((e) => [e.id, e]));
@@ -95,7 +99,7 @@ export async function getDepartmentHierarchy(departmentId: string): Promise<Depa
     .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position }));
 
   return {
-    manager: department.manager,
+    managers: department.managers,
     leads,
     unassigned,
   };

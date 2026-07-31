@@ -14,7 +14,7 @@ async function loadTaskSectionForComments(taskId: string) {
       section: {
         select: {
           projectId: true,
-          department: { select: { id: true, managerId: true } },
+          department: { select: { id: true, managers: { select: { id: true } } } },
         },
       },
     },
@@ -71,7 +71,7 @@ export async function deleteTaskCommentAction(commentId: string) {
           section: {
             select: {
               projectId: true,
-              department: { select: { id: true, managerId: true } },
+              department: { select: { id: true, managers: { select: { id: true } } } },
             },
           },
         },

@@ -69,10 +69,11 @@ model User {
   // а не роль в конкретном проекте.
   homeDepartmentId   String?
   homeDepartment     Department?  @relation("DepartmentEmployees", fields: [homeDepartmentId], references: [id])
-  // Департаменты, которыми этот пользователь руководит (обычно 0-1, но не
-  // ограничиваем на уровне схемы — один человек в принципе может управлять
-  // несколькими небольшими департаментами).
-  managedDepartments Department[] @relation("DepartmentManager")
+  // Департаменты, которыми этот пользователь руководит — многие-ко-многим
+  // в обе стороны: один человек может руководить несколькими департаментами,
+  // и с 2026-07-31 у одного департамента может быть несколько руководителей
+  // одновременно, все с одинаковыми правами (см. Department.managers).
+  managedDepartments Department[] @relation("DepartmentManagers")
 
   // Иерархия "Лид" (PRD #3 Phase 3, только в департаментах с
   // Department.allowsLeadRole) — кому подчиняется этот сотрудник, помимо
@@ -497,8 +498,13 @@ model Department {
   orderIndex  Int      @default(0)
   createdAt   DateTime @default(now())
 
-  managerId String?
-  manager   User?   @relation("DepartmentManager", fields: [managerId], references: [id])
+  // Многие-ко-многим (с 2026-07-31, по запросу Камилы): у департамента
+  // может быть несколько руководителей одновременно, все с полным
+  // паритетом прав — см. lib/departments/permissions.ts::isDepartmentManager.
+  // Раньше было единственное скалярное поле managerId; переход сохранил
+  // существующие назначения через миграцию с ручной вставкой данных
+  // (см. миграцию add_multiple_department_managers).
+  managers User[] @relation("DepartmentManagers")
 
   // Включает промежуточную роль "Лид" для этого департамента (PRD #3
   // Phase 3) — выключено по умолчанию у всех департаментов, руководитель

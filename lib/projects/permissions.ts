@@ -38,7 +38,7 @@ export function canManageOperations(
 // вопрос — руководит ли пользователь хоть каким-то департаментом вообще.
 export async function userManagesAnyDepartment(user: { id: string }): Promise<boolean> {
   const managed = await prisma.department.findFirst({
-    where: { managerId: user.id },
+    where: { managers: { some: { id: user.id } } },
     select: { id: true },
   });
   return !!managed;
@@ -55,7 +55,7 @@ export async function userManagesDepartmentInProject(
   projectId: string,
 ): Promise<boolean> {
   const section = await prisma.section.findFirst({
-    where: { projectId, department: { managerId: user.id } },
+    where: { projectId, department: { managers: { some: { id: user.id } } } },
     select: { id: true },
   });
   return !!section;

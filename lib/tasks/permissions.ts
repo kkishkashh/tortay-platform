@@ -13,7 +13,7 @@ import { isDepartmentManager } from "@/lib/departments/permissions";
 // в плане) отдать управление некому, кроме администратора.
 export function canManageProjectTasks(
   user: { id: string; systemRole: SystemRole },
-  section: { department: { managerId: string | null } | null },
+  section: { department: { managers: { id: string }[] } | null },
 ) {
   if (canManageOperations(user)) return true;
   if (section.department && isDepartmentManager(user, section.department)) return true;
@@ -38,7 +38,7 @@ export const FORWARD_TRANSITIONS: Record<TaskStatus, TaskStatus | null> = {
 // (запрос к ProjectMember), сюда передаётся уже готовым булевым значением.
 export function canCommentOnTask(
   user: { id: string; systemRole: SystemRole },
-  section: { department: { managerId: string | null } | null },
+  section: { department: { managers: { id: string }[] } | null },
   isProjectMember: boolean,
 ) {
   return isProjectMember || canManageProjectTasks(user, section);

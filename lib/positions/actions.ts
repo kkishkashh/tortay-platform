@@ -19,7 +19,9 @@ async function assertCanManagePositions() {
   if (session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ) {
     return;
   }
-  const managed = await prisma.department.findFirst({ where: { managerId: session.user.id } });
+  const managed = await prisma.department.findFirst({
+    where: { managers: { some: { id: session.user.id } } },
+  });
   if (!managed) {
     throw new Error("Недостаточно прав");
   }
