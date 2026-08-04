@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import Link from "next/link";
 import { KeyRound, Power, PowerOff } from "lucide-react";
 
 import {
@@ -107,7 +108,10 @@ export function ManagersTab({
             {managers.map((manager) => (
               <TableRow key={manager.id}>
                 <TableCell>
-                  <div className="flex items-center gap-2">
+                  <Link
+                    href={`/employees/${manager.id}`}
+                    className="flex items-center gap-2 hover:underline"
+                  >
                     <UserAvatar
                       avatarUrl={manager.avatarUrl}
                       fullName={manager.fullName}
@@ -118,7 +122,7 @@ export function ManagersTab({
                       <p className="truncate text-sm font-medium">{manager.fullName}</p>
                       <p className="truncate text-xs text-muted-foreground">{manager.email}</p>
                     </div>
-                  </div>
+                  </Link>
                 </TableCell>
                 <TableCell>
                   {manager.managedDepartments.length > 0 ? (

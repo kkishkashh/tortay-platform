@@ -26,6 +26,7 @@ import { DepartmentIcon } from "@/components/departments/department-icon";
 
 import { ContactForm } from "@/components/employees/contact-form";
 import { DetailsForm } from "@/components/employees/details-form";
+import { ManagedDepartmentsCard } from "@/components/employees/managed-departments-card";
 import { PasswordForm } from "@/components/employees/password-form";
 
 import { AddTaskToProjectDialog } from "./add-task-to-project-dialog";
@@ -356,6 +357,14 @@ export default async function EmployeeProfilePage({
                 </CardContent>
               </Card>
             )}
+
+            {isHead ? (
+              <ManagedDepartmentsCard
+                userId={employee.id}
+                departments={departments}
+                managedDepartmentIds={employee.managedDepartments.map((d) => d.id)}
+              />
+            ) : null}
 
             <Card>
               <CardHeader>
