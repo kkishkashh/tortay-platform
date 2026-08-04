@@ -2,13 +2,9 @@
 
 import { useTransition } from "react";
 import Link from "next/link";
-import { KeyRound, Power, PowerOff } from "lucide-react";
+import { Power, PowerOff } from "lucide-react";
 
-import {
-  deactivateManagerAction,
-  reactivateManagerAction,
-  resetManagerPasswordAction,
-} from "@/lib/managers/actions";
+import { deactivateManagerAction, reactivateManagerAction } from "@/lib/managers/actions";
 import type { DepartmentListItem, ManagerCandidate } from "@/lib/departments/queries";
 import type { ManagerListItem } from "@/lib/managers/queries";
 import { Badge } from "@/components/ui/badge";
@@ -29,17 +25,6 @@ import { DeleteManagerDialog } from "@/components/employees/delete-manager-dialo
 function ManagerRowActions({ manager }: { manager: ManagerListItem }) {
   const [isPending, startTransition] = useTransition();
 
-  function handleResetPassword() {
-    if (!confirm(`Сбросить пароль руководителя «${manager.fullName}»? Новый пароль придёт письмом.`)) {
-      return;
-    }
-    startTransition(() => {
-      resetManagerPasswordAction(manager.id).catch((error) => {
-        alert(error instanceof Error ? error.message : "Не удалось сбросить пароль");
-      });
-    });
-  }
-
   function handleToggleActive() {
     startTransition(() => {
       const action = manager.isActive ? deactivateManagerAction : reactivateManagerAction;
@@ -51,15 +36,6 @@ function ManagerRowActions({ manager }: { manager: ManagerListItem }) {
 
   return (
     <div className="flex items-center justify-end gap-1">
-      <Button
-        variant="ghost"
-        size="icon"
-        title="Сбросить пароль"
-        onClick={handleResetPassword}
-        disabled={isPending}
-      >
-        <KeyRound className="size-4" />
-      </Button>
       <Button
         variant="ghost"
         size="icon"
