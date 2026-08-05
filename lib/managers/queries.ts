@@ -1,3 +1,5 @@
+import { ProjectRole } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 
 export type ManagerListItem = {
@@ -10,6 +12,9 @@ export type ManagerListItem = {
   avatarUrl: string | null;
   isActive: boolean;
   managedDepartments: { id: string; name: string }[];
+  // Для диалога "Убрать из руководителей" (см. remove-from-managers-dialog.tsx) —
+  // сразу предложить назначить ГИПом каких-то проектов взамен.
+  gipProjectIds: string[];
 };
 
 // "Руководитель" — производное понятие (см. D2, lib/departments/permissions.ts):
@@ -31,6 +36,7 @@ export async function getManagers(): Promise<ManagerListItem[]> {
       avatarUrl: true,
       isActive: true,
       managedDepartments: { select: { id: true, name: true }, orderBy: { orderIndex: "asc" } },
+      projectMemberships: { where: { projectRole: ProjectRole.ГИП }, select: { projectId: true } },
     },
     orderBy: { fullName: "asc" },
   });
@@ -45,5 +51,6 @@ export async function getManagers(): Promise<ManagerListItem[]> {
     avatarUrl: manager.avatarUrl,
     isActive: manager.isActive,
     managedDepartments: manager.managedDepartments,
+    gipProjectIds: manager.projectMemberships.map((m) => m.projectId),
   }));
 }

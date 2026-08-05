@@ -6,6 +6,8 @@ import { ManagersTab } from "@/components/employees/managers-tab";
 import { canManageDepartments } from "@/lib/departments/permissions";
 import { getDepartments, getEmployeesForManagerAssignment } from "@/lib/departments/queries";
 import { getManagers } from "@/lib/managers/queries";
+import { getPositions } from "@/lib/positions/queries";
+import { getProjectsForGipPicker } from "@/lib/projects/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
 // Отдельный раздел (не таб в Account Portal). Список видят все сотрудники
@@ -21,7 +23,7 @@ export default async function ManagersPage() {
   }
   const isAdmin = canManageDepartments(session.user);
 
-  const [managers, departments, employeeCandidates] = await Promise.all([
+  const [managers, departments, employeeCandidates, positions, gipPickerProjects] = await Promise.all([
     getManagers(),
     getDepartments(),
     // Только админу — тот же список, что и на странице департамента, для
@@ -29,6 +31,10 @@ export default async function ManagersPage() {
     // getEmployeesForManagerAssignment: без этого RSC-payload утекал бы
     // компании целиком не-админам).
     isAdmin ? getEmployeesForManagerAssignment() : Promise.resolve([]),
+    // Для диалога "Убрать из руководителей" — там можно сразу поменять
+    // должность и назначить ГИПом (см. remove-from-managers-dialog.tsx).
+    isAdmin ? getPositions() : Promise.resolve([]),
+    isAdmin ? getProjectsForGipPicker(session.user) : Promise.resolve([]),
   ]);
 
   return (
@@ -40,6 +46,8 @@ export default async function ManagersPage() {
           departments={departments}
           employeeCandidates={employeeCandidates}
           isAdmin={isAdmin}
+          positions={positions}
+          gipPickerProjects={gipPickerProjects}
         />
       </div>
     </>

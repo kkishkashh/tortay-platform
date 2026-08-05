@@ -7,6 +7,7 @@ import { Power, PowerOff } from "lucide-react";
 import { deactivateManagerAction, reactivateManagerAction } from "@/lib/managers/actions";
 import type { DepartmentListItem, ManagerCandidate } from "@/lib/departments/queries";
 import type { ManagerListItem } from "@/lib/managers/queries";
+import type { PositionItem } from "@/lib/positions/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,11 +56,15 @@ export function ManagersTab({
   departments,
   employeeCandidates,
   isAdmin,
+  positions,
+  gipPickerProjects,
 }: {
   managers: ManagerListItem[];
   departments: DepartmentListItem[];
   employeeCandidates: ManagerCandidate[];
   isAdmin: boolean;
+  positions: PositionItem[];
+  gipPickerProjects: { id: string; name: string }[];
 }) {
   return (
     <div className="space-y-4">
@@ -124,7 +129,14 @@ export function ManagersTab({
                     <div className="flex items-center justify-end gap-1">
                       <EditManagerDialog manager={manager} />
                       <ManagerRowActions manager={manager} />
-                      <RemoveFromManagersDialog userId={manager.id} fullName={manager.fullName} />
+                      <RemoveFromManagersDialog
+                        userId={manager.id}
+                        fullName={manager.fullName}
+                        currentPosition={manager.position}
+                        positions={positions}
+                        gipPickerProjects={gipPickerProjects}
+                        currentGipProjectIds={manager.gipProjectIds}
+                      />
                       <DeleteManagerDialog userId={manager.id} fullName={manager.fullName} />
                     </div>
                   </TableCell>

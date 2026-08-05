@@ -478,6 +478,46 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
   if (homeDepartmentId) revalidatePath(`/departments/${homeDepartmentId}`);
 }
 
+// Лёгкая версия updateEmployeeDetailsAction выше — только должность, без
+// остальных обязательных полей формы (ФИО и т.п.). Нужна для диалога
+// "Убрать из руководителей" (см. remove-from-managers-dialog.tsx): там
+// админ может сразу поменять должность человеку, которого только что
+// понизил, не заполняя всю форму "Кадровых данных" целиком.
+export async function updatePositionAction(userId: string, position: string | null) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  if (!(await canManageEmployeeDetails(session.user, userId))) {
+    throw new Error("Недостаточно прав");
+  }
+
+  const previous = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { position: true, email: true, fullName: true },
+  });
+  if (!previous) {
+    throw new Error("Сотрудник не найден");
+  }
+
+  await prisma.user.update({ where: { id: userId }, data: { position } });
+
+  if (position && position !== previous.position && userId !== session.user.id) {
+    await notifyPositionChanged(prisma, { userId, actorId: session.user.id, position });
+    if (previous.email) {
+      sendPositionChangedEmail({ to: previous.email, employeeName: previous.fullName, position }).catch(
+        (error) => {
+          console.error("Не удалось отправить письмо о смене должности", error);
+        },
+      );
+    }
+  }
+
+  revalidatePath(`/employees/${userId}`);
+  revalidatePath("/employees");
+  revalidatePath("/managers");
+}
+
 // Сам сотрудник обязан подтвердить текущий пароль (проверка личности).
 // Руководитель, сбрасывающий пароль ДРУГОГО сотрудника, текущий пароль
 // не знает и не должен вводить — это административный сброс.
