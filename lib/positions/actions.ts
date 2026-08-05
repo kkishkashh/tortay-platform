@@ -18,7 +18,8 @@ async function assertCanManagePositions() {
   }
   if (
     session.user.systemRole === SystemRole.АДМИН ||
-    session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ
+    session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    session.user.isGip
   ) {
     return;
   }

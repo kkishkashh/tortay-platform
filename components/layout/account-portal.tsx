@@ -36,7 +36,7 @@ export function AccountPortal({
 }) {
   const [open, setOpen] = useState(false);
   const isAdmin = profile.systemRole === SystemRole.АДМИН;
-  const isElevated = isAdmin || profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isElevated = isAdmin || profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ || profile.isGip;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

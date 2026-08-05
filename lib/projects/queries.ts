@@ -187,6 +187,28 @@ export type ManageableProjectOption = {
 // проекта): админ/бухгалтер видят все разделы, руководитель департамента —
 // только разделы СВОЕГО департамента. Проекты без ни одного подходящего
 // раздела не попадают в список вовсе.
+// Простой список проектов "какие может назначить ГИПом" — для пикера на
+// странице сотрудника (Кадровые данные), см. assign-gip-from-employee.tsx.
+// Та же область видимости, что и у диалога на самой странице проекта
+// (canManageOperations): админ/руководитель/ГИП/бухгалтер — видят все
+// проекты; руководитель департамента — только те, где у него есть свой
+// раздел.
+export async function getProjectsForGipPicker(user: {
+  id: string;
+  systemRole: SystemRole;
+  financeAccess?: boolean;
+  isGip?: boolean;
+}): Promise<{ id: string; name: string }[]> {
+  const seesAll = canManageOperations(user);
+  return prisma.project.findMany({
+    where: seesAll
+      ? undefined
+      : { sections: { some: { department: { managers: { some: { id: user.id } } } } } },
+    select: { id: true, name: true },
+    orderBy: { createdAt: "desc" },
+  });
+}
+
 export async function getManageableProjectsForTaskCreation(user: {
   id: string;
   systemRole: SystemRole;

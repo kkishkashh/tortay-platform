@@ -22,7 +22,8 @@ export default async function EmployeesPage() {
   // canAddEmployees — шире: АДМИН, РУКОВОДИТЕЛЬ (обе — операционные роли,
   // см. lib/projects/permissions.ts) или руководитель департамента.
   const isAdmin = session?.user.systemRole === SystemRole.АДМИН;
-  const isElevated = isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isElevated =
+    isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session?.user.isGip;
   const canAddEmployees = isElevated || roleTier === "department_manager";
 
   // Task 2.1/2.2 (PRD #3 Phase 5) — "Вся компания" только для руководителей

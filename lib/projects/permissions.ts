@@ -22,14 +22,20 @@ import { prisma } from "@/lib/prisma";
 // расширила решение до "пусть могут создавать и редактировать и удалять
 // всё". financeAccess живёт в session.user (см. auth.ts/types/next-auth.d.ts),
 // поэтому здесь синхронная проверка, без похода в базу.
+//
+// isGip (2026-08-05, по прямой просьбе): ГИП хотя бы одного проекта
+// получает те же операционные права, что и системная роль РУКОВОДИТЕЛЬ, по
+// ВСЕЙ компании (не только в своём проекте) — тоже живёт в session.user,
+// вычисляется один раз при входе (см. auth.ts).
 export function canManageOperations(
-  user: { systemRole: SystemRole; financeAccess?: boolean },
+  user: { systemRole: SystemRole; financeAccess?: boolean; isGip?: boolean },
   managesRelevantScope = false,
 ) {
   return (
     user.systemRole === SystemRole.АДМИН ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.financeAccess ||
+    !!user.isGip ||
     managesRelevantScope
   );
 }

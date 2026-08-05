@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { ProjectRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -47,12 +48,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
+        // ГИП хотя бы одного проекта — даёт права уровня РУКОВОДИТЕЛЬ по
+        // всей компании (см. lib/projects/permissions.ts). Считаем один раз
+        // при входе и кладём в токен, как и financeAccess ниже — тот же
+        // компромисс: назначили ГИПом — нужно перезайти.
+        const gipMembership = await prisma.projectMember.findFirst({
+          where: { userId: user.id, projectRole: ProjectRole.ГИП },
+          select: { id: true },
+        });
+
         return {
           id: user.id,
           email: user.email,
           name: user.fullName,
           systemRole: user.systemRole,
           financeAccess: user.financeAccess,
+          isGip: !!gipMembership,
         };
       },
     }),
@@ -71,6 +82,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id!;
         token.systemRole = user.systemRole;
         token.financeAccess = user.financeAccess;
+        token.isGip = user.isGip;
       }
       return token;
     },
@@ -78,6 +90,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = token.id;
       session.user.systemRole = token.systemRole;
       session.user.financeAccess = token.financeAccess;
+      session.user.isGip = token.isGip;
       return session;
     },
   },

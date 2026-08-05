@@ -29,7 +29,8 @@ export async function createEmployeeAction(formData: FormData) {
   }
 
   const isAdmin = session.user.systemRole === SystemRole.АДМИН;
-  const isElevated = isAdmin || session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isElevated =
+    isAdmin || session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session.user.isGip;
   let scopedDepartmentId: string | null = null;
   let scopedDepartmentName: string | null = null;
   if (!isElevated) {
@@ -116,14 +117,16 @@ export async function createEmployeeAction(formData: FormData) {
 // тот же принцип): он просто не может войти, история и назначения
 // остаются как есть.
 async function assertCanArchiveEmployee(
-  sessionUser: { id: string; systemRole: SystemRole },
+  sessionUser: { id: string; systemRole: SystemRole; isGip?: boolean },
   userId: string,
 ) {
   if (sessionUser.id === userId) {
     throw new Error("Нельзя изменить статус своего собственного аккаунта");
   }
   const isElevated =
-    sessionUser.systemRole === SystemRole.АДМИН || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+    sessionUser.systemRole === SystemRole.АДМИН ||
+    sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    !!sessionUser.isGip;
   if (isElevated) return;
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { homeDepartmentId: true } });
@@ -266,11 +269,15 @@ export async function deleteEmployeeAction(userId: string) {
 // план: "полный контроль над своим департаментом") — единая проверка,
 // используется контактными данными, кадровыми данными и сбросом пароля.
 async function canActOnEmployee(
-  sessionUser: { id: string; systemRole: SystemRole },
+  sessionUser: { id: string; systemRole: SystemRole; isGip?: boolean },
   targetUserId: string,
 ) {
   if (sessionUser.id === targetUserId) return true;
-  if (sessionUser.systemRole === SystemRole.АДМИН || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) {
+  if (
+    sessionUser.systemRole === SystemRole.АДМИН ||
+    sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    sessionUser.isGip
+  ) {
     return true;
   }
 
@@ -297,10 +304,14 @@ async function canActOnEmployee(
 // с его self-веткой, так что прямой вызов action в обход UI позволял
 // сотруднику самому себе сменить департамент/ФИО/должность).
 async function canManageEmployeeDetails(
-  sessionUser: { id: string; systemRole: SystemRole },
+  sessionUser: { id: string; systemRole: SystemRole; isGip?: boolean },
   targetUserId: string,
 ) {
-  if (sessionUser.systemRole === SystemRole.АДМИН || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) {
+  if (
+    sessionUser.systemRole === SystemRole.АДМИН ||
+    sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    sessionUser.isGip
+  ) {
     return true;
   }
 

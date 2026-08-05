@@ -10,12 +10,18 @@ declare module "next-auth" {
       id: string;
       systemRole: SystemRole;
       financeAccess: boolean;
+      // ГИП хотя бы одного проекта на момент входа — даёт те же
+      // операционные права, что и системная роль РУКОВОДИТЕЛЬ, по всей
+      // компании (см. lib/projects/permissions.ts). Тот же компромисс,
+      // что и с financeAccess/systemRole: подхватывается только при входе.
+      isGip: boolean;
     } & DefaultSession["user"];
   }
 
   interface User {
     systemRole: SystemRole;
     financeAccess: boolean;
+    isGip: boolean;
   }
 }
 
@@ -27,5 +33,6 @@ declare module "@auth/core/jwt" {
     id: string;
     systemRole: SystemRole;
     financeAccess: boolean;
+    isGip: boolean;
   }
 }

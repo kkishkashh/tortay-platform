@@ -14,7 +14,11 @@ import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/queries";
 import { getPositions } from "@/lib/positions/queries";
-import { getManageableProjectsForTaskCreation, getProjectMembersForProjects } from "@/lib/projects/queries";
+import {
+  getManageableProjectsForTaskCreation,
+  getProjectMembersForProjects,
+  getProjectsForGipPicker,
+} from "@/lib/projects/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_COLORS, PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
@@ -31,6 +35,7 @@ import { PasswordForm } from "@/components/employees/password-form";
 
 import { AddTaskToProjectDialog } from "./add-task-to-project-dialog";
 import { ArchiveEmployeeToggle } from "./archive-employee-toggle";
+import { AssignGipFromEmployee } from "./assign-gip-from-employee";
 import { CommentsTab } from "./comments-tab";
 import { HardDeleteEmployeeDialog } from "./hard-delete-employee-dialog";
 import { HistoryTab } from "./history-tab";
@@ -68,7 +73,8 @@ export default async function EmployeeProfilePage({
   // эти остаются только у isAdmin (см. canEditSystemRole ниже и
   // HardDeleteEmployeeDialog).
   const isAdmin = session?.user.systemRole === SystemRole.АДМИН;
-  const isElevated = isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isElevated =
+    isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session?.user.isGip;
 
   // Руководитель департамента получает те же права здесь, что и
   // администратор/руководитель компании, но только для сотрудников СВОЕГО
@@ -116,11 +122,12 @@ export default async function EmployeeProfilePage({
   const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
   const employeeDepartment = departments.find((d) => d.id === employee.homeDepartmentId) ?? null;
 
-  const [tasks, comments, timeline, manageableProjects] = await Promise.all([
+  const [tasks, comments, timeline, manageableProjects, gipPickerProjects] = await Promise.all([
     getTasksForUser(employee.id),
     getCommentsForAssignee(employee.id),
     getEmployeeTimeline(employee.id),
     canManage && session?.user ? getManageableProjectsForTaskCreation(session.user) : Promise.resolve([]),
+    canEditDetails && session?.user ? getProjectsForGipPicker(session.user) : Promise.resolve([]),
   ]);
 
   // Пакетные запросы (один на все проекты/задачи), а не по одному на
@@ -342,6 +349,7 @@ export default async function EmployeeProfilePage({
                     financeAccess={employee.financeAccess}
                     positions={positions}
                   />
+                  <AssignGipFromEmployee employeeUserId={employee.id} projects={gipPickerProjects} />
                 </CardContent>
               </Card>
             ) : (

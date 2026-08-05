@@ -5,10 +5,13 @@ import { SystemRole } from "@prisma/client";
 // АДМИН и РУКОВОДИТЕЛЬ (см. schema.prisma — с 2026-08-05 это две отдельные
 // системные роли, обе получают операционные права, см. lib/projects/
 // permissions.ts::canManageOperations; разница между ними — в финансах и
-// company-wide дашборде, не здесь).
-export function canManageDepartments(user: { systemRole: SystemRole }) {
+// company-wide дашборде, не здесь). ГИП хотя бы одного проекта (isGip) —
+// та же операционная зона, что и РУКОВОДИТЕЛЬ (см. canManageOperations).
+export function canManageDepartments(user: { systemRole: SystemRole; isGip?: boolean }) {
   return (
-    user.systemRole === SystemRole.АДМИН || user.systemRole === SystemRole.РУКОВОДИТЕЛЬ
+    user.systemRole === SystemRole.АДМИН ||
+    user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    !!user.isGip
   );
 }
 
@@ -27,7 +30,7 @@ export function isDepartmentManager(
 // managers, а не новое значение SystemRole). Администратор может всё,
 // что может руководитель департамента, в любом департаменте.
 export function canManageDepartment(
-  user: { id: string; systemRole: SystemRole },
+  user: { id: string; systemRole: SystemRole; isGip?: boolean },
   department: { managers: { id: string }[] },
 ) {
   return canManageDepartments(user) || isDepartmentManager(user, department);
@@ -36,7 +39,7 @@ export function canManageDepartment(
 // Базовый стек задач — первое место в системе, где не-администратор
 // (руководитель департамента) получает реальное право на запись.
 export function canManageTaskStack(
-  user: { id: string; systemRole: SystemRole },
+  user: { id: string; systemRole: SystemRole; isGip?: boolean },
   department: { managers: { id: string }[] },
 ) {
   return canManageDepartment(user, department);

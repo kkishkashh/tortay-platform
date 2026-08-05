@@ -1,4 +1,4 @@
-import { ProjectStatus, SystemRole, TaskStatus, UserType } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SystemRole, TaskStatus, UserType } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { getCurrentUserRoleTier, getManagedDepartment } from "@/lib/departments/queries";
@@ -147,6 +147,10 @@ export type EmployeeProfile = {
   createdAt: Date;
   homeDepartmentId: string | null;
   financeAccess: boolean;
+  // ГИП хотя бы одного проекта — операционные права уровня РУКОВОДИТЕЛЬ по
+  // всей компании (см. lib/projects/permissions.ts). Выводится из уже
+  // загруженного ниже projectMemberships, без отдельного запроса.
+  isGip: boolean;
   isActive: boolean;
   managedDepartments: { id: string; name: string }[];
   // Task 4.1 (PRD #3 Phase 3) — "кому подчиняется": сам Лид, если назначен
@@ -206,6 +210,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       projectMemberships: {
         select: {
           project: { select: { id: true, name: true, status: true } },
+          projectRole: true,
           // Через существующую обратную связь ProjectMember.tasksAssigned —
           // без отдельного запроса к Task (см. план, "reusing already-fetched
           // task data, not re-querying").
@@ -256,6 +261,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     createdAt: user.createdAt,
     homeDepartmentId: user.homeDepartmentId,
     financeAccess: user.financeAccess,
+    isGip: user.projectMemberships.some((m) => m.projectRole === ProjectRole.ГИП),
     isActive: user.isActive,
     managedDepartments: user.managedDepartments,
     reportsToName:
