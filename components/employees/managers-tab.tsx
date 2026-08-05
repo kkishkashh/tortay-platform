@@ -21,6 +21,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 import { CreateManagerDialog } from "@/components/employees/create-manager-dialog";
 import { EditManagerDialog } from "@/components/employees/edit-manager-dialog";
 import { DeleteManagerDialog } from "@/components/employees/delete-manager-dialog";
+import { RemoveFromManagersDialog } from "@/components/employees/remove-from-managers-dialog";
 
 function ManagerRowActions({ manager }: { manager: ManagerListItem }) {
   const [isPending, startTransition] = useTransition();
@@ -123,6 +124,7 @@ export function ManagersTab({
                     <div className="flex items-center justify-end gap-1">
                       <EditManagerDialog manager={manager} />
                       <ManagerRowActions manager={manager} />
+                      <RemoveFromManagersDialog userId={manager.id} fullName={manager.fullName} />
                       <DeleteManagerDialog userId={manager.id} fullName={manager.fullName} />
                     </div>
                   </TableCell>

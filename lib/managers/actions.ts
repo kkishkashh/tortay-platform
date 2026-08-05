@@ -67,6 +67,38 @@ export async function updateManagerAction(userId: string, formData: FormData) {
   revalidatePath("/");
 }
 
+// Убрать человека из руководителей ВСЕХ департаментов разом — становится
+// обычным сотрудником, аккаунт/проекты/история НЕ трогаются. Это
+// НЕ то же самое, что deleteManagerAction ниже (тот безвозвратно удаляет
+// весь аккаунт) — добавлено после реального инцидента: на этой странице
+// была только кнопка "Удалить безвозвратно", и её случайно нажали, желая
+// просто снять человека с руководителей (см. историю разработки, 2026-08-05).
+export async function removeFromAllManagedDepartmentsAction(userId: string) {
+  const session = await auth();
+  if (!session?.user || !canManageDepartments(session.user)) {
+    throw new Error("Снимать с руководителей может только администратор");
+  }
+
+  const departments = await prisma.department.findMany({
+    where: { managers: { some: { id: userId } } },
+    select: { id: true },
+  });
+
+  await Promise.all(
+    departments.map((department) =>
+      prisma.department.update({
+        where: { id: department.id },
+        data: { managers: { disconnect: { id: userId } } },
+      }),
+    ),
+  );
+
+  revalidatePath("/managers");
+  revalidatePath("/departments");
+  revalidatePath("/employees");
+  revalidatePath("/");
+}
+
 // Тот же принцип блокировки, что и deleteEmployeeAction (lib/employees/actions.ts):
 // жёсткое удаление запрещено, если на пользователя ссылаются записи с
 // обязательным внешним ключом. Department.managers —m2m с ON DELETE CASCADE
