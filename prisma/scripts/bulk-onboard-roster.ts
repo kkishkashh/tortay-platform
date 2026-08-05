@@ -44,8 +44,8 @@ async function main() {
     if (existing) {
       console.log(
         `[UPDATE] ${person.fullName} <${existing.email}> — reset password${
-          promoteToAdmin && existing.systemRole !== SystemRole.РУКОВОДИТЕЛЬ
-            ? ", promote to РУКОВОДИТЕЛЬ"
+          promoteToAdmin && existing.systemRole !== SystemRole.АДМИН
+            ? ", promote to АДМИН"
             : ""
         }`,
       );
@@ -56,7 +56,7 @@ async function main() {
             fullName: person.fullName,
             passwordHash,
             position: person.position ?? undefined,
-            ...(promoteToAdmin ? { systemRole: SystemRole.РУКОВОДИТЕЛЬ } : {}),
+            ...(promoteToAdmin ? { systemRole: SystemRole.АДМИН } : {}),
           },
         });
       }

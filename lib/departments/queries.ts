@@ -1,7 +1,6 @@
 import { ProjectStatus, SystemRole, TaskStackCategory, TaskStatus, UserType } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
-import { canManageDepartments } from "@/lib/departments/permissions";
 
 export type DepartmentManagerItem = { id: string; fullName: string };
 
@@ -239,11 +238,19 @@ export type RoleTier = "admin" | "department_manager" | "employee";
 // это не отдельная SystemRole (см. lib/departments/permissions.ts), а
 // производный статус: есть ли департамент, где этот пользователь состоит
 // в managers.
+//
+// ВАЖНО: тир "admin" здесь — это ИМЕННО доступ к company-wide дашборду и
+// аудит-логу (см. sidebar.tsx: visibility "admin"), поэтому проверяем
+// systemRole === АДМИН напрямую, а НЕ через canManageDepartments — та
+// функция с 2026-08-05 также разрешена РУКОВОДИТЕЛЮ (управление
+// департаментами — обычная операционка), но РУКОВОДИТЕЛЬ специально НЕ
+// должен получать company-wide дашборд/аудит-лог (см. lib/projects/
+// permissions.ts::canManageFinance и правку про роли).
 export async function getCurrentUserRoleTier(
   user: { id: string; systemRole: SystemRole } | undefined,
 ): Promise<RoleTier> {
   if (!user) return "employee";
-  if (canManageDepartments(user)) return "admin";
+  if (user.systemRole === SystemRole.АДМИН) return "admin";
 
   const managed = await prisma.department.findFirst({
     where: { managers: { some: { id: user.id } } },

@@ -31,22 +31,26 @@ export function AssignGipDialog({
   projectId,
   gipUserId,
   employees,
+  currentUserId,
 }: {
   projectId: string;
   gipUserId: string | null;
   employees: Employee[];
+  // Для кнопки-быстрого-пути "Назначить себя ГИПом" — null у пользователей
+  // без сессии (сюда практически не долетает, диалог и так виден только
+  // тем, у кого есть права, но session может отсутствовать в контексте).
+  currentUserId: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [selected, setSelected] = useState(gipUserId ?? "");
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit() {
-    if (!selected) return;
+  function assign(userId: string) {
     setError(null);
     startTransition(async () => {
       try {
-        await assignGipAction(projectId, selected);
+        await assignGipAction(projectId, userId);
         setOpen(false);
       } catch (submitError) {
         setError(
@@ -55,6 +59,13 @@ export function AssignGipDialog({
       }
     });
   }
+
+  function handleSubmit() {
+    if (!selected) return;
+    assign(selected);
+  }
+
+  const isAlreadyGip = currentUserId != null && currentUserId === gipUserId;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -66,6 +77,16 @@ export function AssignGipDialog({
         <DialogHeader>
           <DialogTitle>{gipUserId ? "Сменить ГИП" : "Назначить ГИП"}</DialogTitle>
         </DialogHeader>
+        {currentUserId && !isAlreadyGip ? (
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={isPending}
+            onClick={() => assign(currentUserId)}
+          >
+            {isPending ? "Назначаем…" : "Назначить себя ГИПом"}
+          </Button>
+        ) : null}
         <div className="space-y-2">
           <Label htmlFor="gip-select">Сотрудник</Label>
           <Select

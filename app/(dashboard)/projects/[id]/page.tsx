@@ -150,7 +150,8 @@ export default async function ProjectDetailPage({
   const canChangeStatus = session?.user
     ? canManageOperations(session.user, managesThisProject)
     : false;
-  const isHead = session?.user?.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  // Жёсткое удаление проекта — строго АДМИН (см. lib/projects/actions.ts::deleteProjectAction).
+  const isHead = session?.user?.systemRole === SystemRole.АДМИН;
   const currentUserId = session?.user?.id;
 
   return (
@@ -202,6 +203,7 @@ export default async function ProjectDetailPage({
                 projectId={project.id}
                 gipUserId={gipMember?.user.id ?? null}
                 employees={employees}
+                currentUserId={currentUserId ?? null}
               />
             ) : null}
           </div>

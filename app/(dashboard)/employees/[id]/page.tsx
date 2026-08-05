@@ -38,6 +38,7 @@ import { TasksTab } from "./tasks-tab";
 import { TimelineTab } from "./timeline-tab";
 
 const SYSTEM_ROLE_LABELS = {
+  АДМИН: "Админ",
   РУКОВОДИТЕЛЬ: "Руководитель",
   СОТРУДНИК: "Сотрудник",
 } as const;
@@ -60,13 +61,20 @@ export default async function EmployeeProfilePage({
   }
 
   const isSelf = session?.user.id === employee.id;
-  const isHead = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  // isAdmin — строго АДМИН (полный доступ). isElevated — АДМИН ИЛИ
+  // РУКОВОДИТЕЛЬ (обе операционные роли, см. lib/projects/permissions.ts) —
+  // "то же самое, что администратор" для управления сотрудниками/проектами/
+  // департаментами, кроме смены системных ролей и жёсткого удаления —
+  // эти остаются только у isAdmin (см. canEditSystemRole ниже и
+  // HardDeleteEmployeeDialog).
+  const isAdmin = session?.user.systemRole === SystemRole.АДМИН;
+  const isElevated = isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
 
   // Руководитель департамента получает те же права здесь, что и
-  // администратор, но только для сотрудников СВОЕГО департамента (см.
-  // план: "полный контроль над своим департаментом").
+  // администратор/руководитель компании, но только для сотрудников СВОЕГО
+  // департамента (см. план: "полный контроль над своим департаментом").
   let isDeptManagerOfEmployee = false;
-  if (!isSelf && !isHead && session?.user && employee.homeDepartmentId) {
+  if (!isSelf && !isElevated && session?.user && employee.homeDepartmentId) {
     const managed = await prisma.department.findFirst({
       where: { id: employee.homeDepartmentId, managers: { some: { id: session.user.id } } },
       select: { id: true },
@@ -78,7 +86,7 @@ export default async function EmployeeProfilePage({
   // компании целиком (см. canManageFinance): ему нужен доступ к кадровым
   // данным ЛЮБОГО сотрудника, а не только своего департамента, отсюда
   // отдельная (не через isDeptManagerOfEmployee) проверка.
-  const isFinanceManager = !isSelf && !isHead && session?.user
+  const isFinanceManager = !isSelf && !isElevated && session?.user
     ? await canManageFinance(session.user)
     : false;
 
@@ -90,18 +98,20 @@ export default async function EmployeeProfilePage({
   const roleTier = session?.user ? await getCurrentUserRoleTier(session.user) : "employee";
   const isAnyDeptManager = roleTier === "department_manager";
 
-  // Личный кабинет — свой, или (для админа/руководителя его департамента/
-  // финансового руководителя/любого другого руководителя на просмотр) чужой.
-  if (!isSelf && !isHead && !isDeptManagerOfEmployee && !isFinanceManager && !isAnyDeptManager) {
+  // Личный кабинет — свой, или (для админа/руководителя/руководителя его
+  // департамента/финансового руководителя/любого другого руководителя на
+  // просмотр) чужой.
+  if (!isSelf && !isElevated && !isDeptManagerOfEmployee && !isFinanceManager && !isAnyDeptManager) {
     redirect("/employees");
   }
 
-  const canManage = isHead || isDeptManagerOfEmployee;
+  const canManage = isElevated || isDeptManagerOfEmployee;
   const canEditContact = isSelf || canManage;
   // Системная роль — отдельное, более узкое право (см. DetailsForm):
-  // смена привилегий, заведомо только у isHead.
+  // смена привилегий, заведомо только у isAdmin (не у РУКОВОДИТЕЛЬ — иначе
+  // он мог бы сам себе/другим выдать полный доступ).
   const canEditDetails = canManage || isFinanceManager;
-  const canEditSystemRole = isHead;
+  const canEditSystemRole = isAdmin;
   const workloadMeta = WORKLOAD_META[employee.workload];
   const taskWorkloadMeta = WORKLOAD_META[employee.taskWorkload];
   const employeeDepartment = departments.find((d) => d.id === employee.homeDepartmentId) ?? null;
@@ -143,7 +153,7 @@ export default async function EmployeeProfilePage({
           canManage && !isSelf ? (
             <div className="flex items-center gap-2">
               <ArchiveEmployeeToggle userId={employee.id} isActive={employee.isActive} />
-              {isHead ? (
+              {isAdmin ? (
                 <HardDeleteEmployeeDialog userId={employee.id} fullName={employee.fullName} />
               ) : null}
             </div>
@@ -358,7 +368,7 @@ export default async function EmployeeProfilePage({
               </Card>
             )}
 
-            {isHead ? (
+            {isAdmin ? (
               <ManagedDepartmentsCard
                 userId={employee.id}
                 departments={departments}

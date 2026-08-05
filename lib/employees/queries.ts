@@ -5,13 +5,15 @@ import { getCurrentUserRoleTier, getManagedDepartment } from "@/lib/departments/
 import { prisma } from "@/lib/prisma";
 import { taskWorkloadLevel, workloadLevel, type WorkloadLevel } from "@/lib/workload";
 
-// ГИП — руководящая роль внутри компании, поэтому выбираем только
-// штатных сотрудников (аутсорсеров сюда не включаем). Руководители
-// департаментов сюда не входят — они теперь отдельная категория (см.
-// Account Portal → Менеджеры); сотрудников себе добавляют сами.
+// ГИП — руководящая роль внутри компании, поэтому выбираем только штатных
+// сотрудников (аутсорсеров сюда не включаем). Руководители департаментов
+// теперь ТОЖЕ входят в этот список (раньше были исключены через
+// managedDepartments: none — но руководитель должен иметь возможность
+// назначить ГИПом себя или другого руководителя, не только рядового
+// сотрудника, см. правку 2026-08-05).
 export async function getEmployeesForSelect() {
   return prisma.user.findMany({
-    where: { userType: UserType.ШТАТНЫЙ, managedDepartments: { none: {} } },
+    where: { userType: UserType.ШТАТНЫЙ },
     select: { id: true, fullName: true },
     orderBy: { fullName: "asc" },
   });

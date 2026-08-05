@@ -27,6 +27,7 @@ export function canManageOperations(
   managesRelevantScope = false,
 ) {
   return (
+    user.systemRole === SystemRole.АДМИН ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.financeAccess ||
     managesRelevantScope
@@ -68,15 +69,20 @@ export async function userManagesDepartmentInProject(
 // точечным флагом User.financeAccess (см. схему), без того, чтобы делать их
 // руководителями департамента.
 //
-// ВАЖНО (по прямой просьбе Камилы, 2026-08-04): в отличие от
-// canManageOperations, здесь НЕТ автоматического гранта по
-// systemRole === РУКОВОДИТЕЛЬ — до этого любой администратор компании видел
-// финансы (аутсорсеров и договоры) безусловно, что и хотели убрать. Теперь
-// доступ строго ручной: только через financeAccess (который проставляют
-// вручную через чекбокс в профиле сотрудника — components/employees/details-form.tsx
-// — сегодня это может сделать только сам администратор компании, так как
-// редактирование этого чекбокса гейтится isHead) или через руководство ADM.
-export async function canManageFinance(user: { id: string; financeAccess?: boolean }): Promise<boolean> {
+// История (по прямой просьбе Камилы, 2026-08-04): до этой даты — в отличие
+// от canManageOperations — здесь НЕ БЫЛО автоматического гранта по
+// systemRole === РУКОВОДИТЕЛЬ (тогда единственной "полной" роли) — любой
+// администратор компании видел финансы безусловно, что и хотели убрать.
+//
+// 2026-08-05: с введением роли АДМИН (см. schema.prisma — новая, более
+// полная роль, отдельная от РУКОВОДИТЕЛЬ) это решение осознанно развёрнуто
+// ОБРАТНО, но только для АДМИН: "админ имеет доступ ко всему-всему" (прямая
+// формулировка пользователя). РУКОВОДИТЕЛЬ по-прежнему НЕ получает финансы
+// автоматически — только через financeAccess/руководство ADM, как и раньше.
+export async function canManageFinance(
+  user: { id: string; systemRole?: SystemRole; financeAccess?: boolean },
+): Promise<boolean> {
+  if (user.systemRole === SystemRole.АДМИН) return true;
   if (user.financeAccess) return true;
   const record = await prisma.user.findUnique({
     where: { id: user.id },

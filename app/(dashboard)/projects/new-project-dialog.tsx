@@ -442,6 +442,12 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
     return initial;
   };
   const [selections, setSelections] = useState<Record<string, DepartmentSelectionState>>(defaultSelections);
+  // Раньше <Select name="gipUserId"> был неконтролируемым (значение читалось
+  // из FormData только при финальном submit) — так кнопка "Назначить себя"
+  // не могла программно проставить значение. Base UI Select поддерживает
+  // value+name одновременно (скрытый нативный input под капотом всё ещё
+  // попадает в FormData), поэтому переводим на контролируемое состояние.
+  const [gipUserId, setGipUserId] = useState(NONE_VALUE);
   const formRef = useRef<HTMLFormElement>(null);
 
   function getSelection(department: DepartmentOption) {
@@ -459,6 +465,7 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
 
   function resetAll() {
     setSelections(defaultSelections());
+    setGipUserId(NONE_VALUE);
     setStep(1);
   }
 
@@ -557,9 +564,24 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gipUserId">ГИП (необязательно)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="gipUserId">ГИП (необязательно)</Label>
+                {currentUserId && gipUserId !== currentUserId ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setGipUserId(currentUserId)}
+                  >
+                    Назначить себя
+                  </Button>
+                ) : null}
+              </div>
               <Select
                 name="gipUserId"
+                value={gipUserId}
+                onValueChange={(value) => setGipUserId(value ?? NONE_VALUE)}
                 items={[
                   { value: NONE_VALUE, label: "Не назначен" },
                   ...employees.map((employee) => ({ value: employee.id, label: employee.fullName })),

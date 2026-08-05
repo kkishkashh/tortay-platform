@@ -35,7 +35,8 @@ export function AccountPortal({
   departments: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
-  const isHead = profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isAdmin = profile.systemRole === SystemRole.АДМИН;
+  const isElevated = isAdmin || profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -53,7 +54,7 @@ export function AccountPortal({
 
           <TabsContent value="profile" className="mt-4 space-y-4">
             <ContactForm userId={profile.id} email={profile.email} phone={profile.phone} />
-            {isHead ? (
+            {isElevated ? (
               <DetailsForm
                 userId={profile.id}
                 fullName={profile.fullName}
@@ -62,7 +63,7 @@ export function AccountPortal({
                 homeDepartmentId={profile.homeDepartmentId}
                 departments={departments}
                 systemRole={profile.systemRole}
-                canEditSystemRole={isHead}
+                canEditSystemRole={isAdmin}
                 financeAccess={profile.financeAccess}
                 positions={positions}
               />

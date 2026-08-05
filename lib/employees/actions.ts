@@ -16,19 +16,23 @@ import { canManageFinance } from "@/lib/projects/permissions";
 
 // Полный контроль над своим департаментом (см. план): руководитель
 // департамента может создавать сотрудников, но только в СВОЁМ департаменте,
-// всегда с ролью СОТРУДНИК — ни назначить произвольный департамент, ни
-// выдать через эту форму системную роль РУКОВОДИТЕЛЬ он не может.
-// Администратор (РУКОВОДИТЕЛЬ) — без ограничений, как и раньше.
+// всегда с ролью СОТРУДНИК. АДМИН и РУКОВОДИТЕЛЬ (обе системные роли, см.
+// schema.prisma) создают сотрудников без ограничения по департаменту —
+// но назначить через эту форму НЕ базовую системную роль (СОТРУДНИК) может
+// только АДМИН: смена системных ролей — зона ответственности исключительно
+// администратора (иначе РУКОВОДИТЕЛЬ мог бы сам себе/другим выдавать
+// повышенные права в обход "Кадровых данных").
 export async function createEmployeeAction(formData: FormData) {
   const session = await auth();
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
 
-  const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const isAdmin = session.user.systemRole === SystemRole.АДМИН;
+  const isElevated = isAdmin || session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
   let scopedDepartmentId: string | null = null;
   let scopedDepartmentName: string | null = null;
-  if (!isAdmin) {
+  if (!isElevated) {
     const managed = await prisma.department.findFirst({
       where: { managers: { some: { id: session.user.id } } },
       select: { id: true, name: true },
@@ -118,8 +122,9 @@ async function assertCanArchiveEmployee(
   if (sessionUser.id === userId) {
     throw new Error("Нельзя изменить статус своего собственного аккаунта");
   }
-  const isAdmin = sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
-  if (isAdmin) return;
+  const isElevated =
+    sessionUser.systemRole === SystemRole.АДМИН || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  if (isElevated) return;
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { homeDepartmentId: true } });
   const managed = await prisma.department.findFirst({
@@ -180,7 +185,7 @@ export async function deleteEmployeeAction(userId: string) {
   if (session.user.id === userId) {
     throw new Error("Нельзя удалить свой собственный аккаунт");
   }
-  if (session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+  if (session.user.systemRole !== SystemRole.АДМИН) {
     throw new Error("Удалять сотрудников безвозвратно может только администратор");
   }
 
@@ -265,7 +270,9 @@ async function canActOnEmployee(
   targetUserId: string,
 ) {
   if (sessionUser.id === targetUserId) return true;
-  if (sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) return true;
+  if (sessionUser.systemRole === SystemRole.АДМИН || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) {
+    return true;
+  }
 
   const target = await prisma.user.findUnique({
     where: { id: targetUserId },
@@ -293,7 +300,9 @@ async function canManageEmployeeDetails(
   sessionUser: { id: string; systemRole: SystemRole },
   targetUserId: string,
 ) {
-  if (sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) return true;
+  if (sessionUser.systemRole === SystemRole.АДМИН || sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ) {
+    return true;
+  }
 
   const target = await prisma.user.findUnique({
     where: { id: targetUserId },
@@ -356,7 +365,10 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
     throw new Error("Не указан сотрудник");
   }
 
-  const isAdmin = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  // Строго АДМИН, не РУКОВОДИТЕЛЬ — смена системной роли/financeAccess
+  // (ниже) остаётся исключительно у администратора, иначе РУКОВОДИТЕЛЬ смог
+  // бы сам себе/другим выдать полный доступ в обход "Кадровых данных".
+  const isAdmin = session.user.systemRole === SystemRole.АДМИН;
   const isFinanceManager = await canManageFinance(session.user);
 
   if (!(await canManageEmployeeDetails(session.user, userId)) && !isFinanceManager) {

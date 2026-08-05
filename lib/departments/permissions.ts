@@ -2,12 +2,14 @@ import { SystemRole } from "@prisma/client";
 
 // Полное управление департаментами (создание/переименование/удаление,
 // смена цвета/иконки, назначение руководителя) — зона ответственности
-// администратора компании (РУКОВОДИТЕЛЬ), как и остальная операционка
-// (см. lib/projects/permissions.ts::canManageOperations). Отдельной
-// системной роли "администратор" не заводим — РУКОВОДИТЕЛЬ уже играет эту
-// роль во всей системе.
+// АДМИН и РУКОВОДИТЕЛЬ (см. schema.prisma — с 2026-08-05 это две отдельные
+// системные роли, обе получают операционные права, см. lib/projects/
+// permissions.ts::canManageOperations; разница между ними — в финансах и
+// company-wide дашборде, не здесь).
 export function canManageDepartments(user: { systemRole: SystemRole }) {
-  return user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  return (
+    user.systemRole === SystemRole.АДМИН || user.systemRole === SystemRole.РУКОВОДИТЕЛЬ
+  );
 }
 
 // С 2026-07-31 у департамента может быть несколько руководителей

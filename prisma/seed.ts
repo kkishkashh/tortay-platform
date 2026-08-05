@@ -40,7 +40,7 @@ async function main() {
       email: "kamilatleugali7@gmail.com",
       fullName: "Камила Тлеугали",
       passwordHash,
-      systemRole: SystemRole.РУКОВОДИТЕЛЬ,
+      systemRole: SystemRole.АДМИН,
       userType: UserType.ШТАТНЫЙ,
     },
   });

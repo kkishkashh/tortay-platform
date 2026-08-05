@@ -34,7 +34,11 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
     return [];
   }
 
-  const isHead = session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  // Видит ВСЕ проекты компании — строго АДМИН (company-wide, как и
+  // company-wide дашборд, см. lib/departments/queries.ts::getCurrentUserRoleTier)
+  // либо тот, у кого есть доступ к финансам (canManageFinance — им нужно
+  // видеть все проекты, чтобы найти нужный и привязать аутсорсера).
+  const isHead = session.user.systemRole === SystemRole.АДМИН;
   const seesAll = isHead || (await canManageFinance(session.user));
 
   const projects = await prisma.project.findMany({

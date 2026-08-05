@@ -16,7 +16,10 @@ async function assertCanManagePositions() {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ) {
+  if (
+    session.user.systemRole === SystemRole.АДМИН ||
+    session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ
+  ) {
     return;
   }
   const managed = await prisma.department.findFirst({

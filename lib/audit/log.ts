@@ -35,5 +35,9 @@ export async function recordAuditLog(
 // КОМУ-ТО ДРУГОМУ (см. использование в lib/tasks/actions.ts,
 // lib/departments/actions.ts, lib/employees/actions.ts).
 export function isPrivilegedOverride(user: { systemRole: SystemRole; financeAccess?: boolean }) {
-  return user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!user.financeAccess;
+  return (
+    user.systemRole === SystemRole.АДМИН ||
+    user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
+    !!user.financeAccess
+  );
 }

@@ -591,7 +591,7 @@ async function resolveReviewRecipients(department: { managers: { id: string }[] 
   }
 
   return prisma.user.findMany({
-    where: { systemRole: SystemRole.РУКОВОДИТЕЛЬ },
+    where: { systemRole: { in: [SystemRole.АДМИН, SystemRole.РУКОВОДИТЕЛЬ] } },
     select: { id: true, email: true, fullName: true },
   });
 }

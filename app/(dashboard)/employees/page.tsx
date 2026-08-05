@@ -17,8 +17,13 @@ export default async function EmployeesPage() {
 
   // Руководитель департамента тоже может добавлять сотрудников — но только
   // в свой департамент (см. lib/employees/actions.ts::createEmployeeAction).
-  const isAdmin = session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
-  const canAddEmployees = isAdmin || roleTier === "department_manager";
+  // isAdmin здесь — строго АДМИН: gates смену системной роли в форме
+  // создания (NewEmployeeDialog), это остаётся исключительно у него.
+  // canAddEmployees — шире: АДМИН, РУКОВОДИТЕЛЬ (обе — операционные роли,
+  // см. lib/projects/permissions.ts) или руководитель департамента.
+  const isAdmin = session?.user.systemRole === SystemRole.АДМИН;
+  const isElevated = isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ;
+  const canAddEmployees = isElevated || roleTier === "department_manager";
 
   // Task 2.1/2.2 (PRD #3 Phase 5) — "Вся компания" только для руководителей
   // департаментов (не рядовых сотрудников, см. project-prd3 memory: это

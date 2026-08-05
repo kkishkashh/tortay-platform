@@ -771,7 +771,7 @@ export async function deleteProjectAction(projectId: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (session.user.systemRole !== SystemRole.РУКОВОДИТЕЛЬ) {
+  if (session.user.systemRole !== SystemRole.АДМИН) {
     throw new Error("Удалять проект безвозвратно может только администратор");
   }
 
