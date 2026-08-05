@@ -2,46 +2,57 @@
 
 import { useState, useTransition } from "react";
 
-import { assignGipAction } from "@/lib/projects/actions";
+import { assignGipAction, removeGipAction } from "@/lib/projects/actions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type Project = { id: string; name: string };
 
-// Обратный путь к тому же assignGipAction, что и на странице проекта
-// (assign-gip-dialog.tsx) — там сначала выбирают проект, потом сотрудника;
-// здесь сотрудник уже открыт (это его профиль), выбираем проект. По
-// прямой просьбе: видно тем же, кто видит карточку "Кадровые данные"
-// (см. canEditDetails в employees/[id]/page.tsx).
+// Обратный путь к тем же assignGipAction/removeGipAction, что и на странице
+// проекта (assign-gip-dialog.tsx) — там сначала выбирают проект, потом
+// сотрудника; здесь сотрудник уже открыт (это его профиль) — отмечаем
+// галочками, ГИПом каких проектов он должен быть, один сотрудник может
+// быть ГИПом сразу нескольких проектов одновременно (не ограничено одним).
 export function AssignGipFromEmployee({
   employeeUserId,
   projects,
+  currentGipProjectIds,
 }: {
   employeeUserId: string;
   projects: Project[];
+  currentGipProjectIds: string[];
 }) {
   const [isPending, startTransition] = useTransition();
-  const [selected, setSelected] = useState("");
+  const [checked, setChecked] = useState(new Set(currentGipProjectIds));
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  function handleAssign() {
-    if (!selected) return;
+  function toggle(projectId: string) {
+    const next = new Set(checked);
+    if (next.has(projectId)) next.delete(projectId);
+    else next.add(projectId);
+    setChecked(next);
+    setSuccess(false);
+  }
+
+  function handleSave() {
     setError(null);
     setSuccess(false);
     startTransition(async () => {
       try {
-        await assignGipAction(selected, employeeUserId);
+        const initial = new Set(currentGipProjectIds);
+        const toAdd = [...checked].filter((id) => !initial.has(id));
+        const toRemove = [...initial].filter((id) => !checked.has(id));
+
+        await Promise.all([
+          ...toAdd.map((projectId) => assignGipAction(projectId, employeeUserId)),
+          ...toRemove.map((projectId) => removeGipAction(projectId, employeeUserId)),
+        ]);
+
         setSuccess(true);
       } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "Не удалось назначить ГИП");
+        setError(submitError instanceof Error ? submitError.message : "Не удалось сохранить");
       }
     });
   }
@@ -50,32 +61,31 @@ export function AssignGipFromEmployee({
     return null;
   }
 
+  const initial = new Set(currentGipProjectIds);
+  const hasChanges =
+    checked.size !== initial.size || [...checked].some((id) => !initial.has(id));
+
   return (
-    <div className="space-y-1.5 border-t pt-3">
-      <Label htmlFor="assign-gip-project">Назначить ГИПом проекта</Label>
-      <div className="flex gap-2">
-        <Select
-          value={selected || null}
-          onValueChange={(value) => setSelected(value ?? "")}
-          items={projects.map((p) => ({ value: p.id, label: p.name }))}
-        >
-          <SelectTrigger id="assign-gip-project" className="w-full">
-            <SelectValue placeholder="Выберите проект" />
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button type="button" onClick={handleAssign} disabled={isPending || !selected}>
-          {isPending ? "Назначаем…" : "Назначить"}
-        </Button>
+    <div className="space-y-2 border-t pt-3">
+      <Label>ГИП каких проектов (можно нескольких сразу)</Label>
+      <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border p-2">
+        {projects.map((project) => (
+          <label key={project.id} className="flex cursor-pointer items-center gap-2 text-sm">
+            <Checkbox
+              checked={checked.has(project.id)}
+              onCheckedChange={() => toggle(project.id)}
+            />
+            <span className="truncate">{project.name}</span>
+          </label>
+        ))}
       </div>
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      {success ? <p className="text-xs text-muted-foreground">Готово — назначен(а) ГИПом.</p> : null}
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" onClick={handleSave} disabled={isPending || !hasChanges}>
+          {isPending ? "Сохраняем…" : "Сохранить"}
+        </Button>
+        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {success ? <p className="text-xs text-muted-foreground">Готово.</p> : null}
+      </div>
     </div>
   );
 }

@@ -358,7 +358,11 @@ export default async function EmployeeProfilePage({
                     financeAccess={employee.financeAccess}
                     positions={positions}
                   />
-                  <AssignGipFromEmployee employeeUserId={employee.id} projects={gipPickerProjects} />
+                  <AssignGipFromEmployee
+                    employeeUserId={employee.id}
+                    projects={gipPickerProjects}
+                    currentGipProjectIds={employee.gipProjects.map((p) => p.id)}
+                  />
                 </CardContent>
               </Card>
             ) : (

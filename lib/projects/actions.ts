@@ -712,6 +712,38 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
+// Снять ГИП с проекта БЕЗ замены на кого-то другого — для чеклиста
+// "Проекты, где ГИП" на странице сотрудника (см. gip-projects-checklist.tsx):
+// там можно снять галочку с проекта, не выбирая никого взамен. Не удаляет
+// членство в проекте — понижает роль до МЕНЕДЖЕР, как и при обычной смене
+// ГИП в assignGipAction выше (человек остаётся участником проекта).
+export async function removeGipAction(projectId: string, userId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+  const managesThisProject = await userManagesDepartmentInProject(session.user, projectId);
+  if (!canManageOperations(session.user, managesThisProject)) {
+    throw new Error("Снимать ГИП может только руководитель");
+  }
+
+  const member = await prisma.projectMember.findFirst({
+    where: { projectId, userId, projectRole: ProjectRole.ГИП },
+  });
+  if (!member) {
+    return;
+  }
+
+  await prisma.projectMember.update({
+    where: { id: member.id },
+    data: { projectRole: ProjectRole.МЕНЕДЖЕР },
+  });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
 // Обратимая альтернатива удалению (Task 1.2, PRD #3 Phase 2) — та же
 // аудитория, что раньше могла удалять проект (администратор или
 // руководитель ЭТОГО проекта), но здесь можно и отменить. Данные проекта
