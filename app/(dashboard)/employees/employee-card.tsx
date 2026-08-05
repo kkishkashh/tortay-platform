@@ -33,6 +33,16 @@ export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
                     Деактивирован
                   </Badge>
                 ) : null}
+                {employee.isGip ? (
+                  <Badge className="shrink-0" title={employee.gipProjectNames.join(", ")}>
+                    ГИП{employee.gipProjectNames.length > 1 ? ` × ${employee.gipProjectNames.length}` : ""}
+                  </Badge>
+                ) : null}
+                {employee.isLead ? (
+                  <Badge variant="secondary" className="shrink-0">
+                    Лид
+                  </Badge>
+                ) : null}
               </div>
               <p className="truncate text-xs text-muted-foreground">
                 {employee.position ?? "—"}

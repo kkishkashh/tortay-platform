@@ -32,6 +32,11 @@ export type EmployeeListItem = {
   completedProjectsCount: number;
   totalProjectsCount: number;
   workload: WorkloadLevel;
+  // См. EmployeeProfile выше — та же идея (роль видна в списке, не только
+  // в профиле), тот же способ вычисления (без отдельных запросов).
+  isGip: boolean;
+  gipProjectNames: string[];
+  isLead: boolean;
 };
 
 // Полный список для страницы "Сотрудники" — с проектной статистикой и
@@ -62,8 +67,9 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       isActive: true,
       homeDepartment: { select: { code: true } },
       projectMemberships: {
-        select: { project: { select: { status: true } } },
+        select: { project: { select: { name: true, status: true } }, projectRole: true },
       },
+      _count: { select: { reports: true } },
     },
     orderBy: { fullName: "asc" },
   });
@@ -76,6 +82,9 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
     const completedProjectsCount = statuses.filter(
       (status) => status === ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ,
     ).length;
+    const gipMemberships = employee.projectMemberships.filter(
+      (m) => m.projectRole === ProjectRole.ГИП,
+    );
 
     return {
       id: employee.id,
@@ -90,6 +99,9 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       completedProjectsCount,
       totalProjectsCount: statuses.length,
       workload: workloadLevel(activeProjectsCount, employee.homeDepartment?.code),
+      isGip: gipMemberships.length > 0,
+      gipProjectNames: gipMemberships.map((m) => m.project.name),
+      isLead: employee._count.reports > 0,
     };
   });
 }
@@ -151,6 +163,13 @@ export type EmployeeProfile = {
   // всей компании (см. lib/projects/permissions.ts). Выводится из уже
   // загруженного ниже projectMemberships, без отдельного запроса.
   isGip: boolean;
+  // Проекты, где именно ГИП (не любое членство) — для отображения в
+  // профиле как отдельной "роли" (по прямой просьбе: видеть ГИП как роль
+  // наравне с Админ/Руководитель/Лид/Сотрудник, а не скрытый механизм).
+  gipProjects: { id: string; name: string }[];
+  // Тоже производный статус (см. lib/leads/queries.ts::isLead) — отображаем
+  // рядом с ГИП по той же причине.
+  isLead: boolean;
   isActive: boolean;
   managedDepartments: { id: string; name: string }[];
   // Task 4.1 (PRD #3 Phase 3) — "кому подчиняется": сам Лид, если назначен
@@ -201,6 +220,10 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       isActive: true,
       managedDepartments: { select: { id: true, name: true }, orderBy: { name: "asc" } },
       reportsTo: { select: { fullName: true } },
+      // "Лид" — производный статус (см. lib/leads/queries.ts::isLead): есть
+      // ли хоть кто-то, у кого reportsToId указывает на этого пользователя.
+      // Считаем через уже загружаемый запрос (_count), без отдельного похода в БД.
+      _count: { select: { reports: true } },
       homeDepartment: {
         select: {
           code: true,
@@ -262,6 +285,10 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     homeDepartmentId: user.homeDepartmentId,
     financeAccess: user.financeAccess,
     isGip: user.projectMemberships.some((m) => m.projectRole === ProjectRole.ГИП),
+    gipProjects: user.projectMemberships
+      .filter((m) => m.projectRole === ProjectRole.ГИП)
+      .map((m) => m.project),
+    isLead: user._count.reports > 0,
     isActive: user.isActive,
     managedDepartments: user.managedDepartments,
     reportsToName:

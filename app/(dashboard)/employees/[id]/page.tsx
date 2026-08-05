@@ -179,6 +179,12 @@ export default async function EmployeeProfilePage({
             <div className="flex items-center gap-2">
               <p className="text-lg font-medium">{employee.fullName}</p>
               {!employee.isActive ? <Badge variant="secondary">В архиве</Badge> : null}
+              {employee.isGip ? (
+                <Badge title={employee.gipProjects.map((p) => p.name).join(", ")}>
+                  ГИП{employee.gipProjects.length > 1 ? ` × ${employee.gipProjects.length}` : ""}
+                </Badge>
+              ) : null}
+              {employee.isLead ? <Badge variant="secondary">Лид</Badge> : null}
               {employeeDepartment ? (
                 <Link href={`/departments/${employeeDepartment.id}`}>
                   <span
@@ -194,6 +200,9 @@ export default async function EmployeeProfilePage({
             <p className="text-sm text-muted-foreground">
               {employee.position ?? "Должность не указана"} ·{" "}
               {SYSTEM_ROLE_LABELS[employee.systemRole]}
+              {employee.isGip
+                ? ` · ГИП: ${employee.gipProjects.map((p) => p.name).join(", ")}`
+                : ""}
               {employee.reportsToName ? ` · Руководитель: ${employee.reportsToName}` : ""}
             </p>
           </div>
