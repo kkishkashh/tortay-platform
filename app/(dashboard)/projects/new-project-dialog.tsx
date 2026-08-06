@@ -569,9 +569,8 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
                 {currentUserId && gipUserId !== currentUserId ? (
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs"
+                    variant="secondary"
+                    size="xs"
                     onClick={() => setGipUserId(currentUserId)}
                   >
                     Назначить себя
