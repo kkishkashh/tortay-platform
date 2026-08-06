@@ -53,9 +53,9 @@ function parseTaskFields(formData: FormData) {
   const description = (formData.get("description") as string | null)?.trim() || null;
   const priorityRaw = (formData.get("priority") as string | null) ?? TaskPriority.СРЕДНИЙ;
   const deadlineRaw = formData.get("deadline") as string | null;
-  const assigneeMemberIdRaw = (formData.get("assigneeMemberId") as string | null) || null;
-  const assigneeMemberId =
-    assigneeMemberIdRaw && assigneeMemberIdRaw !== UNASSIGNED_MEMBER_VALUE ? assigneeMemberIdRaw : null;
+  const assigneeUserIdRaw = (formData.get("assigneeUserId") as string | null) || null;
+  const assigneeUserId =
+    assigneeUserIdRaw && assigneeUserIdRaw !== UNASSIGNED_MEMBER_VALUE ? assigneeUserIdRaw : null;
 
   if (!title) {
     throw new Error("Название задачи обязательно");
@@ -69,22 +69,27 @@ function parseTaskFields(formData: FormData) {
     description,
     priority: priorityRaw as TaskPriority,
     deadline: deadlineRaw ? new Date(deadlineRaw) : null,
-    assigneeMemberId,
+    assigneeUserId,
   };
 }
 
-// Участник проекта, которому назначается задача — заодно тянем email/имя,
-// они нужны для уведомления и письма (см. notifyTaskAssigned/
-// sendTaskAssignedEmail), чтобы не делать отдельный запрос после.
-async function loadAssigneeOrThrow(assigneeMemberId: string, projectId: string) {
-  const member = await prisma.projectMember.findUnique({
-    where: { id: assigneeMemberId },
-    select: { projectId: true, user: { select: { id: true, email: true, fullName: true } } },
+// Исполнитель задачи выбирается из ВСЕХ сотрудников платформы (не только
+// уже добавленных в этот проект, 2026-08-06 по прямой просьбе — раньше
+// список ограничивался ProjectMember этого проекта, из-за чего часть
+// сотрудников "пропадала" из пикера) — заодно тянем email/имя, они нужны
+// для уведомления и письма (см. notifyTaskAssigned/sendTaskAssignedEmail),
+// чтобы не делать отдельный запрос после. Членство в проекте (ProjectMember,
+// см. Task.assigneeMemberId) обеспечивается отдельно через
+// ensureProjectMember прямо в транзакции создания/сохранения задачи.
+async function loadAssigneeUserOrThrow(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, fullName: true },
   });
-  if (!member || member.projectId !== projectId) {
-    throw new Error("Исполнитель должен быть участником этого проекта");
+  if (!user) {
+    throw new Error("Сотрудник не найден");
   }
-  return member.user;
+  return user;
 }
 
 // Создавать/редактировать/удалять задачи и назначать/менять
@@ -117,13 +122,11 @@ export async function createTasksFromStackAction(sectionId: string, formData: Fo
   const priority = priorityRaw as TaskPriority;
   const deadlineRaw = formData.get("deadline") as string | null;
   const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
-  const assigneeMemberIdRaw = (formData.get("assigneeMemberId") as string | null) || null;
-  const assigneeMemberId =
-    assigneeMemberIdRaw && assigneeMemberIdRaw !== UNASSIGNED_MEMBER_VALUE ? assigneeMemberIdRaw : null;
+  const assigneeUserIdRaw = (formData.get("assigneeUserId") as string | null) || null;
+  const assigneeUserId =
+    assigneeUserIdRaw && assigneeUserIdRaw !== UNASSIGNED_MEMBER_VALUE ? assigneeUserIdRaw : null;
 
-  const assignee = assigneeMemberId
-    ? await loadAssigneeOrThrow(assigneeMemberId, section.projectId)
-    : null;
+  const assignee = assigneeUserId ? await loadAssigneeUserOrThrow(assigneeUserId) : null;
 
   const templateItemIds = Array.from(new Set(formData.getAll("templateItemId") as string[]));
   const checkedSubItemIds = new Set(formData.getAll("subItemId") as string[]);
@@ -185,6 +188,18 @@ export async function createTasksFromStackAction(sectionId: string, formData: Fo
   }
 
   const createdTasks = await prisma.$transaction(async (tx) => {
+    let assigneeMemberId: string | null = null;
+    if (assigneeUserId) {
+      const { member } = await ensureProjectMember(tx, {
+        projectId: section.projectId,
+        userId: assigneeUserId,
+        role: ProjectRole.ИНЖЕНЕР,
+        actorId: session.user.id,
+        projectName: section.project.name,
+      });
+      assigneeMemberId = member.id;
+    }
+
     const results: { id: string; title: string }[] = [];
     for (const plan of plannedTasks) {
       const task = await tx.task.create({
@@ -382,13 +397,13 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
 
   const fields = parseTaskFields(formData);
 
-  const assigneeUser = fields.assigneeMemberId
-    ? await loadAssigneeOrThrow(fields.assigneeMemberId, task.section.projectId)
+  const assigneeUser = fields.assigneeUserId
+    ? await loadAssigneeUserOrThrow(fields.assigneeUserId)
     : null;
   const isReassignment =
-    fields.assigneeMemberId !== null && fields.assigneeMemberId !== task.assigneeMemberId;
+    fields.assigneeUserId !== null && fields.assigneeUserId !== task.assigneeMember?.userId;
   const newAssignee = isReassignment ? assigneeUser : null;
-  const isUnassignment = fields.assigneeMemberId === null && task.assigneeMemberId !== null;
+  const isUnassignment = fields.assigneeUserId === null && task.assigneeMemberId !== null;
   // Task 1.1 (аудит-лог): вмешательство в чужую задачу — исполнителя меняет
   // администратор/бухгалтер (см. isPrivilegedOverride), а задачу изначально
   // назначил КТО-ТО ДРУГОЙ (обычно руководитель департамента).
@@ -406,6 +421,18 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
     (task.deadline?.getTime() ?? null) !== (fields.deadline?.getTime() ?? null);
 
   await prisma.$transaction(async (tx) => {
+    let assigneeMemberId: string | null = null;
+    if (fields.assigneeUserId) {
+      const { member } = await ensureProjectMember(tx, {
+        projectId: task.section.projectId,
+        userId: fields.assigneeUserId,
+        role: ProjectRole.ИНЖЕНЕР,
+        actorId: session.user.id,
+        projectName: task.section.project.name,
+      });
+      assigneeMemberId = member.id;
+    }
+
     await tx.task.update({
       where: { id: taskId },
       data: {
@@ -413,7 +440,7 @@ export async function updateTaskAction(taskId: string, formData: FormData) {
         description: fields.description,
         priority: fields.priority,
         deadline: fields.deadline,
-        assigneeMemberId: fields.assigneeMemberId,
+        assigneeMemberId,
       },
     });
 

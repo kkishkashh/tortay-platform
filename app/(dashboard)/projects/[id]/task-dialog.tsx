@@ -38,14 +38,14 @@ const PRIORITY_OPTIONS = [
 
 const UNASSIGNED = UNASSIGNED_MEMBER_VALUE;
 
-type ProjectMemberOption = { id: string; fullName: string };
+type EmployeeOption = { id: string; fullName: string };
 
 type TaskDefaults = {
   title: string;
   description: string | null;
   priority: TaskPriority;
   deadline: Date | null;
-  assigneeMemberId: string | null;
+  assigneeUserId: string | null;
 };
 
 function toDateInputValue(date: Date | null) {
@@ -138,12 +138,12 @@ function TaskStackPicker({
 // всё одним нажатием (см. createTasksFromStackAction).
 function CreateTasksForm({
   sectionId,
-  projectMembers,
+  assignableEmployees,
   taskStack,
   onDone,
 }: {
   sectionId: string;
-  projectMembers: ProjectMemberOption[];
+  assignableEmployees: EmployeeOption[];
   taskStack: DepartmentTaskStackItem[];
   onDone: () => void;
 }) {
@@ -303,21 +303,21 @@ function CreateTasksForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="assigneeMemberId">Исполнитель</Label>
+        <Label htmlFor="assigneeUserId">Исполнитель</Label>
         <Select
-          name="assigneeMemberId"
+          name="assigneeUserId"
           defaultValue={UNASSIGNED}
           items={[
             { value: UNASSIGNED, label: "Не назначен" },
-            ...projectMembers.map((m) => ({ value: m.id, label: m.fullName })),
+            ...assignableEmployees.map((m) => ({ value: m.id, label: m.fullName })),
           ]}
         >
-          <SelectTrigger id="assigneeMemberId" className="w-full">
+          <SelectTrigger id="assigneeUserId" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={UNASSIGNED}>Не назначен</SelectItem>
-            {projectMembers.map((m) => (
+            {assignableEmployees.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.fullName}
               </SelectItem>
@@ -342,12 +342,12 @@ function CreateTasksForm({
 
 function EditTaskForm({
   taskId,
-  projectMembers,
+  assignableEmployees,
   defaults,
   onDone,
 }: {
   taskId: string;
-  projectMembers: ProjectMemberOption[];
+  assignableEmployees: EmployeeOption[];
   defaults: TaskDefaults;
   onDone: () => void;
 }) {
@@ -416,21 +416,21 @@ function EditTaskForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="assigneeMemberId">Исполнитель</Label>
+        <Label htmlFor="assigneeUserId">Исполнитель</Label>
         <Select
-          name="assigneeMemberId"
-          defaultValue={defaults.assigneeMemberId ?? UNASSIGNED}
+          name="assigneeUserId"
+          defaultValue={defaults.assigneeUserId ?? UNASSIGNED}
           items={[
             { value: UNASSIGNED, label: "Не назначен" },
-            ...projectMembers.map((m) => ({ value: m.id, label: m.fullName })),
+            ...assignableEmployees.map((m) => ({ value: m.id, label: m.fullName })),
           ]}
         >
-          <SelectTrigger id="assigneeMemberId" className="w-full">
+          <SelectTrigger id="assigneeUserId" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={UNASSIGNED}>Не назначен</SelectItem>
-            {projectMembers.map((m) => (
+            {assignableEmployees.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.fullName}
               </SelectItem>
@@ -455,7 +455,7 @@ function EditTaskForm({
 
 export function TaskDialog({
   trigger,
-  projectMembers,
+  assignableEmployees,
   mode,
   sectionId,
   taskId,
@@ -463,7 +463,7 @@ export function TaskDialog({
   taskStack = [],
 }: {
   trigger: ReactNode;
-  projectMembers: ProjectMemberOption[];
+  assignableEmployees: EmployeeOption[];
 } & (
   | { mode: "create"; sectionId: string; taskId?: undefined; defaults?: undefined; taskStack?: DepartmentTaskStackItem[] }
   | { mode: "edit"; taskId: string; sectionId?: undefined; defaults: TaskDefaults; taskStack?: undefined }
@@ -480,14 +480,14 @@ export function TaskDialog({
         {mode === "create" ? (
           <CreateTasksForm
             sectionId={sectionId}
-            projectMembers={projectMembers}
+            assignableEmployees={assignableEmployees}
             taskStack={taskStack}
             onDone={() => setOpen(false)}
           />
         ) : (
           <EditTaskForm
             taskId={taskId}
-            projectMembers={projectMembers}
+            assignableEmployees={assignableEmployees}
             defaults={defaults}
             onDone={() => setOpen(false)}
           />

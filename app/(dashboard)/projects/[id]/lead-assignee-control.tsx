@@ -13,35 +13,35 @@ import {
 
 const UNASSIGNED = "__unassigned__";
 
-// Task 5.2/5.4 (PRD #3 Phase 3) — узкий контрол для Лида: назначать
-// исполнителя может, но ТОЛЬКО из своих прямых подчинённых
-// (assignableMembers уже отфильтрован вызывающим кодом, см.
-// app/(dashboard)/projects/[id]/page.tsx). Показывается вместо обычного
-// "Не назначена" только когда canManage=false, но у Лида есть хотя бы
-// один подчинённый — участник этого проекта.
+// Task 5.2/5.4 (PRD #3 Phase 3) — узкий контрол для Ведущего архитектора:
+// назначать исполнителя может (2026-08-06, по прямой просьбе — из ВСЕХ
+// сотрудников платформы, не только своей команды, как было раньше).
+// Показывается вместо обычного "Не назначена" только когда canManage=false,
+// но у зрителя есть хотя бы один подчинённый (т.е. он вообще Ведущий
+// архитектор — см. app/(dashboard)/projects/[id]/page.tsx).
 export function LeadAssigneeControl({
   taskId,
-  currentAssigneeMemberId,
-  assignableMembers,
+  currentAssigneeUserId,
+  assignableEmployees,
 }: {
   taskId: string;
-  currentAssigneeMemberId: string | null;
-  assignableMembers: { id: string; fullName: string }[];
+  currentAssigneeUserId: string | null;
+  assignableEmployees: { id: string; fullName: string }[];
 }) {
   const [, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [optimisticValue, setOptimisticValue] = useOptimistic(
-    currentAssigneeMemberId ?? UNASSIGNED,
+    currentAssigneeUserId ?? UNASSIGNED,
   );
 
   function handleChange(value: string | null) {
     if (!value || value === optimisticValue) return;
     setError(null);
-    const nextMemberId = value === UNASSIGNED ? null : value;
+    const nextUserId = value === UNASSIGNED ? null : value;
     startTransition(async () => {
       setOptimisticValue(value);
       try {
-        await leadAssignTaskAction(taskId, nextMemberId);
+        await leadAssignTaskAction(taskId, nextUserId);
       } catch (submitError) {
         setError(submitError instanceof Error ? submitError.message : "Не удалось назначить исполнителя");
       }
@@ -55,7 +55,7 @@ export function LeadAssigneeControl({
         onValueChange={handleChange}
         items={[
           { value: UNASSIGNED, label: "Не назначен" },
-          ...assignableMembers.map((m) => ({ value: m.id, label: m.fullName })),
+          ...assignableEmployees.map((m) => ({ value: m.id, label: m.fullName })),
         ]}
       >
         <SelectTrigger size="sm" className="w-full">
@@ -63,7 +63,7 @@ export function LeadAssigneeControl({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={UNASSIGNED}>Не назначен</SelectItem>
-          {assignableMembers.map((m) => (
+          {assignableEmployees.map((m) => (
             <SelectItem key={m.id} value={m.id}>
               {m.fullName}
             </SelectItem>

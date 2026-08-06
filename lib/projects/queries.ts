@@ -108,48 +108,6 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   });
 }
 
-// Задачу можно назначить только участнику ЭТОГО проекта (Task.
-// assigneeMemberId → ProjectMember, не User напрямую) — см. решение D1 в
-// плане: так гарантируется, что исполнитель реально состоит в проекте.
-export async function getProjectMembersForTaskAssignment(projectId: string) {
-  const members = await prisma.projectMember.findMany({
-    where: { projectId },
-    select: { id: true, user: { select: { id: true, fullName: true } } },
-    orderBy: { user: { fullName: "asc" } },
-  });
-
-  return members.map((member) => ({
-    id: member.id,
-    userId: member.user.id,
-    fullName: member.user.fullName,
-  }));
-}
-
-export type ProjectMemberOption = { id: string; userId: string; fullName: string };
-
-// Пакетная версия getProjectMembersForTaskAssignment — ОДИН запрос на весь
-// список проектов вместо запроса на каждый (см. тот же приём в
-// lib/comments/queries.ts::getCommentsForTasksBatch).
-export async function getProjectMembersForProjects(
-  projectIds: string[],
-): Promise<Map<string, ProjectMemberOption[]>> {
-  const map = new Map<string, ProjectMemberOption[]>();
-  if (projectIds.length === 0) return map;
-
-  const members = await prisma.projectMember.findMany({
-    where: { projectId: { in: projectIds } },
-    select: { id: true, projectId: true, user: { select: { id: true, fullName: true } } },
-    orderBy: { user: { fullName: "asc" } },
-  });
-
-  for (const member of members) {
-    const list = map.get(member.projectId) ?? [];
-    list.push({ id: member.id, userId: member.user.id, fullName: member.user.fullName });
-    map.set(member.projectId, list);
-  }
-  return map;
-}
-
 export type SectionDeadlineChangeItem = {
   id: string;
   previousDeadline: Date | null;

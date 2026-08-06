@@ -3,8 +3,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
+import { getEmployeesForSelect } from "@/lib/employees/queries";
 import { getMyPersonalTasks } from "@/lib/personal-tasks/queries";
-import { getProjectMembersForProjects } from "@/lib/projects/queries";
 import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { getMyTasks } from "@/lib/tasks/queries";
 import { formatTodayLabel } from "@/lib/utils";
@@ -22,10 +22,9 @@ export default async function MyTasksPage() {
   // Пакетные запросы (один на все проекты/задачи), а не по одному на
   // каждый — раньше N+1 запросов к Neon подряд были причиной долгой
   // загрузки этой страницы (см. lib/comments/queries.ts::getCommentsForTasksBatch).
-  const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
   const taskIds = tasks.map((t) => t.id);
-  const [projectMembersByProject, commentsByTask, documentsByTask] = await Promise.all([
-    getProjectMembersForProjects(projectIds),
+  const [assignableEmployees, commentsByTask, documentsByTask] = await Promise.all([
+    getEmployeesForSelect(),
     getCommentsForTasksBatch(taskIds),
     getDocumentsForTasksBatch(taskIds),
   ]);
@@ -84,7 +83,7 @@ export default async function MyTasksPage() {
                         : false
                     }
                     isAssignee
-                    projectMembers={projectMembersByProject.get(task.projectId) ?? []}
+                    assignableEmployees={assignableEmployees}
                   />
                 ))}
               </div>

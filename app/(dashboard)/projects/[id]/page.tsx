@@ -26,7 +26,6 @@ import {
   userManagesDepartmentInProject,
   userIsLeadInProject,
 } from "@/lib/projects/permissions";
-import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { getLeadReportIds } from "@/lib/leads/queries";
 import {
   PROJECT_STATUS_LABELS,
@@ -63,7 +62,7 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
 
-  const [session, project, sections, gipMembers, employees, projectMembers] = await Promise.all([
+  const [session, project, sections, gipMembers, employees] = await Promise.all([
     auth(),
     prisma.project.findUnique({ where: { id } }),
     prisma.section.findMany({
@@ -88,7 +87,6 @@ export default async function ProjectDetailPage({
       include: { user: { select: { id: true, fullName: true } } },
     }),
     getEmployeesForSelect(),
-    getProjectMembersForTaskAssignment(id),
   ]);
   if (!project) {
     notFound();
@@ -112,12 +110,15 @@ export default async function ProjectDetailPage({
   );
   const taskStackByDepartmentId = new Map<string, DepartmentTaskStackItem[]>(taskStackEntries);
 
-  // Task 5.2/5.4 (PRD #3 Phase 3) — подчинённые Лида среди участников ЭТОГО
-  // проекта. Пусто у всех, кроме Лидов (см. lib/leads/queries.ts::isLead —
-  // производный статус, наличие подчинённых само по себе им и является).
-  const leadReportUserIds = session?.user ? new Set(await getLeadReportIds(session.user.id)) : new Set<string>();
-  const leadAssignableMembers = projectMembers.filter((m) => leadReportUserIds.has(m.userId));
-  const isLead = leadReportUserIds.size > 0;
+  // Task 5.2/5.4 (PRD #3 Phase 3) — есть ли у зрителя вообще подчинённые
+  // (т.е. он Ведущий архитектор — производный статус, см.
+  // lib/leads/queries.ts::isLead). Список, который такой зритель может
+  // назначить исполнителем, — те же ВСЕ сотрудники платформы, что и у
+  // руководителя/ГИП (2026-08-06, по прямой просьбе — раньше ограничивался
+  // только своей командой).
+  const leadReportUserIds = session?.user ? await getLeadReportIds(session.user.id) : [];
+  const isLead = leadReportUserIds.length > 0;
+  const leadAssignableMembers = isLead ? employees : [];
   // Для права менять срок раздела (см. updateSectionDatesAction) — Лид
   // может продлевать срок ТОЛЬКО в разделах СВОЕГО департамента.
   const currentUserHomeDepartmentId = session?.user
@@ -354,7 +355,7 @@ export default async function ProjectDetailPage({
                         currentUserId={currentUserId}
                         canManage={canManageTasks}
                         isAssignee={task.assignee?.userId === currentUserId}
-                        projectMembers={projectMembers}
+                        assignableEmployees={employees}
                         leadAssignableMembers={leadAssignableMembers}
                       />
                     ))}
@@ -365,7 +366,7 @@ export default async function ProjectDetailPage({
                   <TaskDialog
                     mode="create"
                     sectionId={section.id}
-                    projectMembers={projectMembers}
+                    assignableEmployees={employees}
                     taskStack={section.department ? (taskStackByDepartmentId.get(section.department.id) ?? []) : []}
                     trigger={
                       <Button variant="outline" size="sm">

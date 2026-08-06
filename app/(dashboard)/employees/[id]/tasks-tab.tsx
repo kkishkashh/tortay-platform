@@ -3,20 +3,20 @@ import type { TaskCommentItem } from "@/lib/comments/queries";
 import type { TaskAttachmentItem } from "@/lib/documents/queries";
 import type { MyTaskItem } from "@/lib/tasks/queries";
 
-type ProjectMemberOption = { id: string; fullName: string };
+type EmployeeOption = { id: string; fullName: string };
 
 export function TasksTab({
   tasks,
   commentsByTask,
   documentsByTask,
-  projectMembersByProject,
+  assignableEmployees,
   currentUserId,
   canManageByTask,
 }: {
   tasks: MyTaskItem[];
   commentsByTask: Map<string, TaskCommentItem[]>;
   documentsByTask: Map<string, TaskAttachmentItem[]>;
-  projectMembersByProject: Map<string, ProjectMemberOption[]>;
+  assignableEmployees: EmployeeOption[];
   currentUserId: string | undefined;
   canManageByTask: Map<string, boolean>;
 }) {
@@ -48,7 +48,7 @@ export function TasksTab({
                 currentUserId={currentUserId}
                 canManage={canManageByTask.get(task.id) ?? false}
                 isAssignee={task.assignee?.userId === currentUserId}
-                projectMembers={projectMembersByProject.get(task.projectId) ?? []}
+                assignableEmployees={assignableEmployees}
               />
             ))}
           </div>

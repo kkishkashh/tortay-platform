@@ -12,12 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments/queries";
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
-import { getEmployeeProfile, getEmployeeTimeline } from "@/lib/employees/queries";
+import { getEmployeeProfile, getEmployeesForSelect, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/queries";
 import { getPositions } from "@/lib/positions/queries";
 import {
   getManageableProjectsForTaskCreation,
-  getProjectMembersForProjects,
   getProjectsForGipPicker,
 } from "@/lib/projects/queries";
 import { canManageFinance } from "@/lib/projects/permissions";
@@ -128,10 +127,9 @@ export default async function EmployeeProfilePage({
   // Пакетные запросы (один на все проекты/задачи), а не по одному на
   // каждый — раньше N+1 запросов к Neon подряд были причиной долгой
   // загрузки этой страницы (см. lib/comments/queries.ts::getCommentsForTasksBatch).
-  const projectIds = Array.from(new Set(tasks.map((t) => t.projectId)));
   const taskIds = tasks.map((t) => t.id);
-  const [projectMembersByProject, commentsByTask, documentsByTask] = await Promise.all([
-    getProjectMembersForProjects(projectIds),
+  const [assignableEmployees, commentsByTask, documentsByTask] = await Promise.all([
+    getEmployeesForSelect(),
     getCommentsForTasksBatch(taskIds),
     getDocumentsForTasksBatch(taskIds),
   ]);
@@ -300,7 +298,7 @@ export default async function EmployeeProfilePage({
                   tasks={tasks}
                   commentsByTask={commentsByTask}
                   documentsByTask={documentsByTask}
-                  projectMembersByProject={projectMembersByProject}
+                  assignableEmployees={assignableEmployees}
                   currentUserId={session?.user?.id}
                   canManageByTask={canManageByTask}
                 />

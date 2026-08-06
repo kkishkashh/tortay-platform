@@ -37,7 +37,7 @@ function formatDate(date: Date | null) {
   return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
 }
 
-type ProjectMemberOption = { id: string; fullName: string };
+type EmployeeOption = { id: string; fullName: string };
 
 export function TaskCard({
   task,
@@ -46,7 +46,7 @@ export function TaskCard({
   currentUserId,
   canManage,
   isAssignee,
-  projectMembers,
+  assignableEmployees,
   leadAssignableMembers,
 }: {
   task: TaskListItem;
@@ -55,12 +55,17 @@ export function TaskCard({
   currentUserId: string | undefined;
   canManage: boolean;
   isAssignee: boolean;
-  projectMembers: ProjectMemberOption[];
-  // Task 5.2/5.4 (PRD #3 Phase 3) — только для Лида без полного canManage:
-  // подмножество projectMembers, ограниченное его прямыми подчинёнными
-  // (см. app/(dashboard)/projects/[id]/page.tsx). Пусто/не передано у
-  // всех остальных зрителей.
-  leadAssignableMembers?: { id: string; fullName: string }[];
+  // Все сотрудники платформы (2026-08-06, по прямой просьбе) — раньше
+  // список ограничивался уже добавленными участниками ЭТОГО проекта, из-за
+  // чего часть сотрудников "пропадала" из пикера; выбор кого-то нового
+  // добавляет его участником проекта автоматически (см. ensureProjectMember).
+  assignableEmployees: EmployeeOption[];
+  // Task 5.2/5.4 (PRD #3 Phase 3) — только для Ведущего архитектора без
+  // полного canManage: тот же полный список сотрудников платформы, если у
+  // зрителя вообще есть хотя бы один подчинённый (см.
+  // app/(dashboard)/projects/[id]/page.tsx). Пусто/не передано у всех
+  // остальных зрителей.
+  leadAssignableMembers?: EmployeeOption[];
 }) {
   const isOverdue =
     task.deadline !== null && task.deadline < new Date() && task.status !== TaskStatus.ВЫПОЛНЕНО;
@@ -76,13 +81,13 @@ export function TaskCard({
               <TaskDialog
                 mode="edit"
                 taskId={task.id}
-                projectMembers={projectMembers}
+                assignableEmployees={assignableEmployees}
                 defaults={{
                   title: task.title,
                   description: task.description,
                   priority: task.priority,
                   deadline: task.deadline,
-                  assigneeMemberId: task.assignee?.id ?? null,
+                  assigneeUserId: task.assignee?.userId ?? null,
                 }}
                 trigger={
                   <Button variant="ghost" size="icon-sm" title="Редактировать">
@@ -125,8 +130,8 @@ export function TaskCard({
             {!canManage && leadAssignableMembers && leadAssignableMembers.length > 0 ? (
               <LeadAssigneeControl
                 taskId={task.id}
-                currentAssigneeMemberId={task.assignee?.id ?? null}
-                assignableMembers={leadAssignableMembers}
+                currentAssigneeUserId={task.assignee?.userId ?? null}
+                assignableEmployees={leadAssignableMembers}
               />
             ) : (
               <div className="flex min-w-0 items-center gap-2">
