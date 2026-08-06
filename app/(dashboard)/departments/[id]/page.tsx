@@ -16,6 +16,7 @@ import {
   getDepartmentTaskStack,
   getEmployeesForDepartmentAssignment,
   getEmployeesForManagerAssignment,
+  type ManagerCandidate,
 } from "@/lib/departments/queries";
 import { getDepartmentHierarchy } from "@/lib/leads/queries";
 import { getTaskWorkloadForUsers } from "@/lib/tasks/queries";
@@ -77,21 +78,33 @@ export default async function DepartmentDetailPage({
     redirect("/");
   }
 
-  const [taskStack, allEmployeesRaw, managerCandidates, projects, analyticsStats, hierarchy] =
+  const [taskStack, allEmployeesRaw, managerCandidatesRaw, projects, analyticsStats, hierarchy] =
     await Promise.all([
       getDepartmentTaskStack(id),
       getEmployeesForDepartmentAssignment(),
       // Список кандидатов в руководители — по компании целиком, поэтому
       // запрашиваем и передаём в клиентский компонент только для админа:
-      // сам селект скрыт от руководителя департамента (canAssignManager), но
       // если бы пропс всё равно долетал до его браузера в RSC-payload, это
       // была бы утечка чужих сотрудников — именно то, чего просил избежать
-      // Камила при разделении сотрудников по департаментам.
+      // Камила при разделении сотрудников по департаментам. Руководитель
+      // ЭТОГО департамента (2026-08-06, по прямой просьбе: сам может
+      // добавить себе соруководителя, напр. ГАП) видит только своих же
+      // сотрудников — see ниже, не отдельный запрос.
       isAdmin ? getEmployeesForManagerAssignment() : Promise.resolve([]),
       getDepartmentProjects(id),
       getDepartmentDashboardStats(id),
       getDepartmentHierarchy(id),
     ]);
+  const managerCandidates: ManagerCandidate[] = isAdmin
+    ? managerCandidatesRaw
+    : canManageDept
+      ? department.employees.map((e) => ({
+          id: e.id,
+          fullName: e.fullName,
+          position: e.position,
+          managedDepartmentNames: [],
+        }))
+      : [];
   // Компактный статус загрузки по задачам для каждого сотрудника — один
   // пакетный запрос на весь департамент, показывается прямо в блоках
   // вкладки "Структура" (см. hierarchy-tab.tsx), без похода на профиль
@@ -156,7 +169,7 @@ export default async function DepartmentDetailPage({
               employees={department.employees}
               allEmployees={allEmployees}
               managerCandidates={managerCandidates}
-              canAssignManager={isAdmin}
+              canAssignManager={canManageDept}
               canManageEmployees={canManageDept}
             />
           </TabsContent>

@@ -131,10 +131,21 @@ export async function toggleAllowsLeadRoleAction(departmentId: string, enabled: 
 // С 2026-07-31 у департамента может быть несколько руководителей
 // одновременно (все с одинаковыми правами) — вместо одного "set" теперь
 // две отдельные операции add/remove над списком (Department.managers).
+//
+// 2026-08-06 (по прямой просьбе): раньше это было строго "только
+// администратор" ("структурное решение") — теперь ещё и руководитель
+// ЭТОГО ЖЕ департамента может добавить себе соруководителя (напр. ГАП в
+// Архитектуре), не только глобальный админ/РУКОВОДИТЕЛЬ/ГИП. Список
+// кандидатов для не-админа UI ограничивает сотрудниками своего
+// департамента (см. app/(dashboard)/departments/[id]/page.tsx) — это
+// подсказка в интерфейсе, а не проверка прав, поэтому сервер не
+// дублирует такое же ограничение: canManageDepartment ниже пропускает
+// любой userId, как и раньше для админа.
 export async function addDepartmentManagerAction(departmentId: string, userId: string) {
   const session = await auth();
-  if (!session?.user || !canManageDepartments(session.user)) {
-    throw new Error("Назначать руководителя департамента может только администратор");
+  const department = await loadDepartmentOrThrow(departmentId);
+  if (!session?.user || !canManageDepartment(session.user, department)) {
+    throw new Error("Назначать руководителя департамента может только его руководитель или администратор");
   }
 
   await prisma.$transaction(async (tx) => {
@@ -157,10 +168,13 @@ export async function addDepartmentManagerAction(departmentId: string, userId: s
   revalidatePath(`/employees/${userId}`);
 }
 
+// Симметрично addDepartmentManagerAction выше (2026-08-06) — руководитель
+// этого же департамента тоже может снять соруководителя, не только админ.
 export async function removeDepartmentManagerAction(departmentId: string, userId: string) {
   const session = await auth();
-  if (!session?.user || !canManageDepartments(session.user)) {
-    throw new Error("Снимать руководителя департамента может только администратор");
+  const department = await loadDepartmentOrThrow(departmentId);
+  if (!session?.user || !canManageDepartment(session.user, department)) {
+    throw new Error("Снимать руководителя департамента может только его руководитель или администратор");
   }
 
   await prisma.$transaction(async (tx) => {

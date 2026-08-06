@@ -15,6 +15,18 @@ import {
 import { createPositionAction } from "@/lib/positions/actions";
 import type { PositionItem } from "@/lib/positions/queries";
 
+// Быстрые кнопки для типовых руководящих должностей (2026-08-06, по прямой
+// просьбе: "кнопки в должностях в личных кабинетах") — сразу проставляют
+// значение одним кликом, без набора текста, поверх обычного выбора/поиска
+// ниже. Тот же createPositionAction, что и у "+ Добавить свою должность":
+// если такой должности ещё нет в списке, она создаётся, а не просто
+// подставляется текстом мимо БД.
+const QUICK_POSITIONS = [
+  "Главный архитектор проекта (ГАП)",
+  "Главный инженер проекта (ГИП)",
+  "Лид",
+];
+
 // Список должностей раньше был захардкожен (COMMON_POSITIONS) — теперь
 // живёт в БД (см. миграцию add_positions) и растёт через "+ Добавить свою
 // должность" прямо здесь, без отдельной админ-страницы: тот же круг людей,
@@ -39,30 +51,50 @@ export function PositionSelect({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function handleAdd() {
-    const trimmed = draft.trim();
-    if (!trimmed) return;
+  function selectOrCreate(positionName: string, onDone?: () => void) {
     setError(null);
     startTransition(async () => {
       try {
-        const existing = positions.find((p) => p.name === trimmed);
+        const existing = positions.find((p) => p.name === positionName);
         if (existing) {
           setValue(existing.name);
         } else {
-          const created = await createPositionAction(trimmed);
+          const created = await createPositionAction(positionName);
           setPositions((prev) => [...prev, { id: created.id, name: created.name }]);
           setValue(created.name);
         }
-        setDraft("");
-        setAdding(false);
+        onDone?.();
       } catch (submitError) {
-        setError(submitError instanceof Error ? submitError.message : "Не удалось добавить должность");
+        setError(submitError instanceof Error ? submitError.message : "Не удалось выбрать должность");
       }
+    });
+  }
+
+  function handleAdd() {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    selectOrCreate(trimmed, () => {
+      setDraft("");
+      setAdding(false);
     });
   }
 
   return (
     <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {QUICK_POSITIONS.map((quickName) => (
+          <Button
+            key={quickName}
+            type="button"
+            variant={value === quickName ? "default" : "outline"}
+            size="xs"
+            disabled={isPending}
+            onClick={() => selectOrCreate(quickName)}
+          >
+            {quickName}
+          </Button>
+        ))}
+      </div>
       <Select
         name={name}
         value={value}
