@@ -21,8 +21,6 @@ import { getAvatarColor, getInitials } from "@/lib/utils";
 
 const REPORTS_TO_NONE = "__none__";
 
-type FlatEmployee = { id: string; fullName: string; position: string | null; reportsToId: string | null };
-
 // Компактный индикатор "на каком этапе сейчас" — без похода на профиль
 // сотрудника за полным списком задач: цвет + текущая задача, если есть.
 function WorkloadBadge({ workload }: { workload: UserTaskWorkload | undefined }) {
@@ -119,14 +117,12 @@ export function HierarchyTab({
   departmentId,
   allowsLeadRole,
   hierarchy,
-  employees,
   workloadByUserId,
   canManage,
 }: {
   departmentId: string;
   allowsLeadRole: boolean;
   hierarchy: DepartmentHierarchy;
-  employees: FlatEmployee[];
   workloadByUserId: Map<string, UserTaskWorkload>;
   canManage: boolean;
 }) {
@@ -150,16 +146,14 @@ export function HierarchyTab({
     });
   }
 
-  const managerIds = new Set(hierarchy.managers.map((m) => m.id));
-
-  // Лид — сотрудник, чей reportsToId уже указывает на одного из
-  // руководителей (см. lib/leads/actions.ts — 2 уровня: Руководитель →
-  // Лид → Сотрудник). Такой сотрудник — валидная цель "подчиняется" для
-  // кого угодно ещё в департаменте, независимо от того, под каким именно
-  // руководителем он сейчас числится.
-  const leadOptionsBase: DepartmentHierarchyNode[] = employees
-    .filter((e) => e.reportsToId !== null && managerIds.has(e.reportsToId))
-    .map((e) => ({ id: e.id, fullName: e.fullName, position: e.position }));
+  // Ведущий архитектор — явно назначенный (leadOfManagerId, см.
+  // lib/leads/actions.ts::promoteToLeadAction), уже виден в hierarchy.
+  // Такой сотрудник — валидная цель "подчиняется" для кого угодно ещё в
+  // департаменте, независимо от того, под каким именно руководителем он
+  // сейчас числится.
+  const leadOptionsBase: DepartmentHierarchyNode[] = hierarchy.managers.flatMap((m) =>
+    m.leads.map((l) => ({ id: l.id, fullName: l.fullName, position: l.position })),
+  );
   const managerOptionsBase: DepartmentHierarchyNode[] = hierarchy.managers.map((m) => ({
     id: m.id,
     fullName: m.fullName,

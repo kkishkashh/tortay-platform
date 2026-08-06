@@ -69,7 +69,7 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       projectMemberships: {
         select: { project: { select: { name: true, status: true } }, projectRole: true },
       },
-      _count: { select: { reports: true } },
+      leadOfManagerId: true,
     },
     orderBy: { fullName: "asc" },
   });
@@ -101,7 +101,7 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       workload: workloadLevel(activeProjectsCount, employee.homeDepartment?.code),
       isGip: gipMemberships.length > 0,
       gipProjectNames: gipMemberships.map((m) => m.project.name),
-      isLead: employee._count.reports > 0,
+      isLead: employee.leadOfManagerId !== null,
     };
   });
 }
@@ -224,10 +224,9 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       isActive: true,
       managedDepartments: { select: { id: true, name: true }, orderBy: { name: "asc" } },
       reportsTo: { select: { fullName: true } },
-      // "Лид" — производный статус (см. lib/leads/queries.ts::isLead): есть
-      // ли хоть кто-то, у кого reportsToId указывает на этого пользователя.
-      // Считаем через уже загружаемый запрос (_count), без отдельного похода в БД.
-      _count: { select: { reports: true } },
+      // "Ведущий архитектор" — явное назначение, не производный статус (см.
+      // lib/leads/queries.ts::isLead, User.leadOfManagerId).
+      leadOfManagerId: true,
       homeDepartment: {
         select: {
           code: true,
@@ -293,7 +292,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     gipProjects: user.projectMemberships
       .filter((m) => m.projectRole === ProjectRole.ГИП)
       .map((m) => m.project),
-    isLead: user._count.reports > 0,
+    isLead: user.leadOfManagerId !== null,
     isActive: user.isActive,
     managedDepartments: user.managedDepartments,
     reportsToName:

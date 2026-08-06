@@ -114,6 +114,17 @@ model User {
   reportsTo   User?   @relation("UserReportsTo", fields: [reportsToId], references: [id], onDelete: SetNull)
   reports     User[]  @relation("UserReportsTo")
 
+  // Явное назначение "Ведущий архитектор под конкретным руководителем"
+  // (2026-08-06, по прямой просьбе) — в отличие от reportsToId выше, это НЕ
+  // производный статус: блок появляется в момент назначения, даже если у
+  // человека пока 0 подчинённых. reportsToId сотрудников по-прежнему
+  // свободно указывает либо на руководителя, либо на такого Ведущего
+  // архитектора — это поле только фиксирует "кто вообще Ведущий архитектор
+  // и под кем", а не "кто кому подчиняется".
+  leadOfManagerId String?
+  leadOfManager   User?   @relation("UserLeadOfManager", fields: [leadOfManagerId], references: [id], onDelete: SetNull)
+  leadsUnderMe    User[]  @relation("UserLeadOfManager")
+
   // Во всех проектах, где этот человек участвует (в разных ролях)
   projectMemberships ProjectMember[]
   documentsUploaded  Document[]

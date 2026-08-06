@@ -108,6 +108,32 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   });
 }
 
+export type UserProjectItem = { id: string; name: string; status: ProjectStatus };
+
+// Проекты, прикреплённые к конкретным людям (2026-08-06, для блоков
+// Руководителя/Ведущего архитектора на вкладке «Структура» департамента —
+// см. app/(dashboard)/departments/[id]/teams/[managerId]/team-detail-view.tsx) —
+// один пакетный запрос на весь список сразу, а не по человеку. "Прикреплён"
+// = обычное членство ProjectMember (та же связь, что и "Добавить участника"
+// на странице проекта), без нового поля в схеме.
+export async function getProjectsForUsers(userIds: string[]): Promise<Map<string, UserProjectItem[]>> {
+  const map = new Map<string, UserProjectItem[]>();
+  if (userIds.length === 0) return map;
+
+  const memberships = await prisma.projectMember.findMany({
+    where: { userId: { in: userIds } },
+    select: { userId: true, project: { select: { id: true, name: true, status: true } } },
+    orderBy: { project: { createdAt: "desc" } },
+  });
+
+  for (const membership of memberships) {
+    const list = map.get(membership.userId) ?? [];
+    list.push(membership.project);
+    map.set(membership.userId, list);
+  }
+  return map;
+}
+
 export type SectionDeadlineChangeItem = {
   id: string;
   previousDeadline: Date | null;

@@ -18,7 +18,7 @@ import {
   getEmployeesForManagerAssignment,
   type ManagerCandidate,
 } from "@/lib/departments/queries";
-import { getDepartmentHierarchy } from "@/lib/leads/queries";
+import { getDepartmentHierarchy, isLeadOfDepartment } from "@/lib/leads/queries";
 import { getTaskWorkloadForUsers } from "@/lib/tasks/queries";
 
 import { AnalyticsTab } from "./analytics-tab";
@@ -70,10 +70,15 @@ export default async function DepartmentDetailPage({
   // обязательно этого) тоже может открыть страницу, но только на
   // просмотр: canManageDept ниже по-прежнему смотрит именно на ЭТОТ
   // департамент, поэтому кнопки редактирования/добавления не появятся у
-  // "чужого" руководителя — только рендер страницы разрешён шире. Рядовой
-  // сотрудник по-прежнему не имеет здесь дела.
+  // "чужого" руководителя — только рендер страницы разрешён шире. Ведущий
+  // архитектор ЭТОГО департамента (2026-08-06, по прямой просьбе) тоже
+  // должен видеть страницу — иначе ему негде управлять своим блоком на
+  // вкладке «Структура». Рядовой сотрудник по-прежнему не имеет здесь дела.
   const roleTier = await getCurrentUserRoleTier(session.user);
-  const canView = canManageDept || roleTier === "department_manager";
+  const canView =
+    canManageDept ||
+    roleTier === "department_manager" ||
+    (await isLeadOfDepartment(session.user.id, id));
   if (!canView) {
     redirect("/");
   }
@@ -179,7 +184,6 @@ export default async function DepartmentDetailPage({
               departmentId={department.id}
               allowsLeadRole={department.allowsLeadRole}
               hierarchy={hierarchy}
-              employees={department.employees}
               workloadByUserId={workloadByUserId}
               canManage={canManageDept}
             />
