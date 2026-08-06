@@ -42,9 +42,14 @@ export function SectionDatesFields({
   deadline: Date | null;
 }) {
   const [isPending, startTransition] = useTransition();
-  // Значение, которое реально показывается в поле — при отмене диалога
-  // причины откатываем обратно на currentDeadline, а не оставляем то, что
-  // пользователь успел ввести в <input type="date">.
+  // Оба поля контролируемые (не defaultValue) — иначе при ошибке сохранения
+  // (см. ниже) нечем откатить значение обратно на то, что реально в БД:
+  // раньше startDate был defaultValue, и неудачное сохранение молча
+  // оставляло в поле дату, которую пользователь ввёл, но которая на сервере
+  // не сохранилась (баг: "иногда даты не сохраняются" — ошибка сервера
+  // просто никогда не доходила до пользователя, см. handleStartDateChange/
+  // handleDeadlineChange ниже).
+  const [currentStartDate, setCurrentStartDate] = useState(startDate);
   const [currentDeadline, setCurrentDeadline] = useState(deadline);
   const [pendingDeadline, setPendingDeadline] = useState<string | null>(null);
   const [reasonCategory, setReasonCategory] = useState<ShiftReasonCategory | "">("");
@@ -53,8 +58,15 @@ export function SectionDatesFields({
 
   function handleStartDateChange(event: React.ChangeEvent<HTMLInputElement>) {
     const value = event.target.value || null;
-    startTransition(() => {
-      updateSectionDatesAction(sectionId, value, toDateInputValue(currentDeadline) || null);
+    const previous = currentStartDate;
+    setCurrentStartDate(value ? new Date(value) : null);
+    startTransition(async () => {
+      try {
+        await updateSectionDatesAction(sectionId, value, toDateInputValue(currentDeadline) || null);
+      } catch (submitError) {
+        setCurrentStartDate(previous);
+        alert(submitError instanceof Error ? submitError.message : "Не удалось сохранить дату начала");
+      }
     });
   }
 
@@ -69,9 +81,15 @@ export function SectionDatesFields({
       return;
     }
 
+    const previous = currentDeadline;
     setCurrentDeadline(value ? new Date(value) : null);
-    startTransition(() => {
-      updateSectionDatesAction(sectionId, toDateInputValue(startDate) || null, value);
+    startTransition(async () => {
+      try {
+        await updateSectionDatesAction(sectionId, toDateInputValue(currentStartDate) || null, value);
+      } catch (submitError) {
+        setCurrentDeadline(previous);
+        alert(submitError instanceof Error ? submitError.message : "Не удалось сохранить срок");
+      }
     });
   }
 
@@ -86,7 +104,7 @@ export function SectionDatesFields({
       try {
         await updateSectionDatesAction(
           sectionId,
-          toDateInputValue(startDate) || null,
+          toDateInputValue(currentStartDate) || null,
           value,
           reasonCategory,
           comment.trim(),
@@ -112,7 +130,7 @@ export function SectionDatesFields({
     <div className="flex items-center gap-1.5">
       <Input
         type="date"
-        defaultValue={toDateInputValue(startDate)}
+        value={toDateInputValue(currentStartDate)}
         onChange={handleStartDateChange}
         disabled={isPending}
         className="h-8 w-36 text-xs"

@@ -31,7 +31,9 @@ export function ProjectStatusSelect({
   function handleValueChange(value: string | null) {
     if (!value) return;
     startTransition(() => {
-      updateProjectStatusAction(projectId, value as ProjectStatus);
+      updateProjectStatusAction(projectId, value as ProjectStatus).catch((error) => {
+        alert(error instanceof Error ? error.message : "Не удалось изменить статус проекта");
+      });
     });
   }
 

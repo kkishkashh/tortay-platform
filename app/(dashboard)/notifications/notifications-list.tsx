@@ -29,14 +29,14 @@ export function NotificationsList({ notifications }: { notifications: Notificati
 
   function handleMarkAllRead() {
     startTransition(() => {
-      markAllNotificationsReadAction();
+      markAllNotificationsReadAction().catch(console.error);
     });
   }
 
   function handleItemClick(id: string, isRead: boolean) {
     if (isRead) return;
     startTransition(() => {
-      markNotificationReadAction(id);
+      markNotificationReadAction(id).catch(console.error);
     });
   }
 

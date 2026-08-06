@@ -27,7 +27,9 @@ export function SectionStatusSelect({
   function handleValueChange(value: string | null) {
     if (!value) return;
     startTransition(() => {
-      updateSectionStatusAction(sectionId, value as SectionStatus);
+      updateSectionStatusAction(sectionId, value as SectionStatus).catch((error) => {
+        alert(error instanceof Error ? error.message : "Не удалось изменить статус раздела");
+      });
     });
   }
 

@@ -75,7 +75,9 @@ function PaymentCard({
     const value = event.target.value;
     if (value === String(payment.amount)) return;
     startTransition(() => {
-      updatePaymentAmountAction(payment.id, value);
+      updatePaymentAmountAction(payment.id, value).catch((error) => {
+        alert(error instanceof Error ? error.message : "Не удалось сохранить сумму");
+      });
     });
   }
 
@@ -124,7 +126,9 @@ function PaymentCard({
           disabled={isPending}
           onClick={() =>
             startTransition(() => {
-              togglePaymentPaidAction(payment.id);
+              togglePaymentPaidAction(payment.id).catch((error) => {
+                alert(error instanceof Error ? error.message : "Не удалось изменить статус оплаты");
+              });
             })
           }
         >
@@ -233,7 +237,9 @@ export function ContractDetailModal({
                 onValueChange={(value) =>
                   value &&
                   startTransition(() => {
-                    updateContractStatusAction(contract.id, value as ContractStatus);
+                    updateContractStatusAction(contract.id, value as ContractStatus).catch((error) => {
+                      alert(error instanceof Error ? error.message : "Не удалось изменить статус договора");
+                    });
                   })
                 }
               >
@@ -266,7 +272,9 @@ export function ContractDetailModal({
                 onValueChange={(value) =>
                   value &&
                   startTransition(() => {
-                    updateAvrStageAction(contract.id, value as AvrStage);
+                    updateAvrStageAction(contract.id, value as AvrStage).catch((error) => {
+                      alert(error instanceof Error ? error.message : "Не удалось изменить статус АВР");
+                    });
                   })
                 }
               >

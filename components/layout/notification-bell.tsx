@@ -42,14 +42,14 @@ export function NotificationBell({
 
   function handleMarkAllRead() {
     startTransition(() => {
-      markAllNotificationsReadAction();
+      markAllNotificationsReadAction().catch(console.error);
     });
   }
 
   function handleItemClick(notificationId: string, isRead: boolean) {
     if (isRead) return;
     startTransition(() => {
-      markNotificationReadAction(notificationId);
+      markNotificationReadAction(notificationId).catch(console.error);
     });
   }
 
