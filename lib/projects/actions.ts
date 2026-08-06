@@ -194,23 +194,26 @@ export async function createProjectAction(formData: FormData) {
   const startDate = startDateRaw ? new Date(startDateRaw) : null;
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
 
-  // ГИП необязателен при создании (по прямой просьбе Камилы, 2026-07-30) —
-  // назначить можно и позже через assignGipAction на странице проекта.
-  // "__none__" — та же условность, что и у homeDepartmentId в
-  // lib/employees/actions.ts (пикер всегда шлёт какое-то значение).
-  const gipUserIdRaw = (formData.get("gipUserId") as string | null)?.trim() || "";
-  const gipUserId = gipUserIdRaw && gipUserIdRaw !== "__none__" ? gipUserIdRaw : null;
+  // ГИП необязателен при создании, можно сразу несколько (2026-08-06, по
+  // прямой просьбе: "ГИП-ов может быть несколько на один проект") —
+  // назначить/добавить ещё можно и позже через assignGipAction на странице
+  // проекта. formData.getAll — тот же приём, что и у departmentIds
+  // (new-project-dialog.tsx рендерит по одному hidden input на каждого
+  // выбранного).
+  const gipUserIds = Array.from(
+    new Set((formData.getAll("gipUserId") as string[]).map((v) => v.trim()).filter(Boolean)),
+  );
 
-  // Нужны email/имя для уведомления о назначении — заодно валидируем,
-  // что выбранный ГИП реально существует (иначе ниже упадёт по FK).
-  const gipUser = gipUserId
-    ? await prisma.user.findUnique({
-        where: { id: gipUserId },
-        select: { email: true, fullName: true },
+  // Нужны email/имя для уведомлений — заодно валидируем, что все выбранные
+  // ГИП реально существуют (иначе ниже упадёт по FK).
+  const gipUsers = gipUserIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: gipUserIds } },
+        select: { id: true, email: true, fullName: true },
       })
-    : null;
-  if (gipUserId && !gipUser) {
-    throw new Error("Выбранный ГИП не найден");
+    : [];
+  if (gipUsers.length !== gipUserIds.length) {
+    throw new Error("Один из выбранных ГИП не найден");
   }
 
   // Порядок департаментов — по их orderIndex (canonical), а не по порядку
@@ -375,7 +378,7 @@ export async function createProjectAction(formData: FormData) {
     throw new Error("Чтобы указать БИН, укажите и стоимость договора");
   }
 
-  const creatorIsGip = gipUserId === session.user.id;
+  const creatorIsGip = gipUserIds.includes(session.user.id);
 
   const assignedTaskEmails: {
     to: string;
@@ -389,22 +392,28 @@ export async function createProjectAction(formData: FormData) {
       data: { name, client, location, startDate, endDate, description },
     });
 
-    const gipMember = gipUserId
-      ? await tx.projectMember.create({
+    const gipMembers = await Promise.all(
+      gipUserIds.map((gipUserId) =>
+        tx.projectMember.create({
           data: {
             projectId: project.id,
             userId: gipUserId,
             projectRole: ProjectRole.ГИП,
           },
-        })
-      : null;
-    if (gipMember && gipUserId) {
+        }),
+      ),
+    );
+    for (const gipUserId of gipUserIds) {
       await notifyGipAssigned(tx, { userId: gipUserId, actorId: session.user.id, projectName: name });
     }
+    // Если создатель сам среди выбранных ГИП — его собственное членство в
+    // проекте это уже созданная выше ГИП-запись, отдельную МЕНЕДЖЕР-запись
+    // заводить не нужно (иначе получится дубль по @@unique([projectId, userId])).
+    const creatorGipMember = gipMembers.find((m) => m.userId === session.user.id) ?? null;
 
     const creatorMember =
-      creatorIsGip && gipMember
-        ? gipMember
+      creatorIsGip && creatorGipMember
+        ? creatorGipMember
         : await tx.projectMember.create({
             data: {
               projectId: project.id,
@@ -563,7 +572,7 @@ export async function createProjectAction(formData: FormData) {
       console.error("Не удалось отправить уведомление о назначении задачи", error);
     });
   }
-  if (gipUser) {
+  for (const gipUser of gipUsers) {
     sendGipAssignedEmail({
       to: gipUser.email,
       employeeName: gipUser.fullName,
@@ -584,7 +593,7 @@ export async function createProjectAction(formData: FormData) {
     startDate,
     endDate,
     description,
-    gipName: gipUser?.fullName ?? null,
+    gipName: gipUsers.length > 0 ? gipUsers.map((u) => u.fullName).join(", ") : null,
     createdByName: session.user.name ?? "Руководитель",
     statusLabel: PROJECT_STATUS_LABELS[createdProject.status],
     createdAt: createdProject.createdAt,
@@ -633,11 +642,14 @@ export async function updateProjectNameAction(projectId: string, name: string) {
   revalidatePath(`/projects/${projectId}`);
 }
 
-// Назначить/сменить ГИП можно и после создания проекта (изначально это
-// было только в мастере создания). Если у проекта уже был другой ГИП —
-// он не выпадает из проекта, а становится МЕНЕДЖЕРОМ (та же логика,
-// что и в createProjectAction для создателя-не-ГИПа): так не теряется
-// его связь с уже созданными на нём договорами (createdByMemberId).
+// Назначить ГИП можно и после создания проекта (изначально это было только
+// в мастере создания). На проекте может быть НЕСКОЛЬКО ГИП одновременно
+// (2026-08-06, по прямой просьбе) — раньше эта функция понижала
+// предыдущего ГИП до МЕНЕДЖЕРа при назначении нового, из-за чего второй
+// ГИП физически не мог появиться; теперь она только ДОБАВЛЯЕТ нового,
+// никого не трогая. Снять ГИП с кого-то конкретного — отдельная
+// removeGipAction ниже (уже существовала для чеклиста на профиле
+// сотрудника, теперь это и есть единственный способ убрать ГИП).
 export async function assignGipAction(projectId: string, gipUserId: string) {
   const session = await auth();
   if (!session?.user) {
@@ -660,24 +672,13 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
   }
 
   const changed = await prisma.$transaction(async (tx) => {
-    const currentGip = await tx.projectMember.findFirst({
-      where: { projectId, projectRole: ProjectRole.ГИП },
-    });
-
-    if (currentGip?.userId === gipUserId) {
-      return false;
-    }
-
-    if (currentGip) {
-      await tx.projectMember.update({
-        where: { id: currentGip.id },
-        data: { projectRole: ProjectRole.МЕНЕДЖЕР },
-      });
-    }
-
     const existingMembership = await tx.projectMember.findUnique({
       where: { projectId_userId: { projectId, userId: gipUserId } },
     });
+
+    if (existingMembership?.projectRole === ProjectRole.ГИП) {
+      return false;
+    }
 
     if (existingMembership) {
       await tx.projectMember.update({
@@ -702,7 +703,11 @@ export async function assignGipAction(projectId: string, gipUserId: string) {
   });
 
   if (changed) {
-    syncProjectField(projectId, "gip", gipUser.fullName).catch((error) => {
+    const allGips = await prisma.projectMember.findMany({
+      where: { projectId, projectRole: ProjectRole.ГИП },
+      select: { user: { select: { fullName: true } } },
+    });
+    syncProjectField(projectId, "gip", allGips.map((m) => m.user.fullName).join(", ")).catch((error) => {
       console.error("Не удалось обновить ГИП проекта в Google Sheets", error);
     });
   }
@@ -738,6 +743,16 @@ export async function removeGipAction(projectId: string, userId: string) {
     where: { id: member.id },
     data: { projectRole: ProjectRole.МЕНЕДЖЕР },
   });
+
+  const remainingGips = await prisma.projectMember.findMany({
+    where: { projectId, projectRole: ProjectRole.ГИП },
+    select: { user: { select: { fullName: true } } },
+  });
+  syncProjectField(projectId, "gip", remainingGips.map((m) => m.user.fullName).join(", ")).catch(
+    (error) => {
+      console.error("Не удалось обновить ГИП проекта в Google Sheets", error);
+    },
+  );
 
   revalidatePath("/");
   revalidatePath("/projects");

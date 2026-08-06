@@ -47,10 +47,11 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
       ? undefined
       : { members: { some: { userId: session.user.id } } },
     include: {
+      // Может быть несколько ГИП на одном проекте (2026-08-06, по прямой
+      // просьбе) — раньше здесь стоял take: 1, показывавший только первого.
       members: {
         where: { projectRole: ProjectRole.ГИП },
         include: { user: { select: { fullName: true } } },
-        take: 1,
       },
       sections: { select: { status: true, startDate: true, deadline: true } },
     },
@@ -78,7 +79,10 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
       id: project.id,
       name: project.name,
       status: project.status,
-      gipName: project.members[0]?.user.fullName ?? null,
+      gipName:
+        project.members.length > 0
+          ? project.members.map((member) => member.user.fullName).join(", ")
+          : null,
       startDate,
       deadline,
       totalSections: project.sections.length,

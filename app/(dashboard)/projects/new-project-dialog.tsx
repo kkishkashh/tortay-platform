@@ -442,12 +442,12 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
     return initial;
   };
   const [selections, setSelections] = useState<Record<string, DepartmentSelectionState>>(defaultSelections);
-  // Раньше <Select name="gipUserId"> был неконтролируемым (значение читалось
-  // из FormData только при финальном submit) — так кнопка "Назначить себя"
-  // не могла программно проставить значение. Base UI Select поддерживает
-  // value+name одновременно (скрытый нативный input под капотом всё ещё
-  // попадает в FormData), поэтому переводим на контролируемое состояние.
-  const [gipUserId, setGipUserId] = useState(NONE_VALUE);
+  // Несколько ГИП на проекте — по прямой просьбе (2026-08-06, "ГИП-ов может
+  // быть несколько на один проект"). Состояние — набор id, при submit
+  // отдаётся в FormData как несколько скрытых input[name="gipUserId"] (тот
+  // же приём, что и у departmentIds ниже) — Checkbox из @base-ui/react не
+  // участвует в нативной форме сам по себе.
+  const [gipUserIds, setGipUserIds] = useState<Set<string>>(new Set());
   const formRef = useRef<HTMLFormElement>(null);
 
   function getSelection(department: DepartmentOption) {
@@ -463,9 +463,21 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
     setSelection(department.id, { ...current, checked: !current.checked });
   }
 
+  function toggleGip(userId: string) {
+    setGipUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      return next;
+    });
+  }
+
   function resetAll() {
     setSelections(defaultSelections());
-    setGipUserId(NONE_VALUE);
+    setGipUserIds(new Set());
     setStep(1);
   }
 
@@ -565,39 +577,36 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
 
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="gipUserId">ГИП (необязательно)</Label>
-                {currentUserId && gipUserId !== currentUserId ? (
+                <Label>ГИП (необязательно, можно несколько сразу)</Label>
+                {currentUserId && !gipUserIds.has(currentUserId) ? (
                   <Button
                     type="button"
                     variant="secondary"
                     size="xs"
-                    onClick={() => setGipUserId(currentUserId)}
+                    onClick={() => toggleGip(currentUserId)}
                   >
                     Назначить себя
                   </Button>
                 ) : null}
               </div>
-              <Select
-                name="gipUserId"
-                value={gipUserId}
-                onValueChange={(value) => setGipUserId(value ?? NONE_VALUE)}
-                items={[
-                  { value: NONE_VALUE, label: "Не назначен" },
-                  ...employees.map((employee) => ({ value: employee.id, label: employee.fullName })),
-                ]}
-              >
-                <SelectTrigger type="button" id="gipUserId" className="w-full">
-                  <SelectValue placeholder="Не назначен" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE_VALUE}>Не назначен</SelectItem>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border p-2">
+                {employees.length === 0 ? (
+                  <p className="p-1 text-xs text-muted-foreground">Нет доступных сотрудников.</p>
+                ) : (
+                  employees.map((employee) => (
+                    <label key={employee.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={gipUserIds.has(employee.id)}
+                        onCheckedChange={() => toggleGip(employee.id)}
+                      />
+                      <span className="truncate">{employee.fullName}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+              {Array.from(gipUserIds).map((id) => (
+                <input key={id} type="hidden" name="gipUserId" value={id} />
+              ))}
               <p className="text-xs text-muted-foreground">Можно назначить и позже, со страницы проекта.</p>
             </div>
 

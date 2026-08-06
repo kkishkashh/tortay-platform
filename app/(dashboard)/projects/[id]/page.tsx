@@ -55,7 +55,7 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
 
-  const [session, project, sections, gipMember, employees, projectMembers] = await Promise.all([
+  const [session, project, sections, gipMembers, employees, projectMembers] = await Promise.all([
     auth(),
     prisma.project.findUnique({ where: { id } }),
     prisma.section.findMany({
@@ -73,7 +73,9 @@ export default async function ProjectDetailPage({
         },
       },
     }),
-    prisma.projectMember.findFirst({
+    // Может быть несколько ГИП на одном проекте (2026-08-06, по прямой
+    // просьбе) — раньше здесь стоял findFirst.
+    prisma.projectMember.findMany({
       where: { projectId: id, projectRole: ProjectRole.ГИП },
       include: { user: { select: { id: true, fullName: true } } },
     }),
@@ -198,18 +200,22 @@ export default async function ProjectDetailPage({
           </div>
 
           <div className="flex items-center gap-3">
-            {gipMember ? (
-              <div className="flex items-center gap-2">
-                <span
-                  className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
-                  style={{ backgroundColor: getAvatarColor(gipMember.user.id) }}
-                >
-                  {getInitials(gipMember.user.fullName)}
-                </span>
-                <div className="leading-tight">
-                  <p className="text-xs text-muted-foreground">ГИП</p>
-                  <p className="text-sm font-medium">{gipMember.user.fullName}</p>
-                </div>
+            {gipMembers.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {gipMembers.map((member) => (
+                  <div key={member.id} className="flex items-center gap-2">
+                    <span
+                      className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                      style={{ backgroundColor: getAvatarColor(member.user.id) }}
+                    >
+                      {getInitials(member.user.fullName)}
+                    </span>
+                    <div className="leading-tight">
+                      <p className="text-xs text-muted-foreground">ГИП</p>
+                      <p className="text-sm font-medium">{member.user.fullName}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : canChangeStatus ? (
               <p className="text-sm text-muted-foreground">ГИП не назначен</p>
@@ -217,7 +223,7 @@ export default async function ProjectDetailPage({
             {canChangeStatus ? (
               <AssignGipDialog
                 projectId={project.id}
-                gipUserId={gipMember?.user.id ?? null}
+                gipMembers={gipMembers.map((m) => ({ id: m.user.id, fullName: m.user.fullName }))}
                 employees={employees}
                 currentUserId={currentUserId ?? null}
               />
