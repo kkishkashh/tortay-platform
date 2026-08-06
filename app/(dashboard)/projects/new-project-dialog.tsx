@@ -794,7 +794,7 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
 
                     {department.allowsLeadRole ? (
                       <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Лид проекта (необязательно)</Label>
+                        <Label className="text-xs text-muted-foreground">Ведущий архитектор проекта (необязательно)</Label>
                         <Select
                           value={selection.leadUserId || NONE_VALUE}
                           onValueChange={(value) =>

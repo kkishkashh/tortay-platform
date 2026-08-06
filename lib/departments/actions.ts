@@ -117,7 +117,7 @@ export async function deleteDepartmentAction(departmentId: string) {
 export async function toggleAllowsLeadRoleAction(departmentId: string, enabled: boolean) {
   const session = await auth();
   if (!session?.user || !canManageDepartments(session.user)) {
-    throw new Error("Включать роль Лида может только администратор");
+    throw new Error("Включать роль Ведущего архитектора может только администратор");
   }
 
   await prisma.department.update({
@@ -134,7 +134,7 @@ export async function toggleAllowsLeadRoleAction(departmentId: string, enabled: 
 //
 // 2026-08-06 (по прямой просьбе): раньше это было строго "только
 // администратор" ("структурное решение") — теперь ещё и руководитель
-// ЭТОГО ЖЕ департамента может добавить себе соруководителя (напр. ГАП в
+// ЭТОГО ЖЕ департамента может добавить себе соруководителя (напр. в
 // Архитектуре), не только глобальный админ/РУКОВОДИТЕЛЬ/ГИП. Список
 // кандидатов для не-админа UI ограничивает сотрудниками своего
 // департамента (см. app/(dashboard)/departments/[id]/page.tsx) — это

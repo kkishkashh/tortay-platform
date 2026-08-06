@@ -31,7 +31,6 @@ const ROLE_OPTIONS = [
   ProjectRole.ВЕДУЩИЙ_СПЕЦИАЛИСТ,
   ProjectRole.ПОМОЩНИК_ГИП,
   ProjectRole.МЕНЕДЖЕР,
-  ProjectRole.ГАП,
   ProjectRole.ГИП,
 ];
 

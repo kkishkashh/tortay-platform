@@ -179,7 +179,7 @@ export default async function EmployeeProfilePage({
                   ГИП{employee.gipProjects.length > 1 ? ` × ${employee.gipProjects.length}` : ""}
                 </Badge>
               ) : null}
-              {employee.isLead ? <Badge variant="secondary">Лид</Badge> : null}
+              {employee.isLead ? <Badge variant="secondary">Ведущий архитектор</Badge> : null}
               {employeeDepartment ? (
                 <Link href={`/departments/${employeeDepartment.id}`}>
                   <span

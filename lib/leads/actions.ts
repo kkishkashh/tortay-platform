@@ -39,10 +39,10 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
     throw new Error("Недостаточно прав");
   }
   if (!department.allowsLeadRole) {
-    throw new Error("В этом департаменте роль Лида не включена");
+    throw new Error("В этом департаменте роль Ведущего архитектора не включена");
   }
   if (leadUserId === employeeId) {
-    throw new Error("Сотрудник не может быть собственным Лидом");
+    throw new Error("Сотрудник не может быть собственным Ведущим архитектором");
   }
   // Руководитель департамента сам назначает Лидов и распределяет команду —
   // он никогда не подчиняется кому-то другому в этом же экшене (по прямой
@@ -66,7 +66,7 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
       select: { homeDepartmentId: true, reportsToId: true },
     });
     if (!lead || lead.homeDepartmentId !== department.id) {
-      throw new Error("Лид должен состоять в том же департаменте");
+      throw new Error("Ведущий архитектор должен состоять в том же департаменте");
     }
     // Ограничение в 2 уровня (Руководитель → Лид → Сотрудник) — Лидом
     // можно назначить только того, кто сам уже закреплён за одним из
@@ -74,7 +74,7 @@ export async function setEmployeeLeadAction(employeeId: string, leadUserId: stri
     // получилась бы длиннее 2 уровней.
     if (!lead.reportsToId || !managerIds.has(lead.reportsToId)) {
       throw new Error(
-        "Сначала закрепите этого сотрудника за руководителем — Лидом можно сделать только того, кто уже подчиняется руководителю напрямую",
+        "Сначала закрепите этого сотрудника за руководителем — Ведущим архитектором можно сделать только того, кто уже подчиняется руководителю напрямую",
       );
     }
     // Обратная сторона того же ограничения: сотрудника, у которого уже

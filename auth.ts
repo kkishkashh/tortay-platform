@@ -48,8 +48,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        // ГИП, МЕНЕДЖЕР или ГАП хотя бы одного проекта (2026-08-06, по
-        // прямой просьбе: все три роли внутри ProjectMember дают права
+        // ГИП или МЕНЕДЖЕР хотя бы одного проекта (2026-08-06, по
+        // прямой просьбе: обе роли внутри ProjectMember дают права
         // уровня РУКОВОДИТЕЛЬ по всей компании, не только на "своём"
         // проекте, см. lib/projects/permissions.ts). Считаем один раз при
         // входе и кладём в токен, как и financeAccess ниже — тот же
@@ -57,7 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const projectLeadMembership = await prisma.projectMember.findFirst({
           where: {
             userId: user.id,
-            projectRole: { in: [ProjectRole.ГИП, ProjectRole.МЕНЕДЖЕР, ProjectRole.ГАП] },
+            projectRole: { in: [ProjectRole.ГИП, ProjectRole.МЕНЕДЖЕР] },
           },
           select: { id: true },
         });

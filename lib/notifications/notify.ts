@@ -251,7 +251,7 @@ export async function notifyLeadPromoted(
       userId: data.userId,
       actorId: data.actorId,
       type: NotificationType.ЛИД_НАЗНАЧЕН,
-      title: "Вас назначили Лидом",
+      title: "Вас назначили Ведущим архитектором",
       body: data.departmentName
         ? `Теперь за вами закреплены сотрудники в департаменте «${data.departmentName}»`
         : "Теперь за вами закреплены сотрудники",
@@ -267,7 +267,7 @@ export async function notifyLeadDemoted(db: Db, data: { userId: string; actorId:
       userId: data.userId,
       actorId: data.actorId,
       type: NotificationType.ЛИД_СНЯТ,
-      title: "Вы больше не Лид",
+      title: "Вы больше не Ведущий архитектор",
       body: "Сотрудники, которые были закреплены за вами, переназначены — в вашей команде больше никого нет.",
     },
   });

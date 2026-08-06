@@ -349,7 +349,7 @@ export async function createProjectAction(formData: FormData) {
     // исполнителя задачи: клиентский пикер уже ограничивает выбор
     // сотрудниками ЭТОГО департамента, но это не замена проверке на сервере.
     if (selection.leadUserId && !employeeIds.has(selection.leadUserId)) {
-      throw new Error("Лид проекта должен быть сотрудником выбранного департамента");
+      throw new Error("Ведущий архитектор проекта должен быть сотрудником выбранного департамента");
     }
     const teamMemberIds = selection.teamMemberIds.filter((id) => employeeIds.has(id));
 
@@ -811,7 +811,7 @@ export async function addProjectMemberAction(
     canManageOperations(session.user, managesThisProject) ||
     (await userIsLeadInProject(session.user, projectId));
   if (!canAdd) {
-    throw new Error("Добавлять участников в проект может только руководитель, ГИП/Менеджер/ГАП или Лид");
+    throw new Error("Добавлять участников в проект может только руководитель, ГИП/Менеджер или Ведущий архитектор");
   }
 
   const [project, targetUser] = await Promise.all([
@@ -1112,7 +1112,7 @@ export async function updateSectionDatesAction(
       ? await isLeadOfDepartment(session.user.id, section.department.id)
       : false;
   if (!isManager && !isLeadOfDept) {
-    throw new Error("Менять сроки раздела может только руководитель или Лид этого департамента");
+    throw new Error("Менять сроки раздела может только руководитель или Ведущий архитектор этого департамента");
   }
 
   const newStartDate = startDate ? new Date(startDate) : null;

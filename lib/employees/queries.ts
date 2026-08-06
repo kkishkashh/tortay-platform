@@ -160,7 +160,7 @@ export type EmployeeProfile = {
   homeDepartmentId: string | null;
   financeAccess: boolean;
   // Точечный доступ "видеть/управлять любым проектом" (2026-08-06, для
-  // руководителя/ГАП Архитектуры) — см. lib/projects/permissions.ts.
+  // руководителя Архитектуры) — см. lib/projects/permissions.ts.
   allProjectsAccess: boolean;
   // ГИП хотя бы одного проекта — операционные права уровня РУКОВОДИТЕЛЬ по
   // всей компании (см. lib/projects/permissions.ts). Выводится из уже

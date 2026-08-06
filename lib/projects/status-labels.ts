@@ -11,7 +11,6 @@ export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
 // списком, у него отдельный, специализированный диалог.
 export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
   [ProjectRole.ГИП]: "ГИП",
-  [ProjectRole.ГАП]: "ГАП",
   [ProjectRole.МЕНЕДЖЕР]: "Менеджер",
   [ProjectRole.ПОМОЩНИК_ГИП]: "Помощник ГИП",
   [ProjectRole.ВЕДУЩИЙ_СПЕЦИАЛИСТ]: "Ведущий специалист",

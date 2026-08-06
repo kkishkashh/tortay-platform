@@ -44,7 +44,7 @@ export async function setPulseAction(sectionId: string, signal: PulseSignal, not
   const isManager = section.department.managers.some((manager) => manager.id === session.user.id);
   const isLeadOfDept = !isManager && (await isLeadOfDepartment(session.user.id, section.department.id));
   if (!isManager && !isLeadOfDept) {
-    throw new Error("Проставлять пульс может только руководитель или Лид этого департамента");
+    throw new Error("Проставлять пульс может только руководитель или Ведущий архитектор этого департамента");
   }
 
   const isoWeek = currentIsoWeek();

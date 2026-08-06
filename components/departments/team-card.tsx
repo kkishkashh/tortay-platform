@@ -36,7 +36,7 @@ export function TeamCard({
   onClick,
 }: {
   manager: { id: string; fullName: string };
-  // Имена ВСЕХ Лидов этого руководителя — их может быть 0, 1 или несколько
+  // Имена ВСЕХ ведущих архитекторов этого руководителя — их может быть 0, 1 или несколько
   // (см. lib/leads/queries.ts::DepartmentHierarchyManager.leads).
   leads: string[];
   employeeCount: number;
@@ -67,10 +67,10 @@ export function TeamCard({
 
       <div className="relative mt-3 space-y-1 text-sm text-white/85">
         {leads.length === 0 ? (
-          <p>Лид не назначен</p>
+          <p>Ведущий архитектор не назначен</p>
         ) : (
           <p className="truncate">
-            {leads.length > 1 ? "Лиды: " : "Лид: "}
+            {leads.length > 1 ? "Ведущие архитекторы: " : "Ведущий архитектор: "}
             {leads.join(", ")}
           </p>
         )}

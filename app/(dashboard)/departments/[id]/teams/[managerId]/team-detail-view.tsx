@@ -203,7 +203,7 @@ export function TeamDetailView({
                     <p className="text-sm font-medium">{lead.fullName}</p>
                     <Badge variant="outline" className="gap-1">
                       <Crown className="size-3" />
-                      Лид
+                      Ведущий архитектор
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">в команде: {lead.reports.length}</p>
@@ -261,7 +261,7 @@ export function TeamDetailView({
       {manager.directReports.length > 0 ? (
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Без Лида — напрямую у {manager.fullName.split(" ")[0]}
+            Без ведущего архитектора — напрямую у {manager.fullName.split(" ")[0]}
           </p>
           <div className="space-y-2">
             {manager.directReports.map((employee) => {

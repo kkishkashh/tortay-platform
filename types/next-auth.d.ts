@@ -16,7 +16,7 @@ declare module "next-auth" {
       // что и с financeAccess/systemRole: подхватывается только при входе.
       isProjectLead: boolean;
       // Точечный доступ "видеть/управлять любым проектом компании"
-      // (2026-08-06, для руководителя/ГАП Архитектуры) — тот же принцип,
+      // (2026-08-06, для руководителя Архитектуры) — тот же принцип,
       // что и financeAccess: отдельный флаг, не привязан к systemRole.
       allProjectsAccess: boolean;
     } & DefaultSession["user"];

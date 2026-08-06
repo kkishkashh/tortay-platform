@@ -45,7 +45,7 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   // company-wide дашборд, см. lib/departments/queries.ts::getCurrentUserRoleTier),
   // тот, у кого есть доступ к финансам (canManageFinance — им нужно видеть
   // все проекты, чтобы найти нужный и привязать аутсорсера), либо точечный
-  // флаг allProjectsAccess (2026-08-06, для руководителя/ГАП Архитектуры —
+  // флаг allProjectsAccess (2026-08-06, для руководителя Архитектуры —
   // см. lib/projects/permissions.ts::canManageOperations).
   const isHead = isFullAdmin(session.user.systemRole);
   const seesAll =

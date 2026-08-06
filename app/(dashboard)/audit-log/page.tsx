@@ -87,8 +87,8 @@ const ACTION_LABELS: Record<string, string> = {
   employee_finance_access_change: "Изменил(а) финансовый доступ сотрудника",
   employee_all_projects_access_change: "Изменил(а) доступ ко всем проектам у сотрудника",
   hard_delete: "Удалил(а) безвозвратно",
-  lead_assign: "Назначил(а) Лида",
-  lead_unassign: "Снял(а) Лида",
+  lead_assign: "Назначил(а) Ведущего архитектора",
+  lead_unassign: "Снял(а) Ведущего архитектора",
 };
 
 const TARGET_TYPE_LABELS: Record<string, string> = {

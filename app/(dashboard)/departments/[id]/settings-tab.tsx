@@ -22,13 +22,13 @@ export function SettingsTab({ department }: { department: DepartmentDetail }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Роль «Лид»</CardTitle>
+          <CardTitle>Роль «Ведущий архитектор»</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-sm text-muted-foreground">
             Промежуточный уровень между руководителем департамента и рядовыми сотрудниками:
-            руководитель сможет назначать Лидов на вкладке «Структура», а Лид — назначать задачи
-            только сотрудникам своей команды.
+            руководитель сможет назначать Ведущих архитекторов на вкладке «Структура», а Ведущий
+            архитектор — назначать задачи только сотрудникам своей команды.
           </p>
           <LeadRoleToggle departmentId={department.id} allowsLeadRole={department.allowsLeadRole} />
         </CardContent>

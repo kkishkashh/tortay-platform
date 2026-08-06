@@ -23,7 +23,7 @@ export function LeadRoleToggle({ departmentId, allowsLeadRole }: { departmentId:
         disabled={isPending}
         onCheckedChange={(checked) => handleChange(checked === true)}
       />
-      Включить роль «Лид» в этом департаменте
+      Включить роль «Ведущий архитектор» в этом департаменте
     </label>
   );
 }

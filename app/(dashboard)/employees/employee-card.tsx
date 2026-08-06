@@ -40,7 +40,7 @@ export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
                 ) : null}
                 {employee.isLead ? (
                   <Badge variant="secondary" className="shrink-0">
-                    Лид
+                    Ведущий архитектор
                   </Badge>
                 ) : null}
               </div>
