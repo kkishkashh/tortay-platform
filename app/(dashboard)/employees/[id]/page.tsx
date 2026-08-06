@@ -69,7 +69,7 @@ export default async function EmployeeProfilePage({
   // HardDeleteEmployeeDialog).
   const isAdmin = !!session?.user && isFullAdmin(session.user.systemRole);
   const isElevated =
-    isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session?.user.isGip;
+    isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session?.user.isProjectLead;
 
   // Руководитель департамента получает те же права здесь, что и
   // администратор/руководитель компании, но только для сотрудников СВОЕГО

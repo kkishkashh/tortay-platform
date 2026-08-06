@@ -31,7 +31,7 @@ export async function createEmployeeAction(formData: FormData) {
 
   const isAdmin = isFullAdmin(session.user.systemRole);
   const isElevated =
-    isAdmin || session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session.user.isGip;
+    isAdmin || session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session.user.isProjectLead;
   let scopedDepartmentId: string | null = null;
   let scopedDepartmentName: string | null = null;
   if (!isElevated) {
@@ -118,7 +118,7 @@ export async function createEmployeeAction(formData: FormData) {
 // тот же принцип): он просто не может войти, история и назначения
 // остаются как есть.
 async function assertCanArchiveEmployee(
-  sessionUser: { id: string; systemRole: SystemRole; isGip?: boolean },
+  sessionUser: { id: string; systemRole: SystemRole; isProjectLead?: boolean },
   userId: string,
 ) {
   if (sessionUser.id === userId) {
@@ -127,7 +127,7 @@ async function assertCanArchiveEmployee(
   const isElevated =
     isFullAdmin(sessionUser.systemRole) ||
     sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
-    !!sessionUser.isGip;
+    !!sessionUser.isProjectLead;
   if (isElevated) return;
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { homeDepartmentId: true } });
@@ -270,14 +270,14 @@ export async function deleteEmployeeAction(userId: string) {
 // план: "полный контроль над своим департаментом") — единая проверка,
 // используется контактными данными, кадровыми данными и сбросом пароля.
 async function canActOnEmployee(
-  sessionUser: { id: string; systemRole: SystemRole; isGip?: boolean },
+  sessionUser: { id: string; systemRole: SystemRole; isProjectLead?: boolean },
   targetUserId: string,
 ) {
   if (sessionUser.id === targetUserId) return true;
   if (
     isFullAdmin(sessionUser.systemRole) ||
     sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
-    sessionUser.isGip
+    sessionUser.isProjectLead
   ) {
     return true;
   }
@@ -305,13 +305,13 @@ async function canActOnEmployee(
 // с его self-веткой, так что прямой вызов action в обход UI позволял
 // сотруднику самому себе сменить департамент/ФИО/должность).
 async function canManageEmployeeDetails(
-  sessionUser: { id: string; systemRole: SystemRole; isGip?: boolean },
+  sessionUser: { id: string; systemRole: SystemRole; isProjectLead?: boolean },
   targetUserId: string,
 ) {
   if (
     isFullAdmin(sessionUser.systemRole) ||
     sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
-    sessionUser.isGip
+    sessionUser.isProjectLead
   ) {
     return true;
   }

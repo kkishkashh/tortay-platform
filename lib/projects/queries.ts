@@ -198,7 +198,7 @@ export async function getProjectsForGipPicker(user: {
   id: string;
   systemRole: SystemRole;
   financeAccess?: boolean;
-  isGip?: boolean;
+  isProjectLead?: boolean;
 }): Promise<{ id: string; name: string }[]> {
   const seesAll = canManageOperations(user);
   return prisma.project.findMany({

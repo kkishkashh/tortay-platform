@@ -20,7 +20,7 @@ async function assertCanManagePositions() {
   if (
     isFullAdmin(session.user.systemRole) ||
     session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
-    session.user.isGip
+    session.user.isProjectLead
   ) {
     return;
   }

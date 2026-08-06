@@ -24,19 +24,20 @@ import { isFullAdmin } from "@/lib/auth/roles";
 // всё". financeAccess живёт в session.user (см. auth.ts/types/next-auth.d.ts),
 // поэтому здесь синхронная проверка, без похода в базу.
 //
-// isGip (2026-08-05, по прямой просьбе): ГИП хотя бы одного проекта
-// получает те же операционные права, что и системная роль РУКОВОДИТЕЛЬ, по
-// ВСЕЙ компании (не только в своём проекте) — тоже живёт в session.user,
-// вычисляется один раз при входе (см. auth.ts).
+// isProjectLead (2026-08-05, расширено 2026-08-06 по прямой просьбе): ГИП
+// ИЛИ МЕНЕДЖЕР хотя бы одного проекта получает те же операционные права,
+// что и системная роль РУКОВОДИТЕЛЬ, по ВСЕЙ компании (не только в своём
+// проекте) — тоже живёт в session.user, вычисляется один раз при входе
+// (см. auth.ts).
 export function canManageOperations(
-  user: { systemRole: SystemRole; financeAccess?: boolean; isGip?: boolean },
+  user: { systemRole: SystemRole; financeAccess?: boolean; isProjectLead?: boolean },
   managesRelevantScope = false,
 ) {
   return (
     isFullAdmin(user.systemRole) ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.financeAccess ||
-    !!user.isGip ||
+    !!user.isProjectLead ||
     managesRelevantScope
   );
 }

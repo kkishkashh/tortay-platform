@@ -12,18 +12,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { canManageDepartments } from "@/lib/departments/permissions";
+import { isFullAdmin } from "@/lib/auth/roles";
 import { getAuditLog } from "@/lib/audit/queries";
 import { formatTodayLabel } from "@/lib/utils";
 
-// Только администратор компании — руководители департаментов и бухгалтеры
-// с financeAccess сюда не допускаются, это не их зона (см. план PRD #3,
-// Phase 1: "Manager/Lead не видят"). canManageDepartments — та же проверка,
-// что и у "Департаменты"/"Руководители", здесь означает то же самое:
-// systemRole === РУКОВОДИТЕЛЬ.
+// Только администратор компании (АДМИН/ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР) — та
+// же граница, что и у пункта "Аудит-лог" в боковом меню (visibility:
+// "admin", см. sidebar.tsx + getCurrentUserRoleTier). Раньше здесь стояла
+// canManageDepartments — исторически это означало то же самое (systemRole
+// === РУКОВОДИТЕЛЬ), но с 2026-08-05 canManageDepartments также открыта
+// ГИП/Руководителю, а с 2026-08-06 ещё и Менеджеру (см. lib/departments/
+// permissions.ts) — эти роли НЕ должны видеть аудит-лог (по прямой
+// просьбе), только боковое меню их и так уже скрывало, но прямая ссылка
+// на /audit-log их бы пускала. Проверяем isFullAdmin напрямую, без
+// переиспользования более широкой canManageDepartments.
 export default async function AuditLogPage() {
   const session = await auth();
-  if (!session?.user || !canManageDepartments(session.user)) {
+  if (!session?.user || !isFullAdmin(session.user.systemRole)) {
     redirect("/");
   }
 

@@ -108,6 +108,37 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
     ? await loadAssigneeOrThrow(fields.assigneeMemberId, section.projectId)
     : null;
 
+  // Пункт стека задач департамента (см. lib/departments/queries.ts::
+  // getDepartmentTaskStack) — необязателен: если выбран в TaskDialog, задача
+  // наследует вес и чек-лист подпунктов пункта стека, та же логика, что и
+  // при создании проекта из мастера (см. createProjectAction). Название/
+  // описание при этом остаются тем, что реально отправлено в форме (по
+  // умолчанию предзаполнены из пункта стека, но пользователь мог их
+  // подправить) — стек тут только источник шаблона, не источник истины.
+  const taskTemplateItemId = (formData.get("taskTemplateItemId") as string | null) || null;
+  let weight = 1;
+  let checklistTitles: string[] = [];
+  if (taskTemplateItemId) {
+    if (!section.department) {
+      throw new Error("У раздела без департамента нет стека задач");
+    }
+    const templateItem = await prisma.departmentTaskTemplateItem.findUnique({
+      where: { id: taskTemplateItemId },
+      select: {
+        departmentId: true,
+        weight: true,
+        subItems: { select: { title: true }, orderBy: { orderIndex: "asc" } },
+      },
+    });
+    // Пункт должен реально принадлежать департаменту ЭТОГО раздела —
+    // защита от подмены id в обход формы (напр. пункт из чужого стека).
+    if (!templateItem || templateItem.departmentId !== section.department.id) {
+      throw new Error("Пункт стека не найден для этого раздела");
+    }
+    weight = templateItem.weight;
+    checklistTitles = templateItem.subItems.map((sub) => sub.title);
+  }
+
   await prisma.$transaction(async (tx) => {
     const task = await tx.task.create({
       data: {
@@ -118,8 +149,19 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
         deadline: fields.deadline,
         assigneeMemberId: fields.assigneeMemberId,
         assignedByUserId: session.user.id,
+        weight,
       },
     });
+
+    if (checklistTitles.length > 0) {
+      await tx.taskChecklistItem.createMany({
+        data: checklistTitles.map((title, index) => ({
+          taskId: task.id,
+          title,
+          orderIndex: index,
+        })),
+      });
+    }
 
     await logActivity(tx, {
       projectId: section.projectId,

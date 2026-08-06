@@ -16,6 +16,7 @@ import { canManageProjectTasks } from "@/lib/tasks/permissions";
 import { computeWeightedProgress } from "@/lib/tasks/progress";
 import { getTasksForSections } from "@/lib/tasks/queries";
 import { getEmployeesForSelect } from "@/lib/employees/queries";
+import { getDepartmentTaskStack, type DepartmentTaskStackItem } from "@/lib/departments/queries";
 import { prisma } from "@/lib/prisma";
 import { getContractSummaryForProject } from "@/lib/contracts/queries";
 import { getProjectOutsourcers, getOutsourcersForPicker } from "@/lib/project-outsourcers/queries";
@@ -86,6 +87,20 @@ export default async function ProjectDetailPage({
   const managesThisProject = session?.user
     ? await userManagesDepartmentInProject(session.user, id)
     : false;
+
+  // Стек задач департамента для диалога "Добавить задачу" (см. TaskDialog) —
+  // один запрос на департамент, не на раздел: у нескольких разделов проекта
+  // может быть один и тот же департамент (напр. два раздела АР).
+  const departmentIdsForTaskStack = Array.from(
+    new Set(sections.map((section) => section.department?.id).filter((id): id is string => !!id)),
+  );
+  const taskStackEntries = await Promise.all(
+    departmentIdsForTaskStack.map(async (departmentId) => [
+      departmentId,
+      await getDepartmentTaskStack(departmentId),
+    ] as const),
+  );
+  const taskStackByDepartmentId = new Map<string, DepartmentTaskStackItem[]>(taskStackEntries);
 
   // Task 5.2/5.4 (PRD #3 Phase 3) — подчинённые Лида среди участников ЭТОГО
   // проекта. Пусто у всех, кроме Лидов (см. lib/leads/queries.ts::isLead —
@@ -303,6 +318,7 @@ export default async function ProjectDetailPage({
                     mode="create"
                     sectionId={section.id}
                     projectMembers={projectMembers}
+                    taskStack={section.department ? (taskStackByDepartmentId.get(section.department.id) ?? []) : []}
                     trigger={
                       <Button variant="outline" size="sm">
                         <Plus className="size-3.5" />

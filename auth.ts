@@ -48,12 +48,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null;
         }
 
-        // ГИП хотя бы одного проекта — даёт права уровня РУКОВОДИТЕЛЬ по
-        // всей компании (см. lib/projects/permissions.ts). Считаем один раз
-        // при входе и кладём в токен, как и financeAccess ниже — тот же
-        // компромисс: назначили ГИПом — нужно перезайти.
-        const gipMembership = await prisma.projectMember.findFirst({
-          where: { userId: user.id, projectRole: ProjectRole.ГИП },
+        // ГИП или МЕНЕДЖЕР хотя бы одного проекта (2026-08-06, по прямой
+        // просьбе: обе роли внутри ProjectMember дают права уровня
+        // РУКОВОДИТЕЛЬ по всей компании, не только на "своём" проекте, см.
+        // lib/projects/permissions.ts). Считаем один раз при входе и кладём
+        // в токен, как и financeAccess ниже — тот же компромисс: назначили
+        // ГИПом/МЕНЕДЖЕРом — нужно перезайти, чтобы право подхватилось.
+        const projectLeadMembership = await prisma.projectMember.findFirst({
+          where: {
+            userId: user.id,
+            projectRole: { in: [ProjectRole.ГИП, ProjectRole.МЕНЕДЖЕР] },
+          },
           select: { id: true },
         });
 
@@ -63,7 +68,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.fullName,
           systemRole: user.systemRole,
           financeAccess: user.financeAccess,
-          isGip: !!gipMembership,
+          isProjectLead: !!projectLeadMembership,
         };
       },
     }),
@@ -82,7 +87,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id!;
         token.systemRole = user.systemRole;
         token.financeAccess = user.financeAccess;
-        token.isGip = user.isGip;
+        token.isProjectLead = user.isProjectLead;
       }
       return token;
     },
@@ -90,7 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.id = token.id;
       session.user.systemRole = token.systemRole;
       session.user.financeAccess = token.financeAccess;
-      session.user.isGip = token.isGip;
+      session.user.isProjectLead = token.isProjectLead;
       return session;
     },
   },

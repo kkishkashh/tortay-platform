@@ -7,13 +7,14 @@ import { isFullAdmin } from "@/lib/auth/roles";
 // АДМИН и РУКОВОДИТЕЛЬ (см. schema.prisma — с 2026-08-05 это две отдельные
 // системные роли, обе получают операционные права, см. lib/projects/
 // permissions.ts::canManageOperations; разница между ними — в финансах и
-// company-wide дашборде, не здесь). ГИП хотя бы одного проекта (isGip) —
-// та же операционная зона, что и РУКОВОДИТЕЛЬ (см. canManageOperations).
-export function canManageDepartments(user: { systemRole: SystemRole; isGip?: boolean }) {
+// company-wide дашборде, не здесь). ГИП или МЕНЕДЖЕР хотя бы одного проекта
+// (isProjectLead) — та же операционная зона, что и РУКОВОДИТЕЛЬ (см.
+// canManageOperations).
+export function canManageDepartments(user: { systemRole: SystemRole; isProjectLead?: boolean }) {
   return (
     isFullAdmin(user.systemRole) ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
-    !!user.isGip
+    !!user.isProjectLead
   );
 }
 
@@ -32,7 +33,7 @@ export function isDepartmentManager(
 // managers, а не новое значение SystemRole). Администратор может всё,
 // что может руководитель департамента, в любом департаменте.
 export function canManageDepartment(
-  user: { id: string; systemRole: SystemRole; isGip?: boolean },
+  user: { id: string; systemRole: SystemRole; isProjectLead?: boolean },
   department: { managers: { id: string }[] },
 ) {
   return canManageDepartments(user) || isDepartmentManager(user, department);
@@ -41,7 +42,7 @@ export function canManageDepartment(
 // Базовый стек задач — первое место в системе, где не-администратор
 // (руководитель департамента) получает реальное право на запись.
 export function canManageTaskStack(
-  user: { id: string; systemRole: SystemRole; isGip?: boolean },
+  user: { id: string; systemRole: SystemRole; isProjectLead?: boolean },
   department: { managers: { id: string }[] },
 ) {
   return canManageDepartment(user, department);
