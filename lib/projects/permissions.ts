@@ -2,6 +2,7 @@ import { SystemRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { isFullAdmin } from "@/lib/auth/roles";
+import { isLeadOfDepartment } from "@/lib/leads/queries";
 
 // Операционная часть (создание проектов, смена статусов проектов/разделов,
 // назначение ГИП, удаление) — у администратора компании безусловно, и у
@@ -68,6 +69,31 @@ export async function userManagesDepartmentInProject(
     select: { id: true },
   });
   return !!section;
+}
+
+// Право на "Добавить участника" на странице проекта (2026-08-06, по
+// прямой просьбе) — canManageOperations(user, managesThisProject) уже
+// покрывает админа/ГТД/РУКОВОДИТЕЛЯ/финансы/ГИП-МЕНЕДЖЕР-ГАП где угодно
+// в компании/руководителя профильного департамента ЭТОГО проекта. Плюс
+// узкий, отдельный кейс: Лид департамента, у которого есть раздел в этом
+// проекте — та же логика, что уже используется для продления сроков
+// разделов (см. updateSectionDatesAction), но на уровне всего проекта, а
+// не одного раздела: перебираем департаменты всех разделов проекта.
+export async function userIsLeadInProject(
+  user: { id: string },
+  projectId: string,
+): Promise<boolean> {
+  const sections = await prisma.section.findMany({
+    where: { projectId, departmentId: { not: null } },
+    select: { departmentId: true },
+    distinct: ["departmentId"],
+  });
+  for (const section of sections) {
+    if (section.departmentId && (await isLeadOfDepartment(user.id, section.departmentId))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // Финансово-кадровая зона (аутсорсеры, договоры) — открыта руководителю

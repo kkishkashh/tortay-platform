@@ -1,9 +1,21 @@
-import { ProjectStatus, SectionStatus, TaskPriority, TaskStatus } from "@prisma/client";
+import { ProjectRole, ProjectStatus, SectionStatus, TaskPriority, TaskStatus } from "@prisma/client";
 
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   [ProjectStatus.В_РАБОТЕ]: "В работе",
   [ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ]: "Завершён по разделам",
   [ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ]: "Завершён полностью",
+};
+
+// Для диалога "Добавить участника" на странице проекта (см.
+// add-project-member-dialog.tsx) — ГИП/АssignGipDialog не пользуется этим
+// списком, у него отдельный, специализированный диалог.
+export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
+  [ProjectRole.ГИП]: "ГИП",
+  [ProjectRole.ГАП]: "ГАП",
+  [ProjectRole.МЕНЕДЖЕР]: "Менеджер",
+  [ProjectRole.ПОМОЩНИК_ГИП]: "Помощник ГИП",
+  [ProjectRole.ВЕДУЩИЙ_СПЕЦИАЛИСТ]: "Ведущий специалист",
+  [ProjectRole.ИНЖЕНЕР]: "Инженер",
 };
 
 // Та же статусная палитра, что и в projects-explorer.tsx (STATUS_META) —

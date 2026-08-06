@@ -26,7 +26,9 @@ import {
   canManageOperations,
   userManagesAnyDepartment,
   userManagesDepartmentInProject,
+  userIsLeadInProject,
 } from "@/lib/projects/permissions";
+import { notifyProjectAssigned } from "@/lib/notifications/notify";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
 import { isFullAdmin } from "@/lib/auth/roles";
 
@@ -780,6 +782,73 @@ export async function removeGipAction(projectId: string, userId: string) {
       console.error("Не удалось обновить ГИП проекта в Google Sheets", error);
     },
   );
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
+// "Добавить участника" на странице уже существующего проекта (2026-08-06,
+// по прямой просьбе — раньше единственный способ попасть в ProjectMember
+// после создания проекта был через assignGipAction, только с ролью ГИП).
+// Право — та же операционная проверка, что и на смену статуса/ГИП
+// (canManageOperations), плюс отдельный узкий кейс: Лид департамента,
+// у которого есть раздел в этом проекте (см. userIsLeadInProject). Если
+// человек уже участник — просто меняем ему роль, не бросаем ошибку
+// "уже добавлен": пришли поменять роль, значит поменять роль и есть цель.
+export async function addProjectMemberAction(
+  projectId: string,
+  userId: string,
+  role: ProjectRole,
+) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const managesThisProject = await userManagesDepartmentInProject(session.user, projectId);
+  const canAdd =
+    canManageOperations(session.user, managesThisProject) ||
+    (await userIsLeadInProject(session.user, projectId));
+  if (!canAdd) {
+    throw new Error("Добавлять участников в проект может только руководитель, ГИП/Менеджер/ГАП или Лид");
+  }
+
+  const [project, targetUser] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { id: true, fullName: true } }),
+  ]);
+  if (!project) {
+    throw new Error("Проект не найден");
+  }
+  if (!targetUser) {
+    throw new Error("Сотрудник не найден");
+  }
+
+  await prisma.$transaction(async (tx) => {
+    const existingMembership = await tx.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+    });
+
+    const isNew = !existingMembership;
+    if (existingMembership) {
+      if (existingMembership.projectRole !== role) {
+        await tx.projectMember.update({ where: { id: existingMembership.id }, data: { projectRole: role } });
+      }
+    } else {
+      await tx.projectMember.create({ data: { projectId, userId, projectRole: role } });
+    }
+
+    if (isNew) {
+      await notifyProjectAssigned(tx, { userId, actorId: session.user.id, projectName: project.name });
+    }
+
+    await logActivity(tx, {
+      projectId,
+      actorId: session.user.id,
+      message: `${session.user.name} добавил(а) ${targetUser.fullName} в проект «${project.name}» (${role})`,
+    });
+  });
 
   revalidatePath("/");
   revalidatePath("/projects");

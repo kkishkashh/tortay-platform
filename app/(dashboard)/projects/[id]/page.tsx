@@ -20,7 +20,12 @@ import { getDepartmentTaskStack, type DepartmentTaskStackItem } from "@/lib/depa
 import { prisma } from "@/lib/prisma";
 import { getContractSummaryForProject } from "@/lib/contracts/queries";
 import { getProjectOutsourcers, getOutsourcersForPicker } from "@/lib/project-outsourcers/queries";
-import { canManageFinance, canManageOperations, userManagesDepartmentInProject } from "@/lib/projects/permissions";
+import {
+  canManageFinance,
+  canManageOperations,
+  userManagesDepartmentInProject,
+  userIsLeadInProject,
+} from "@/lib/projects/permissions";
 import { getProjectMembersForTaskAssignment } from "@/lib/projects/queries";
 import { getLeadReportIds } from "@/lib/leads/queries";
 import {
@@ -29,6 +34,7 @@ import {
 } from "@/lib/projects/status-labels";
 import { getAvatarColor, getInitials } from "@/lib/utils";
 
+import { AddProjectMemberDialog } from "./add-project-member-dialog";
 import { ArchiveProjectToggle } from "./archive-project-toggle";
 import { AssignGipDialog } from "./assign-gip-dialog";
 import { ContractSummaryCard } from "./contract-summary-card";
@@ -170,6 +176,11 @@ export default async function ProjectDetailPage({
   const canChangeStatus = session?.user
     ? canManageOperations(session.user, managesThisProject)
     : false;
+  // "Добавить участника" (2026-08-06, по прямой просьбе) — та же операционная
+  // проверка, что и canChangeStatus, плюс отдельный узкий кейс: Лид
+  // департамента с разделом в этом проекте (см. userIsLeadInProject).
+  const canAddMember =
+    canChangeStatus || (!!session?.user && (await userIsLeadInProject(session.user, id)));
   // Жёсткое удаление проекта — строго АДМИН (см. lib/projects/actions.ts::deleteProjectAction).
   const isHead = !!session?.user && isFullAdmin(session.user.systemRole);
   const currentUserId = session?.user?.id;
@@ -235,6 +246,13 @@ export default async function ProjectDetailPage({
               <AssignGipDialog
                 projectId={project.id}
                 gipMembers={gipMembers.map((m) => ({ id: m.user.id, fullName: m.user.fullName }))}
+                employees={employees}
+                currentUserId={currentUserId ?? null}
+              />
+            ) : null}
+            {canAddMember ? (
+              <AddProjectMemberDialog
+                projectId={project.id}
                 employees={employees}
                 currentUserId={currentUserId ?? null}
               />
