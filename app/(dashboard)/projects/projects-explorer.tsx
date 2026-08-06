@@ -188,6 +188,15 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
                           Задержан
                         </Badge>
                       ) : null}
+                      {project.wasCreatedOverdue ? (
+                        <Badge
+                          variant="outline"
+                          className="border-[#c47a12]/30 text-[#c47a12]"
+                          title="Дедлайн уже прошёл на момент создания проекта"
+                        >
+                          Создан просроченным
+                        </Badge>
+                      ) : null}
                       {project.isArchived ? <Badge variant="secondary">В архиве</Badge> : null}
                     </div>
                   </TableCell>

@@ -188,6 +188,17 @@ model Project {
   endDate     DateTime?
   description String?
 
+  // "Создан просроченным" (2026-08-06, по прямой просьбе) — если на шаге 1
+  // мастера "Дата окончания" (endDate выше) уже в прошлом, форма требует
+  // эти два поля и не даёт создать проект без них (см.
+  // createProjectAction). endDate при этом остаётся как есть — то, что
+  // реально ввели изначально, — а finalDeadline это скорректированный,
+  // актуальный срок. Оба nullable: заполняются только когда сценарий
+  // сработал, у обычных (не просроченных при создании) проектов остаются
+  // пустыми.
+  overdueReason  String?   @db.Text
+  finalDeadline  DateTime?
+
   members     ProjectMember[]
   sections    Section[]
   contracts   Contract[]

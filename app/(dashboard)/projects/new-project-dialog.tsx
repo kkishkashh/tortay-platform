@@ -448,6 +448,14 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
   // же приём, что и у departmentIds ниже) — Checkbox из @base-ui/react не
   // участвует в нативной форме сам по себе.
   const [gipUserIds, setGipUserIds] = useState<Set<string>>(new Set());
+  // Проект "создаётся просроченным" — по прямой просьбе (2026-08-06):
+  // если выбранная "Дата окончания" уже в прошлом, требуем причину и
+  // скорректированный ("окончательный") срок прямо тут же, на шаге 1 —
+  // сравнение строк YYYY-MM-DD работает лексикографически так же, как и
+  // числовое сравнение дат, без возни с часовыми поясами Date().
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [endDateValue, setEndDateValue] = useState("");
+  const isOverdueAtCreation = endDateValue !== "" && endDateValue < todayStr;
   const formRef = useRef<HTMLFormElement>(null);
 
   function getSelection(department: DepartmentOption) {
@@ -478,6 +486,7 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
   function resetAll() {
     setSelections(defaultSelections());
     setGipUserIds(new Set());
+    setEndDateValue("");
     setStep(1);
   }
 
@@ -498,6 +507,23 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
         setError("Название проекта обязательно");
         nameValue?.focus();
         return;
+      }
+      if (isOverdueAtCreation) {
+        const reasonValue = formRef.current?.elements.namedItem("overdueReason");
+        const reasonEmpty = reasonValue instanceof HTMLTextAreaElement && !reasonValue.value.trim();
+        if (reasonEmpty) {
+          setError("Укажите причину просрочки");
+          reasonValue?.focus();
+          return;
+        }
+        const finalDeadlineValue = formRef.current?.elements.namedItem("finalDeadline");
+        const finalDeadlineEmpty =
+          finalDeadlineValue instanceof HTMLInputElement && !finalDeadlineValue.value;
+        if (finalDeadlineEmpty) {
+          setError("Укажите окончательный дедлайн");
+          finalDeadlineValue?.focus();
+          return;
+        }
       }
     }
     setError(null);
@@ -566,9 +592,31 @@ export function NewProjectDialog({ employees, departments, currentUserId }: NewP
               </div>
               <div className="space-y-2">
                 <Label htmlFor="endDate">Дата окончания</Label>
-                <Input id="endDate" name="endDate" type="date" />
+                <Input
+                  id="endDate"
+                  name="endDate"
+                  type="date"
+                  value={endDateValue}
+                  onChange={(event) => setEndDateValue(event.target.value)}
+                />
               </div>
             </div>
+
+            {isOverdueAtCreation ? (
+              <div className="space-y-3 rounded-lg border border-[#d03b3b]/30 bg-[#d03b3b]/5 p-3">
+                <p className="text-xs font-medium text-[#d03b3b]">
+                  Дата окончания уже в прошлом — проект создаётся просроченным
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="overdueReason">Причина просрочки</Label>
+                  <Textarea id="overdueReason" name="overdueReason" rows={2} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="finalDeadline">Окончательный дедлайн</Label>
+                  <Input id="finalDeadline" name="finalDeadline" type="date" required />
+                </div>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label htmlFor="description">Описание</Label>

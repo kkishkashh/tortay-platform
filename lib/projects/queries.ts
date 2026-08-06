@@ -17,6 +17,12 @@ export type ProjectListItem = {
   // "Задержан" — не отдельный статус в БД (см. обсуждение), а вычисляется
   // на лету: проект в работе, но самый поздний срок раздела уже прошёл.
   isOverdue: boolean;
+  // "Создан просроченным" (2026-08-06) — в отличие от isOverdue выше, это
+  // не текущее состояние, а зафиксированный при создании факт (см.
+  // Project.overdueReason/finalDeadline, createProjectAction). Разные
+  // вещи: проект может перестать быть isOverdue после переноса сроков
+  // разделов, но wasCreatedOverdue остаётся историческим фактом навсегда.
+  wasCreatedOverdue: boolean;
   // Task 1.2 (PRD #3 Phase 2) — архивные проекты остаются в этом списке
   // (не фильтруются в запросе), UI по умолчанию их прячет (см.
   // projects-explorer.tsx), тот же паттерн, что у getEmployees/isActive.
@@ -89,6 +95,7 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
       completedSections: project.sections.filter(
         (section) => section.status === SectionStatus.ВЫПОЛНЕНО,
       ).length,
+      wasCreatedOverdue: project.overdueReason !== null,
       isOverdue:
         project.status === ProjectStatus.В_РАБОТЕ &&
         deadline !== null &&

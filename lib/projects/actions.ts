@@ -194,6 +194,24 @@ export async function createProjectAction(formData: FormData) {
   const startDate = startDateRaw ? new Date(startDateRaw) : null;
   const endDate = endDateRaw ? new Date(endDateRaw) : null;
 
+  // "Создан просроченным" (2026-08-06, по прямой просьбе) — проверяем
+  // независимо от фронта (см. new-project-dialog.tsx), той же логикой:
+  // endDate < начало сегодняшнего дня по UTC. Раздел/задачи не касается —
+  // только уровень проекта.
+  const todayUtcMidnight = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+  const isOverdueAtCreation = endDate !== null && endDate.getTime() < todayUtcMidnight.getTime();
+
+  const overdueReason = (formData.get("overdueReason") as string | null)?.trim() || null;
+  const finalDeadlineRaw = formData.get("finalDeadline") as string | null;
+  const finalDeadline = finalDeadlineRaw ? new Date(finalDeadlineRaw) : null;
+
+  if (isOverdueAtCreation && !overdueReason) {
+    throw new Error("Укажите причину просрочки");
+  }
+  if (isOverdueAtCreation && !finalDeadline) {
+    throw new Error("Укажите окончательный дедлайн");
+  }
+
   // ГИП необязателен при создании, можно сразу несколько (2026-08-06, по
   // прямой просьбе: "ГИП-ов может быть несколько на один проект") —
   // назначить/добавить ещё можно и позже через assignGipAction на странице
@@ -389,7 +407,16 @@ export async function createProjectAction(formData: FormData) {
 
   const createdProject = await prisma.$transaction(async (tx) => {
     const project = await tx.project.create({
-      data: { name, client, location, startDate, endDate, description },
+      data: {
+        name,
+        client,
+        location,
+        startDate,
+        endDate,
+        description,
+        overdueReason: isOverdueAtCreation ? overdueReason : null,
+        finalDeadline: isOverdueAtCreation ? finalDeadline : null,
+      },
     });
 
     const gipMembers = await Promise.all(

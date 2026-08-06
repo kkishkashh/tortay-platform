@@ -41,11 +41,13 @@ import { SectionDeadlineHistoryButton } from "./section-deadline-history-button"
 import { SectionStatusSelect } from "./section-status-select";
 import { TaskDialog } from "./task-dialog";
 
+function formatDate(date: Date) {
+  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
 function formatSectionDates(startDate: Date | null, deadline: Date | null) {
   if (!startDate && !deadline) return "Сроки не заданы";
-  const format = (date: Date) =>
-    date.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit", year: "2-digit" });
-  return `${startDate ? format(startDate) : "?"} — ${deadline ? format(deadline) : "?"}`;
+  return `${startDate ? formatDate(startDate) : "?"} — ${deadline ? formatDate(deadline) : "?"}`;
 }
 
 export default async function ProjectDetailPage({
@@ -197,6 +199,15 @@ export default async function ProjectDetailPage({
               <Badge variant="secondary">{PROJECT_STATUS_LABELS[project.status]}</Badge>
             )}
             {project.isArchived ? <Badge variant="secondary">В архиве</Badge> : null}
+            {project.overdueReason ? (
+              <Badge
+                variant="outline"
+                className="border-[#c47a12]/30 text-[#c47a12]"
+                title="Дедлайн уже прошёл на момент создания проекта"
+              >
+                Создан просроченным
+              </Badge>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-3">
@@ -230,6 +241,19 @@ export default async function ProjectDetailPage({
             ) : null}
           </div>
         </div>
+
+        {project.overdueReason ? (
+          <div className="mb-6 space-y-1.5 rounded-lg border border-[#c47a12]/30 bg-[#c47a12]/5 px-4 py-3 text-sm">
+            <p className="font-medium text-[#c47a12]">Проект создан с уже прошедшим дедлайном</p>
+            <p className="text-muted-foreground">
+              Первоначальная дата окончания: {project.endDate ? formatDate(project.endDate) : "—"}
+              {" · "}
+              Окончательный дедлайн:{" "}
+              {project.finalDeadline ? formatDate(project.finalDeadline) : "—"}
+            </p>
+            <p className="text-muted-foreground">Причина: {project.overdueReason}</p>
+          </div>
+        ) : null}
 
         {contractSummary ? (
           <div className="mb-6">
