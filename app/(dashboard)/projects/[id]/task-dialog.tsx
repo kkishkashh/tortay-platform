@@ -106,26 +106,35 @@ function TaskStackPicker({
     );
   }
 
+  // Раньше нестандартный стек шёл ПОД базовым (одной колонкой) — при полном
+  // раскрытии обоих на departmента с длинными стеками (напр. Архитектура)
+  // диалог вырастал выше экрана, и кнопка "Создать" становилась недоступна.
+  // Два стека рядом, колонками — тот же контент, но по ширине, а не по
+  // высоте (см. также DialogContent ниже — сам диалог теперь ещё и
+  // прокручивается, как страховка от той же проблемы на узких экранах).
   return (
-    <div className="space-y-3">
-      {baseItems.length === 0 ? (
-        <p className="text-xs text-muted-foreground">В базовом стеке этого департамента пока нет задач.</p>
-      ) : (
-        <div className="space-y-1.5">{baseItems.map((item) => renderItemRow(item))}</div>
-      )}
+    <div className={cn("grid grid-cols-1 gap-4", showNonStandard && nonStandardItems.length > 0 && "sm:grid-cols-2")}>
+      <div className="space-y-1.5">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Базовый стек</p>
+        {baseItems.length === 0 ? (
+          <p className="text-xs text-muted-foreground">В базовом стеке этого департамента пока нет задач.</p>
+        ) : (
+          <div className="space-y-1.5">{baseItems.map((item) => renderItemRow(item))}</div>
+        )}
+      </div>
 
       {nonStandardItems.length > 0 ? (
-        <div className="border-t pt-2">
+        <div className="space-y-1.5 border-t pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
           <button
             type="button"
             onClick={() => setShowNonStandard((v) => !v)}
-            className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground"
           >
             <ChevronDown className={cn("size-3.5 transition-transform", showNonStandard && "rotate-180")} />
             Нестандартный стек ({nonStandardItems.length})
           </button>
           {showNonStandard ? (
-            <div className="mt-2 space-y-1.5">{nonStandardItems.map((item) => renderItemRow(item))}</div>
+            <div className="space-y-1.5">{nonStandardItems.map((item) => renderItemRow(item))}</div>
           ) : null}
         </div>
       ) : null}
@@ -473,7 +482,12 @@ export function TaskDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={trigger as React.ReactElement} />
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent
+        className={cn(
+          "max-h-[85vh] overflow-y-auto",
+          mode === "create" ? "sm:max-w-2xl" : "sm:max-w-[520px]",
+        )}
+      >
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Новые задачи" : "Редактировать задачу"}</DialogTitle>
         </DialogHeader>
