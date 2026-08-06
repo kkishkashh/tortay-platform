@@ -15,6 +15,10 @@ declare module "next-auth" {
       // компании (см. lib/projects/permissions.ts). Тот же компромисс,
       // что и с financeAccess/systemRole: подхватывается только при входе.
       isProjectLead: boolean;
+      // Точечный доступ "видеть/управлять любым проектом компании"
+      // (2026-08-06, для руководителя/ГАП Архитектуры) — тот же принцип,
+      // что и financeAccess: отдельный флаг, не привязан к systemRole.
+      allProjectsAccess: boolean;
     } & DefaultSession["user"];
   }
 
@@ -22,6 +26,7 @@ declare module "next-auth" {
     systemRole: SystemRole;
     financeAccess: boolean;
     isProjectLead: boolean;
+    allProjectsAccess: boolean;
   }
 }
 
@@ -34,5 +39,6 @@ declare module "@auth/core/jwt" {
     systemRole: SystemRole;
     financeAccess: boolean;
     isProjectLead: boolean;
+    allProjectsAccess: boolean;
   }
 }

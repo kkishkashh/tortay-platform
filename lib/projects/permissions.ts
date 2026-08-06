@@ -25,13 +25,25 @@ import { isLeadOfDepartment } from "@/lib/leads/queries";
 // всё". financeAccess живёт в session.user (см. auth.ts/types/next-auth.d.ts),
 // поэтому здесь синхронная проверка, без похода в базу.
 //
-// isProjectLead (2026-08-05, расширено 2026-08-06 по прямой просьбе): ГИП
-// ИЛИ МЕНЕДЖЕР хотя бы одного проекта получает те же операционные права,
-// что и системная роль РУКОВОДИТЕЛЬ, по ВСЕЙ компании (не только в своём
-// проекте) — тоже живёт в session.user, вычисляется один раз при входе
-// (см. auth.ts).
+// isProjectLead (2026-08-05, расширено 2026-08-06 по прямой просьбе): ГИП,
+// МЕНЕДЖЕР ИЛИ ГАП хотя бы одного проекта получает те же операционные
+// права, что и системная роль РУКОВОДИТЕЛЬ, по ВСЕЙ компании (не только в
+// своём проекте) — тоже живёт в session.user, вычисляется один раз при
+// входе (см. auth.ts).
+//
+// allProjectsAccess (2026-08-06, по прямой просьбе — для руководителя/ГАП
+// Архитектуры) — тот же принцип, что и financeAccess: отдельный точечный
+// флаг на User, НЕ привязанный к конкретной роли/департаменту в коде.
+// Специально НЕ учитывается в getCurrentUserRoleTier (см. lib/departments/
+// queries.ts) — даёт операционные права и видимость всех проектов, но не
+// company-wide дашборд/аудит-лог/финансы.
 export function canManageOperations(
-  user: { systemRole: SystemRole; financeAccess?: boolean; isProjectLead?: boolean },
+  user: {
+    systemRole: SystemRole;
+    financeAccess?: boolean;
+    isProjectLead?: boolean;
+    allProjectsAccess?: boolean;
+  },
   managesRelevantScope = false,
 ) {
   return (
@@ -39,6 +51,7 @@ export function canManageOperations(
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.financeAccess ||
     !!user.isProjectLead ||
+    !!user.allProjectsAccess ||
     managesRelevantScope
   );
 }

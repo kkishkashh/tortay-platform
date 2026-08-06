@@ -85,6 +85,7 @@ const ACTION_LABELS: Record<string, string> = {
   department_manager_reassign: "Переназначил(а) руководителя департамента",
   employee_role_change: "Изменил(а) системную роль сотрудника",
   employee_finance_access_change: "Изменил(а) финансовый доступ сотрудника",
+  employee_all_projects_access_change: "Изменил(а) доступ ко всем проектам у сотрудника",
   hard_delete: "Удалил(а) безвозвратно",
   lead_assign: "Назначил(а) Лида",
   lead_unassign: "Снял(а) Лида",

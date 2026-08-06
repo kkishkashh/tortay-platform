@@ -72,6 +72,16 @@ model User {
   // см. lib/projects/permissions.ts::canManageFinance. Отдельно от
   // systemRole/managerId: не даёт никаких других прав.
   financeAccess Boolean   @default(false)
+  // Точечный доступ "видеть и управлять ЛЮБЫМ проектом компании" (2026-08-06,
+  // по прямой просьбе — для руководителя/ГАП Архитектуры) — тот же принцип,
+  // что и financeAccess: отдельный флаг, НЕ привязанный к systemRole/
+  // конкретному департаменту в коде, включается вручную в "Кадровых данных".
+  // Даёт canManageOperations (добавление участников, редактирование
+  // проекта, задачи, видимость в /projects) — НЕ даёт company-wide
+  // дашборд/аудит-лог/финансы (см. lib/projects/permissions.ts,
+  // lib/departments/queries.ts::getCurrentUserRoleTier не учитывает этот
+  // флаг специально).
+  allProjectsAccess Boolean @default(false)
   createdAt    DateTime   @default(now())
 
   // Код подтверждения для "регистрации" (первый вход/сброс пароля через

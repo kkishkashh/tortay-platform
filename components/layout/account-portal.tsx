@@ -66,6 +66,7 @@ export function AccountPortal({
                 systemRole={profile.systemRole}
                 canEditSystemRole={isAdmin}
                 financeAccess={profile.financeAccess}
+                allProjectsAccess={profile.allProjectsAccess}
                 positions={positions}
               />
             ) : null}

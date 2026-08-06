@@ -42,11 +42,14 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   }
 
   // Видит ВСЕ проекты компании — строго АДМИН (company-wide, как и
-  // company-wide дашборд, см. lib/departments/queries.ts::getCurrentUserRoleTier)
-  // либо тот, у кого есть доступ к финансам (canManageFinance — им нужно
-  // видеть все проекты, чтобы найти нужный и привязать аутсорсера).
+  // company-wide дашборд, см. lib/departments/queries.ts::getCurrentUserRoleTier),
+  // тот, у кого есть доступ к финансам (canManageFinance — им нужно видеть
+  // все проекты, чтобы найти нужный и привязать аутсорсера), либо точечный
+  // флаг allProjectsAccess (2026-08-06, для руководителя/ГАП Архитектуры —
+  // см. lib/projects/permissions.ts::canManageOperations).
   const isHead = isFullAdmin(session.user.systemRole);
-  const seesAll = isHead || (await canManageFinance(session.user));
+  const seesAll =
+    isHead || !!session.user.allProjectsAccess || (await canManageFinance(session.user));
 
   const projects = await prisma.project.findMany({
     where: seesAll

@@ -69,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           systemRole: user.systemRole,
           financeAccess: user.financeAccess,
           isProjectLead: !!projectLeadMembership,
+          allProjectsAccess: user.allProjectsAccess,
         };
       },
     }),
@@ -88,6 +89,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.systemRole = user.systemRole;
         token.financeAccess = user.financeAccess;
         token.isProjectLead = user.isProjectLead;
+        token.allProjectsAccess = user.allProjectsAccess;
       }
       return token;
     },
@@ -96,6 +98,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.systemRole = token.systemRole;
       session.user.financeAccess = token.financeAccess;
       session.user.isProjectLead = token.isProjectLead;
+      session.user.allProjectsAccess = token.allProjectsAccess;
       return session;
     },
   },

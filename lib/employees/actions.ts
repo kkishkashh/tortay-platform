@@ -413,14 +413,23 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
 
   let systemRole: SystemRole | undefined = undefined;
   let financeAccess: boolean | undefined = undefined;
+  let allProjectsAccess: boolean | undefined = undefined;
   if (isAdmin) {
     systemRole = (formData.get("systemRole") as SystemRole | null) ?? undefined;
     financeAccess = formData.get("financeAccess") === "on";
+    allProjectsAccess = formData.get("allProjectsAccess") === "on";
   }
 
   const previous = await prisma.user.findUnique({
     where: { id: userId },
-    select: { homeDepartmentId: true, position: true, email: true, systemRole: true, financeAccess: true },
+    select: {
+      homeDepartmentId: true,
+      position: true,
+      email: true,
+      systemRole: true,
+      financeAccess: true,
+      allProjectsAccess: true,
+    },
   });
 
   await prisma.$transaction(async (tx) => {
@@ -433,6 +442,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
         homeDepartmentId,
         systemRole,
         financeAccess,
+        allProjectsAccess,
       },
     });
 
@@ -459,6 +469,15 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
       await recordAuditLog(tx, {
         actorId: session.user.id,
         action: "employee_finance_access_change",
+        targetType: "User",
+        targetId: userId,
+        isOverride: isPrivilegedOverride(session.user) && userId !== session.user.id,
+      });
+    }
+    if (allProjectsAccess !== undefined && allProjectsAccess !== previous?.allProjectsAccess) {
+      await recordAuditLog(tx, {
+        actorId: session.user.id,
+        action: "employee_all_projects_access_change",
         targetType: "User",
         targetId: userId,
         isOverride: isPrivilegedOverride(session.user) && userId !== session.user.id,

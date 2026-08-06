@@ -159,6 +159,9 @@ export type EmployeeProfile = {
   createdAt: Date;
   homeDepartmentId: string | null;
   financeAccess: boolean;
+  // Точечный доступ "видеть/управлять любым проектом" (2026-08-06, для
+  // руководителя/ГАП Архитектуры) — см. lib/projects/permissions.ts.
+  allProjectsAccess: boolean;
   // ГИП хотя бы одного проекта — операционные права уровня РУКОВОДИТЕЛЬ по
   // всей компании (см. lib/projects/permissions.ts). Выводится из уже
   // загруженного ниже projectMemberships, без отдельного запроса.
@@ -217,6 +220,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
       createdAt: true,
       homeDepartmentId: true,
       financeAccess: true,
+      allProjectsAccess: true,
       isActive: true,
       managedDepartments: { select: { id: true, name: true }, orderBy: { name: "asc" } },
       reportsTo: { select: { fullName: true } },
@@ -284,6 +288,7 @@ export async function getEmployeeProfile(id: string): Promise<EmployeeProfile | 
     createdAt: user.createdAt,
     homeDepartmentId: user.homeDepartmentId,
     financeAccess: user.financeAccess,
+    allProjectsAccess: user.allProjectsAccess,
     isGip: user.projectMemberships.some((m) => m.projectRole === ProjectRole.ГИП),
     gipProjects: user.projectMemberships
       .filter((m) => m.projectRole === ProjectRole.ГИП)

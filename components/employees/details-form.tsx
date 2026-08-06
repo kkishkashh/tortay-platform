@@ -44,6 +44,7 @@ export function DetailsForm({
   systemRole,
   canEditSystemRole,
   financeAccess,
+  allProjectsAccess,
   positions,
 }: {
   userId: string;
@@ -55,6 +56,7 @@ export function DetailsForm({
   systemRole: SystemRole;
   canEditSystemRole: boolean;
   financeAccess: boolean;
+  allProjectsAccess: boolean;
   positions: PositionItem[];
 }) {
   const [isPending, startTransition] = useTransition();
@@ -167,6 +169,20 @@ export function DetailsForm({
             <p className="mt-1 text-xs text-muted-foreground">
               Для бухгалтеров и других сотрудников, которым нужны только эти два раздела — без
               полных прав администратора и без назначения руководителем департамента.
+            </p>
+          </div>
+        ) : null}
+
+        {canEditSystemRole ? (
+          <div className="sm:col-span-2">
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox name="allProjectsAccess" defaultChecked={allProjectsAccess} />
+              Видит и управляет всеми проектами компании
+            </label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Для руководителя/ГАП Архитектуры и похожих случаев — добавление участников,
+              редактирование проектов и задач по всей компании, без company-wide дашборда,
+              аудит-лога и финансов.
             </p>
           </div>
         ) : null}

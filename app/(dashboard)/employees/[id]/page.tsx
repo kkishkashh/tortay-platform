@@ -348,6 +348,7 @@ export default async function EmployeeProfilePage({
                     birthDate={employee.birthDate}
                     homeDepartmentId={employee.homeDepartmentId}
                     departments={departments}
+                    allProjectsAccess={employee.allProjectsAccess}
                     systemRole={employee.systemRole}
                     canEditSystemRole={canEditSystemRole}
                     financeAccess={employee.financeAccess}
