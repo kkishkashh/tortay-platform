@@ -29,10 +29,21 @@ import { ProjectsTab } from "./projects-tab";
 import { SettingsTab } from "./settings-tab";
 import { TaskStackTab } from "./task-stack-tab";
 
+const KNOWN_TABS = new Set([
+  "employees",
+  "hierarchy",
+  "task-stack",
+  "projects",
+  "analytics",
+  "settings",
+]);
+
 export default async function DepartmentDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) {
@@ -40,6 +51,13 @@ export default async function DepartmentDetailPage({
   }
 
   const { id } = await params;
+  // Поддержка глубокой ссылки на конкретную вкладку (напр. со StatCard на
+  // дашборде руководителя департамента или из "Аналитики" — см.
+  // department-manager-dashboard.tsx/analytics-tab.tsx) — Tabs сам по себе
+  // неконтролируемый (defaultValue), синхронизации с URL при клике по
+  // вкладкам вручную нет, только начальное состояние при заходе по ссылке.
+  const { tab } = await searchParams;
+  const initialTab = tab && KNOWN_TABS.has(tab) ? tab : "employees";
   const department = await getDepartmentById(id);
   if (!department) {
     notFound();
@@ -121,7 +139,7 @@ export default async function DepartmentDetailPage({
           </div>
         </div>
 
-        <Tabs defaultValue="employees">
+        <Tabs defaultValue={initialTab}>
           <TabsList>
             <TabsTrigger value="employees">Сотрудники</TabsTrigger>
             <TabsTrigger value="hierarchy">Структура</TabsTrigger>
@@ -163,7 +181,7 @@ export default async function DepartmentDetailPage({
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-4">
-            <AnalyticsTab stats={analyticsStats} />
+            <AnalyticsTab stats={analyticsStats} departmentId={department.id} />
           </TabsContent>
 
           {isAdmin ? (

@@ -163,12 +163,14 @@ export default async function DashboardPage() {
           value={String(stats.activeProjectsCount)}
           icon={FolderKanban}
           color="blue"
+          href="/projects"
         />
         <StatCard
           label="Сотрудники"
           value={String(stats.employeesCount)}
           icon={Users}
           color="green"
+          href="/employees"
         />
         <StatCard
           label="К получению"
@@ -177,12 +179,14 @@ export default async function DashboardPage() {
           }
           icon={Banknote}
           color="gold"
+          href="/contracts"
         />
         <StatCard
           label={`Завершено в ${currentYear} году`}
           value={String(stats.completedThisYearCount)}
           icon={CheckCircle2}
           color="purple"
+          href="/projects"
         />
       </div>
 
@@ -192,24 +196,28 @@ export default async function DashboardPage() {
           value={String(stats.departmentsCount ?? 0)}
           icon={Building2}
           color="blue"
+          href="/departments"
         />
         <StatCard
           label="Руководители"
           value={String(stats.managersCount ?? 0)}
           icon={UserCog}
           color="green"
+          href="/managers"
         />
         <StatCard
           label="Договоры"
           value={String(stats.contractsCount ?? 0)}
           icon={FileText}
           color="gold"
+          href="/contracts"
         />
         <StatCard
           label="Аутсорсеры"
           value={String(stats.outsourcersCount ?? 0)}
           icon={Briefcase}
           color="purple"
+          href="/outsourcers"
         />
       </div>
 

@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
@@ -11,24 +12,23 @@ const GRADIENTS = {
 
 export type StatCardColor = keyof typeof GRADIENTS;
 
+// href необязателен — карточки без него остаются как раньше, просто
+// плиткой статистики (напр. проценты загрузки, которые никуда не ведут).
 export function StatCard({
   label,
   value,
   icon: Icon,
   color = "gold",
+  href,
 }: {
   label: string;
   value: string;
   icon: LucideIcon;
   color?: StatCardColor;
+  href?: string;
 }) {
-  return (
-    <div
-      className={cn(
-        "group relative overflow-hidden rounded-xl bg-linear-to-br p-5 text-white shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover",
-        GRADIENTS[color],
-      )}
-    >
+  const content = (
+    <>
       <div
         className="pointer-events-none absolute -top-8 -right-8 size-28 rounded-full bg-white/10 transition-transform duration-300 group-hover:scale-110"
         aria-hidden
@@ -40,6 +40,21 @@ export function StatCard({
         </div>
       </div>
       <p className="relative mt-3 text-3xl font-semibold tracking-tight">{value}</p>
-    </div>
+    </>
   );
+
+  const className = cn(
+    "group relative overflow-hidden rounded-xl bg-linear-to-br p-5 text-white shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover",
+    GRADIENTS[color],
+  );
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }
