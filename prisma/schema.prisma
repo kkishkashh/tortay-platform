@@ -107,6 +107,7 @@ model User {
   // Во всех проектах, где этот человек участвует (в разных ролях)
   projectMemberships ProjectMember[]
   documentsUploaded  Document[]
+  contractTemplatesUploaded ContractTemplate[]
   comments           Comment[]
   activityLogEntries ActivityLog[]
 
@@ -890,4 +891,24 @@ model ClosingDocument {
   createdAt          DateTime            @default(now())
 
   @@map("closing_documents")
+}
+
+// Общий на всю компанию .docx-шаблон договора с плейсхолдерами вида
+// {{сумма_договора}} (2026-08-06, по прямой просьбе) — активен всегда
+// ровно один; загрузка нового не удаляет предыдущий физически, а просто
+// снимает с него isActive (см. lib/contract-templates/actions.ts) — та же
+// философия, что и у Project.isArchived, история хранится, а не теряется.
+// Список поддерживаемых плейсхолдеров и их маппинг на поля БД — жёстко
+// прописан в lib/contracts/contract-docx-template.ts, не редактируется
+// через интерфейс.
+model ContractTemplate {
+  id               String   @id @default(uuid())
+  fileUrl          String
+  fileName         String
+  isActive         Boolean  @default(true)
+  uploadedByUserId String
+  uploadedByUser   User     @relation(fields: [uploadedByUserId], references: [id])
+  createdAt        DateTime @default(now())
+
+  @@map("contract_templates")
 }

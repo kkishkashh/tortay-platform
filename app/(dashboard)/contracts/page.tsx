@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
+import { canManageContractTemplate } from "@/lib/contract-templates/permissions";
+import { getActiveContractTemplate } from "@/lib/contract-templates/queries";
 import {
   getContractsForCurrentUser,
   getProjectsForContractSelect,
@@ -11,6 +13,7 @@ import {
 import { canManageFinance } from "@/lib/projects/permissions";
 import { formatTodayLabel } from "@/lib/utils";
 
+import { ChangeTemplateDialog } from "./change-template-dialog";
 import { ContractsTable } from "./contracts-table";
 import { NewContractDialog } from "./new-contract-dialog";
 
@@ -24,18 +27,25 @@ export default async function ContractsPage() {
     redirect("/");
   }
 
-  const [contracts, projects, suggestedNumber] = await Promise.all([
+  const [contracts, projects, suggestedNumber, activeTemplate] = await Promise.all([
     getContractsForCurrentUser(),
     getProjectsForContractSelect(),
     suggestContractNumber(),
+    getActiveContractTemplate(),
   ]);
+  const canChangeTemplate = canManageContractTemplate(session.user);
 
   return (
     <>
       <PageHeader
         title="Договоры"
         subtitle={formatTodayLabel(new Date())}
-        action={<NewContractDialog projects={projects} suggestedNumber={suggestedNumber} />}
+        action={
+          <div className="flex items-center gap-2">
+            {canChangeTemplate ? <ChangeTemplateDialog currentTemplate={activeTemplate} /> : null}
+            <NewContractDialog projects={projects} suggestedNumber={suggestedNumber} />
+          </div>
+        }
       />
       <div className="p-8">
         {contracts.length === 0 ? (
@@ -44,7 +54,7 @@ export default async function ContractsPage() {
           </p>
         ) : (
           <Card className="p-0">
-            <ContractsTable contracts={contracts} canManage />
+            <ContractsTable contracts={contracts} canManage hasTemplate={activeTemplate !== null} />
           </Card>
         )}
       </div>

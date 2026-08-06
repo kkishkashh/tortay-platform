@@ -185,23 +185,67 @@ function DeleteContractDialog({
 export function ContractDetailModal({
   contract,
   canManage,
+  hasTemplate,
   onClose,
 }: {
   contract: ContractListItem;
   canManage: boolean;
+  hasTemplate: boolean;
   onClose: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const remaining = Math.max(contract.totalAmount - contract.paidAmount, 0);
   const sortedPayments = PAYMENT_ORDER.map((type) =>
     contract.payments.find((payment) => payment.paymentType === type),
   ).filter((payment): payment is ContractListItem["payments"][number] => payment !== undefined);
 
+  // fetch + blob вместо простого <a href> — чтобы ошибку формирования
+  // (напр. кто-то ещё не загрузил шаблон, или в шаблоне битые плейсхолдеры)
+  // можно было показать текстом, а не просто открыть JSON в новой вкладке.
+  async function handleDownload() {
+    setDownloadError(null);
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`/api/contracts/${contract.id}/document`);
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? "Не удалось сформировать договор");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Договор ${contract.number}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : "Не удалось сформировать договор");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[900px]">
         <DialogHeader>
-          <DialogTitle>Договор {contract.number}</DialogTitle>
+          <DialogTitle className="flex items-center justify-between gap-3">
+            <span>Договор {contract.number}</span>
+            {hasTemplate ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isDownloading}
+                onClick={handleDownload}
+              >
+                {isDownloading ? "Формируем…" : "Скачать договор"}
+              </Button>
+            ) : null}
+          </DialogTitle>
+          {downloadError ? <p className="text-sm text-destructive">{downloadError}</p> : null}
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

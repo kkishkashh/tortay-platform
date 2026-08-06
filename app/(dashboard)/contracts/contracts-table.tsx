@@ -43,9 +43,11 @@ function ProgressCell({ paid, total }: { paid: number; total: number }) {
 export function ContractsTable({
   contracts,
   canManage,
+  hasTemplate,
 }: {
   contracts: ContractListItem[];
   canManage: boolean;
+  hasTemplate: boolean;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = contracts.find((c) => c.id === selectedId) ?? null;
@@ -110,6 +112,7 @@ export function ContractsTable({
         <ContractDetailModal
           contract={selected}
           canManage={canManage}
+          hasTemplate={hasTemplate}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
