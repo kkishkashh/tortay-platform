@@ -3,6 +3,7 @@
 import { ReactNode, useState } from "react";
 import { SystemRole } from "@prisma/client";
 
+import { isFullAdmin } from "@/lib/auth/roles";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ export function AccountPortal({
   departments: { id: string; name: string }[];
 }) {
   const [open, setOpen] = useState(false);
-  const isAdmin = profile.systemRole === SystemRole.АДМИН;
+  const isAdmin = isFullAdmin(profile.systemRole);
   const isElevated = isAdmin || profile.systemRole === SystemRole.РУКОВОДИТЕЛЬ || profile.isGip;
 
   return (

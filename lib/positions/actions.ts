@@ -5,6 +5,7 @@ import { Prisma, SystemRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 // Тот же круг, кто может создавать/редактировать сотрудников (см.
 // createEmployeeAction в lib/employees/actions.ts) — должность добавляется
@@ -17,7 +18,7 @@ async function assertCanManagePositions() {
     throw new Error("Не авторизован");
   }
   if (
-    session.user.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(session.user.systemRole) ||
     session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     session.user.isGip
   ) {

@@ -1,5 +1,7 @@
 import { SystemRole } from "@prisma/client";
 
+import { isFullAdmin } from "@/lib/auth/roles";
+
 // Полное управление департаментами (создание/переименование/удаление,
 // смена цвета/иконки, назначение руководителя) — зона ответственности
 // АДМИН и РУКОВОДИТЕЛЬ (см. schema.prisma — с 2026-08-05 это две отдельные
@@ -9,7 +11,7 @@ import { SystemRole } from "@prisma/client";
 // та же операционная зона, что и РУКОВОДИТЕЛЬ (см. canManageOperations).
 export function canManageDepartments(user: { systemRole: SystemRole; isGip?: boolean }) {
   return (
-    user.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(user.systemRole) ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.isGip
   );

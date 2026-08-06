@@ -3,6 +3,7 @@ import { SystemRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { isFullAdmin } from "@/lib/auth/roles";
 import { getCurrentUserRoleTier } from "@/lib/departments/queries";
 import { getCompanyWideEmployees, getEmployees } from "@/lib/employees/queries";
 import { getPositions } from "@/lib/positions/queries";
@@ -21,7 +22,7 @@ export default async function EmployeesPage() {
   // создания (NewEmployeeDialog), это остаётся исключительно у него.
   // canAddEmployees — шире: АДМИН, РУКОВОДИТЕЛЬ (обе — операционные роли,
   // см. lib/projects/permissions.ts) или руководитель департамента.
-  const isAdmin = session?.user.systemRole === SystemRole.АДМИН;
+  const isAdmin = !!session?.user && isFullAdmin(session.user.systemRole);
   const isElevated =
     isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session?.user.isGip;
   const canAddEmployees = isElevated || roleTier === "department_manager";

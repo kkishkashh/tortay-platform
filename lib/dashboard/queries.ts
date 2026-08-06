@@ -1,7 +1,8 @@
-import { PaymentStatus, ProjectStatus, SystemRole, UserType } from "@prisma/client";
+import { PaymentStatus, ProjectStatus, UserType } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { isFullAdmin } from "@/lib/auth/roles";
 import { workloadLevel, type WorkloadLevel } from "@/lib/workload";
 
 export type DashboardStats = {
@@ -38,7 +39,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   // Company-wide дашборд — строго АДМИН (с 2026-08-05 РУКОВОДИТЕЛЬ его не
   // видит, см. lib/departments/queries.ts::getCurrentUserRoleTier).
-  const isHead = session.user.systemRole === SystemRole.АДМИН;
+  const isHead = isFullAdmin(session.user.systemRole);
   const projectScope = isHead
     ? undefined
     : { members: { some: { userId: session.user.id } } };
@@ -186,7 +187,7 @@ export async function getRecentActivity(limit = 8): Promise<ActivityItem[]> {
 
   // Company-wide дашборд — строго АДМИН (с 2026-08-05 РУКОВОДИТЕЛЬ его не
   // видит, см. lib/departments/queries.ts::getCurrentUserRoleTier).
-  const isHead = session.user.systemRole === SystemRole.АДМИН;
+  const isHead = isFullAdmin(session.user.systemRole);
 
   const entries = await prisma.activityLog.findMany({
     where: isHead
@@ -213,7 +214,7 @@ export type UpcomingPayment = {
 // pendingPaymentsTotal в getDashboardStats().
 export async function getUpcomingPayments(limit = 6): Promise<UpcomingPayment[]> {
   const session = await auth();
-  if (!session?.user || session.user.systemRole !== SystemRole.АДМИН) {
+  if (!session?.user || !isFullAdmin(session.user.systemRole)) {
     return [];
   }
 
@@ -258,7 +259,7 @@ export async function getProjectStatusBreakdown(): Promise<ProjectStatusBreakdow
 
   // Company-wide дашборд — строго АДМИН (с 2026-08-05 РУКОВОДИТЕЛЬ его не
   // видит, см. lib/departments/queries.ts::getCurrentUserRoleTier).
-  const isHead = session.user.systemRole === SystemRole.АДМИН;
+  const isHead = isFullAdmin(session.user.systemRole);
   const projectScope = isHead
     ? undefined
     : { members: { some: { userId: session.user.id } } };
@@ -299,7 +300,7 @@ export async function getUpcomingDeadlines(daysAhead = 7): Promise<UpcomingDeadl
 
   // Company-wide дашборд — строго АДМИН (с 2026-08-05 РУКОВОДИТЕЛЬ его не
   // видит, см. lib/departments/queries.ts::getCurrentUserRoleTier).
-  const isHead = session.user.systemRole === SystemRole.АДМИН;
+  const isHead = isFullAdmin(session.user.systemRole);
   const projectScope = isHead
     ? undefined
     : { members: { some: { userId: session.user.id } } };
@@ -353,7 +354,7 @@ export async function getProjectTimelines(): Promise<ProjectTimeline[]> {
 
   // Company-wide дашборд — строго АДМИН (с 2026-08-05 РУКОВОДИТЕЛЬ его не
   // видит, см. lib/departments/queries.ts::getCurrentUserRoleTier).
-  const isHead = session.user.systemRole === SystemRole.АДМИН;
+  const isHead = isFullAdmin(session.user.systemRole);
   const projectScope = isHead
     ? undefined
     : { members: { some: { userId: session.user.id } } };

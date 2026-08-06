@@ -1,4 +1,4 @@
-import { ProjectRole } from "@prisma/client";
+import { ProjectRole, SystemRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -53,4 +53,28 @@ export async function getManagers(): Promise<ManagerListItem[]> {
     managedDepartments: manager.managedDepartments,
     gipProjectIds: manager.projectMemberships.map((m) => m.projectId),
   }));
+}
+
+export type ChiefTechnicalDirectorItem = {
+  id: string;
+  fullName: string;
+  email: string;
+  avatarUrl: string | null;
+  isActive: boolean;
+};
+
+// ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР (2026-08-06) — отдельный блок над обычной
+// таблицей руководителей на /managers (см. ManagersTab), т.к. это системная
+// роль с правами уровня АДМИН (см. lib/auth/roles.ts::isFullAdmin), а не
+// производный статус "руководит департаментом", как у обычных руководителей
+// в getManagers() выше — человек с этой ролью может вообще не значиться
+// руководителем ни одного департамента и всё равно управлять компанией
+// целиком.
+export async function getChiefTechnicalDirectors(): Promise<ChiefTechnicalDirectorItem[]> {
+  const users = await prisma.user.findMany({
+    where: { systemRole: SystemRole.ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР },
+    select: { id: true, fullName: true, email: true, avatarUrl: true, isActive: true },
+    orderBy: { fullName: "asc" },
+  });
+  return users;
 }

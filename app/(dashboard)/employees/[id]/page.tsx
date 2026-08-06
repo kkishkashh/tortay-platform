@@ -5,6 +5,7 @@ import { SystemRole } from "@prisma/client";
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
 import { prisma } from "@/lib/prisma";
+import { isFullAdmin, SYSTEM_ROLE_LABELS } from "@/lib/auth/roles";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,12 +43,6 @@ import { HistoryTab } from "./history-tab";
 import { TasksTab } from "./tasks-tab";
 import { TimelineTab } from "./timeline-tab";
 
-const SYSTEM_ROLE_LABELS = {
-  АДМИН: "Админ",
-  РУКОВОДИТЕЛЬ: "Руководитель",
-  СОТРУДНИК: "Сотрудник",
-} as const;
-
 export default async function EmployeeProfilePage({
   params,
 }: {
@@ -72,7 +67,7 @@ export default async function EmployeeProfilePage({
   // департаментами, кроме смены системных ролей и жёсткого удаления —
   // эти остаются только у isAdmin (см. canEditSystemRole ниже и
   // HardDeleteEmployeeDialog).
-  const isAdmin = session?.user.systemRole === SystemRole.АДМИН;
+  const isAdmin = !!session?.user && isFullAdmin(session.user.systemRole);
   const isElevated =
     isAdmin || session?.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session?.user.isGip;
 

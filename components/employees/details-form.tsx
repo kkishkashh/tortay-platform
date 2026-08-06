@@ -137,6 +137,10 @@ export function DetailsForm({
                 { value: "СОТРУДНИК", label: "Обычные" },
                 { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
                 { value: "АДМИН", label: "Админ (полный доступ)" },
+                {
+                  value: "ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР",
+                  label: "Главный технический директор (полный доступ)",
+                },
               ]}
             >
               <SelectTrigger id="details-systemRole" className="w-full">
@@ -146,6 +150,9 @@ export function DetailsForm({
                 <SelectItem value="СОТРУДНИК">Обычные</SelectItem>
                 <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
                 <SelectItem value="АДМИН">Админ (полный доступ)</SelectItem>
+                <SelectItem value="ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР">
+                  Главный технический директор (полный доступ)
+                </SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">

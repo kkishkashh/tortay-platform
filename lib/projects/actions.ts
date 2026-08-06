@@ -8,7 +8,6 @@ import {
   ProjectStatus,
   SectionStatus,
   ShiftReasonCategory,
-  SystemRole,
   TaskPriority,
 } from "@prisma/client";
 import { del } from "@vercel/blob";
@@ -29,6 +28,7 @@ import {
   userManagesDepartmentInProject,
 } from "@/lib/projects/permissions";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 const TASK_PRIORITY_VALUES = new Set<string>(Object.values(TaskPriority));
 
@@ -803,7 +803,7 @@ export async function deleteProjectAction(projectId: string) {
   if (!session?.user) {
     throw new Error("Не авторизован");
   }
-  if (session.user.systemRole !== SystemRole.АДМИН) {
+  if (!isFullAdmin(session.user.systemRole)) {
     throw new Error("Удалять проект безвозвратно может только администратор");
   }
 

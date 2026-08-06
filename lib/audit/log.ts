@@ -4,6 +4,8 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { SystemRole } from "@prisma/client";
 
+import { isFullAdmin } from "@/lib/auth/roles";
+
 type Db = PrismaClient | Prisma.TransactionClient;
 
 export async function recordAuditLog(
@@ -36,7 +38,7 @@ export async function recordAuditLog(
 // lib/departments/actions.ts, lib/employees/actions.ts).
 export function isPrivilegedOverride(user: { systemRole: SystemRole; financeAccess?: boolean }) {
   return (
-    user.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(user.systemRole) ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.financeAccess
   );

@@ -117,6 +117,10 @@ export function NewEmployeeDialog({
                     { value: "СОТРУДНИК", label: "Сотрудник" },
                     { value: "РУКОВОДИТЕЛЬ", label: "Руководитель" },
                     { value: "АДМИН", label: "Админ (полный доступ)" },
+                    {
+                      value: "ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР",
+                      label: "Главный технический директор (полный доступ)",
+                    },
                   ]}
                 >
                   <SelectTrigger id="systemRole" className="w-full">
@@ -126,6 +130,9 @@ export function NewEmployeeDialog({
                     <SelectItem value="СОТРУДНИК">Сотрудник</SelectItem>
                     <SelectItem value="РУКОВОДИТЕЛЬ">Руководитель</SelectItem>
                     <SelectItem value="АДМИН">Админ (полный доступ)</SelectItem>
+                    <SelectItem value="ГЛАВНЫЙ_ТЕХНИЧЕСКИЙ_ДИРЕКТОР">
+                      Главный технический директор (полный доступ)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

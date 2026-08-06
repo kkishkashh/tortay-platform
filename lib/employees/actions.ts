@@ -13,6 +13,7 @@ import { sendEmployeeCreatedEmail, sendPasswordResetEmail, sendPositionChangedEm
 import { notifyEmployeeCreated, notifyPasswordReset, notifyPositionChanged } from "@/lib/notifications/notify";
 import { prisma } from "@/lib/prisma";
 import { canManageFinance } from "@/lib/projects/permissions";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 // Полный контроль над своим департаментом (см. план): руководитель
 // департамента может создавать сотрудников, но только в СВОЁМ департаменте,
@@ -28,7 +29,7 @@ export async function createEmployeeAction(formData: FormData) {
     throw new Error("Не авторизован");
   }
 
-  const isAdmin = session.user.systemRole === SystemRole.АДМИН;
+  const isAdmin = isFullAdmin(session.user.systemRole);
   const isElevated =
     isAdmin || session.user.systemRole === SystemRole.РУКОВОДИТЕЛЬ || !!session.user.isGip;
   let scopedDepartmentId: string | null = null;
@@ -124,7 +125,7 @@ async function assertCanArchiveEmployee(
     throw new Error("Нельзя изменить статус своего собственного аккаунта");
   }
   const isElevated =
-    sessionUser.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(sessionUser.systemRole) ||
     sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!sessionUser.isGip;
   if (isElevated) return;
@@ -188,7 +189,7 @@ export async function deleteEmployeeAction(userId: string) {
   if (session.user.id === userId) {
     throw new Error("Нельзя удалить свой собственный аккаунт");
   }
-  if (session.user.systemRole !== SystemRole.АДМИН) {
+  if (!isFullAdmin(session.user.systemRole)) {
     throw new Error("Удалять сотрудников безвозвратно может только администратор");
   }
 
@@ -274,7 +275,7 @@ async function canActOnEmployee(
 ) {
   if (sessionUser.id === targetUserId) return true;
   if (
-    sessionUser.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(sessionUser.systemRole) ||
     sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     sessionUser.isGip
   ) {
@@ -308,7 +309,7 @@ async function canManageEmployeeDetails(
   targetUserId: string,
 ) {
   if (
-    sessionUser.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(sessionUser.systemRole) ||
     sessionUser.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     sessionUser.isGip
   ) {
@@ -379,7 +380,7 @@ export async function updateEmployeeDetailsAction(formData: FormData) {
   // Строго АДМИН, не РУКОВОДИТЕЛЬ — смена системной роли/financeAccess
   // (ниже) остаётся исключительно у администратора, иначе РУКОВОДИТЕЛЬ смог
   // бы сам себе/другим выдать полный доступ в обход "Кадровых данных".
-  const isAdmin = session.user.systemRole === SystemRole.АДМИН;
+  const isAdmin = isFullAdmin(session.user.systemRole);
   const isFinanceManager = await canManageFinance(session.user);
 
   if (!(await canManageEmployeeDetails(session.user, userId)) && !isFinanceManager) {

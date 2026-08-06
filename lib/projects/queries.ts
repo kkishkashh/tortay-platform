@@ -3,6 +3,7 @@ import { ProjectRole, ProjectStatus, SectionStatus, ShiftReasonCategory, SystemR
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { canManageFinance, canManageOperations } from "@/lib/projects/permissions";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 export type ProjectListItem = {
   id: string;
@@ -38,7 +39,7 @@ export async function getProjectsForCurrentUser(): Promise<ProjectListItem[]> {
   // company-wide дашборд, см. lib/departments/queries.ts::getCurrentUserRoleTier)
   // либо тот, у кого есть доступ к финансам (canManageFinance — им нужно
   // видеть все проекты, чтобы найти нужный и привязать аутсорсера).
-  const isHead = session.user.systemRole === SystemRole.АДМИН;
+  const isHead = isFullAdmin(session.user.systemRole);
   const seesAll = isHead || (await canManageFinance(session.user));
 
   const projects = await prisma.project.findMany({

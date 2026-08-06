@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { signOutAction } from "@/lib/actions/auth";
+import { SYSTEM_ROLE_LABELS } from "@/lib/auth/roles";
 import { Sidebar } from "@/components/layout/sidebar";
 import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/queries";
 import { getEmployeeProfile } from "@/lib/employees/queries";
@@ -53,7 +54,7 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen">
       <Sidebar
         fullName={session.user.name ?? session.user.email ?? ""}
-        systemRoleLabel={session.user.systemRole}
+        systemRoleLabel={SYSTEM_ROLE_LABELS[session.user.systemRole]}
         roleTier={roleTier}
         canManageFinance={hasFinanceAccess}
         hasPulseAccess={hasPulse}

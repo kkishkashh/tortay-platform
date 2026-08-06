@@ -1,6 +1,7 @@
 import { SystemRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 // Операционная часть (создание проектов, смена статусов проектов/разделов,
 // назначение ГИП, удаление) — у администратора компании безусловно, и у
@@ -32,7 +33,7 @@ export function canManageOperations(
   managesRelevantScope = false,
 ) {
   return (
-    user.systemRole === SystemRole.АДМИН ||
+    isFullAdmin(user.systemRole) ||
     user.systemRole === SystemRole.РУКОВОДИТЕЛЬ ||
     !!user.financeAccess ||
     !!user.isGip ||
@@ -88,7 +89,7 @@ export async function userManagesDepartmentInProject(
 export async function canManageFinance(
   user: { id: string; systemRole?: SystemRole; financeAccess?: boolean },
 ): Promise<boolean> {
-  if (user.systemRole === SystemRole.АДМИН) return true;
+  if (user.systemRole && isFullAdmin(user.systemRole)) return true;
   if (user.financeAccess) return true;
   const record = await prisma.user.findUnique({
     where: { id: user.id },

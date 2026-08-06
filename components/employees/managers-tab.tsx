@@ -6,10 +6,11 @@ import { Power, PowerOff } from "lucide-react";
 
 import { deactivateManagerAction, reactivateManagerAction } from "@/lib/managers/actions";
 import type { DepartmentListItem, ManagerCandidate } from "@/lib/departments/queries";
-import type { ManagerListItem } from "@/lib/managers/queries";
+import type { ChiefTechnicalDirectorItem, ManagerListItem } from "@/lib/managers/queries";
 import type { PositionItem } from "@/lib/positions/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -52,6 +53,7 @@ function ManagerRowActions({ manager }: { manager: ManagerListItem }) {
 }
 
 export function ManagersTab({
+  chiefTechnicalDirectors,
   managers,
   departments,
   employeeCandidates,
@@ -59,6 +61,7 @@ export function ManagersTab({
   positions,
   gipPickerProjects,
 }: {
+  chiefTechnicalDirectors: ChiefTechnicalDirectorItem[];
   managers: ManagerListItem[];
   departments: DepartmentListItem[];
   employeeCandidates: ManagerCandidate[];
@@ -68,6 +71,40 @@ export function ManagersTab({
 }) {
   return (
     <div className="space-y-4">
+      {chiefTechnicalDirectors.length > 0 ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-muted-foreground">
+            Главный технический директор
+          </h3>
+          {chiefTechnicalDirectors.map((director) => (
+            <Card key={director.id}>
+              <CardContent className="flex items-center justify-between gap-3">
+                <Link
+                  href={`/employees/${director.id}`}
+                  className="flex items-center gap-3 hover:underline"
+                >
+                  <UserAvatar
+                    avatarUrl={director.avatarUrl}
+                    fullName={director.fullName}
+                    seed={director.id}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{director.fullName}</p>
+                    <p className="truncate text-xs text-muted-foreground">{director.email}</p>
+                  </div>
+                </Link>
+                <div className="flex items-center gap-2">
+                  <Badge variant={director.isActive ? "success" : "secondary"}>
+                    {director.isActive ? "Активен" : "Деактивирован"}
+                  </Badge>
+                  <Badge variant="outline">Права как у Админа</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
       {isAdmin ? (
         <div className="flex justify-end">
           <CreateManagerDialog departments={departments} employeeCandidates={employeeCandidates} />

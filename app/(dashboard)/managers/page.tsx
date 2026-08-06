@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { ManagersTab } from "@/components/employees/managers-tab";
 import { canManageDepartments } from "@/lib/departments/permissions";
 import { getDepartments, getEmployeesForManagerAssignment } from "@/lib/departments/queries";
-import { getManagers } from "@/lib/managers/queries";
+import { getChiefTechnicalDirectors, getManagers } from "@/lib/managers/queries";
 import { getPositions } from "@/lib/positions/queries";
 import { getProjectsForGipPicker } from "@/lib/projects/queries";
 import { formatTodayLabel } from "@/lib/utils";
@@ -23,7 +23,8 @@ export default async function ManagersPage() {
   }
   const isAdmin = canManageDepartments(session.user);
 
-  const [managers, departments, employeeCandidates, positions, gipPickerProjects] = await Promise.all([
+  const [chiefTechnicalDirectors, managers, departments, employeeCandidates, positions, gipPickerProjects] = await Promise.all([
+    getChiefTechnicalDirectors(),
     getManagers(),
     getDepartments(),
     // Только админу — тот же список, что и на странице департамента, для
@@ -42,6 +43,7 @@ export default async function ManagersPage() {
       <PageHeader title="Руководители" subtitle={formatTodayLabel(new Date())} />
       <div className="p-8">
         <ManagersTab
+          chiefTechnicalDirectors={chiefTechnicalDirectors}
           managers={managers}
           departments={departments}
           employeeCandidates={employeeCandidates}

@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { Plus } from "lucide-react";
-import { ProjectRole, SystemRole } from "@prisma/client";
+import { ProjectRole } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
+import { isFullAdmin } from "@/lib/auth/roles";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -151,7 +152,7 @@ export default async function ProjectDetailPage({
     ? canManageOperations(session.user, managesThisProject)
     : false;
   // Жёсткое удаление проекта — строго АДМИН (см. lib/projects/actions.ts::deleteProjectAction).
-  const isHead = session?.user?.systemRole === SystemRole.АДМИН;
+  const isHead = !!session?.user && isFullAdmin(session.user.systemRole);
   const currentUserId = session?.user?.id;
 
   return (

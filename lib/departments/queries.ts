@@ -1,6 +1,7 @@
 import { ProjectStatus, SystemRole, TaskStackCategory, TaskStatus, UserType } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 export type DepartmentManagerItem = { id: string; fullName: string };
 
@@ -250,7 +251,7 @@ export async function getCurrentUserRoleTier(
   user: { id: string; systemRole: SystemRole } | undefined,
 ): Promise<RoleTier> {
   if (!user) return "employee";
-  if (user.systemRole === SystemRole.АДМИН) return "admin";
+  if (isFullAdmin(user.systemRole)) return "admin";
 
   const managed = await prisma.department.findFirst({
     where: { managers: { some: { id: user.id } } },
