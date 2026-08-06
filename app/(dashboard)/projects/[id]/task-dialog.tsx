@@ -1,7 +1,6 @@
 "use client";
 
 import { ReactNode, useState, useTransition } from "react";
-import { ChevronDown } from "lucide-react";
 import { TaskPriority, TaskStackCategory } from "@prisma/client";
 
 import { createTasksFromStackAction, updateTaskAction } from "@/lib/tasks/actions";
@@ -75,8 +74,6 @@ function TaskStackPicker({
   onToggleItem: (item: DepartmentTaskStackItem) => void;
   onToggleSubItem: (subItemId: string) => void;
 }) {
-  const [showNonStandard, setShowNonStandard] = useState(false);
-
   const baseItems = taskStack.filter((item) => item.category === TaskStackCategory.БАЗОВЫЙ);
   const nonStandardItems = taskStack.filter(
     (item) => item.category === TaskStackCategory.НЕСТАНДАРТНЫЙ,
@@ -106,14 +103,17 @@ function TaskStackPicker({
     );
   }
 
-  // Раньше нестандартный стек шёл ПОД базовым (одной колонкой) — при полном
-  // раскрытии обоих на departmента с длинными стеками (напр. Архитектура)
-  // диалог вырастал выше экрана, и кнопка "Создать" становилась недоступна.
-  // Два стека рядом, колонками — тот же контент, но по ширине, а не по
-  // высоте (см. также DialogContent ниже — сам диалог теперь ещё и
-  // прокручивается, как страховка от той же проблемы на узких экранах).
+  // Раньше нестандартный стек шёл ПОД базовым (одной колонкой, свёрнут по
+  // умолчанию за кнопкой) — при полном раскрытии обоих на департаментах с
+  // длинными стеками (напр. Архитектура: 13 + 21 пункт) диалог вырастал
+  // выше экрана, и кнопка "Создать" становилась недоступна. Теперь оба
+  // стека — два столбца рядом, показаны сразу, без сворачивания (по прямой
+  // просьбе: раз места стало больше по ширине, прятать нечего — высота
+  // ограничена самым длинным стеком, а не суммой обоих). См. также
+  // DialogContent ниже — сам диалог ещё и прокручивается, как страховка на
+  // узких экранах, где столбцы схлопываются в один.
   return (
-    <div className={cn("grid grid-cols-1 gap-4", showNonStandard && nonStandardItems.length > 0 && "sm:grid-cols-2")}>
+    <div className={cn("grid grid-cols-1 gap-4", nonStandardItems.length > 0 && "sm:grid-cols-2")}>
       <div className="space-y-1.5">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Базовый стек</p>
         {baseItems.length === 0 ? (
@@ -125,17 +125,10 @@ function TaskStackPicker({
 
       {nonStandardItems.length > 0 ? (
         <div className="space-y-1.5 border-t pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
-          <button
-            type="button"
-            onClick={() => setShowNonStandard((v) => !v)}
-            className="flex items-center gap-1 text-xs font-medium text-muted-foreground uppercase tracking-wide hover:text-foreground"
-          >
-            <ChevronDown className={cn("size-3.5 transition-transform", showNonStandard && "rotate-180")} />
-            Нестандартный стек ({nonStandardItems.length})
-          </button>
-          {showNonStandard ? (
-            <div className="space-y-1.5">{nonStandardItems.map((item) => renderItemRow(item))}</div>
-          ) : null}
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Нестандартный стек
+          </p>
+          <div className="space-y-1.5">{nonStandardItems.map((item) => renderItemRow(item))}</div>
         </div>
       ) : null}
     </div>
