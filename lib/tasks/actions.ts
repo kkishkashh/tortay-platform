@@ -91,7 +91,15 @@ async function loadAssigneeOrThrow(assigneeMemberId: string, projectId: string) 
 // исполнителя-срок-приоритет может только руководитель ЭТОГО департамента
 // (или администратор) — сотрудник задачи не редактирует вообще, только
 // двигает статус своей задачи (см. advanceTaskStatusAction).
-export async function createTaskAction(sectionId: string, formData: FormData) {
+//
+// Создание задач в существующем разделе (см. TaskDialog) устроено так же,
+// как шаг "Задачи" мастера создания проекта (см. new-project-dialog.tsx/
+// createProjectAction) — по прямой просьбе, "один в один": чекбоксами
+// отмечаются сразу несколько пунктов стека департамента (плюс свои
+// произвольные задачи), и все они создаются одним действием с общими
+// сроком/приоритетом/исполнителем. Раньше здесь была отдельная
+// createTaskAction на одну задачу за раз — заменена этой функцией.
+export async function createTasksFromStackAction(sectionId: string, formData: FormData) {
   const session = await auth();
   if (!session?.user) {
     throw new Error("Не авторизован");
@@ -102,94 +110,139 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
     throw new Error("Недостаточно прав для создания задач в этом разделе");
   }
 
-  const fields = parseTaskFields(formData);
+  const priorityRaw = (formData.get("priority") as string | null) ?? TaskPriority.СРЕДНИЙ;
+  if (!TASK_PRIORITY_VALUES.has(priorityRaw)) {
+    throw new Error("Некорректный приоритет");
+  }
+  const priority = priorityRaw as TaskPriority;
+  const deadlineRaw = formData.get("deadline") as string | null;
+  const deadline = deadlineRaw ? new Date(deadlineRaw) : null;
+  const assigneeMemberIdRaw = (formData.get("assigneeMemberId") as string | null) || null;
+  const assigneeMemberId =
+    assigneeMemberIdRaw && assigneeMemberIdRaw !== UNASSIGNED_MEMBER_VALUE ? assigneeMemberIdRaw : null;
 
-  const assignee = fields.assigneeMemberId
-    ? await loadAssigneeOrThrow(fields.assigneeMemberId, section.projectId)
+  const assignee = assigneeMemberId
+    ? await loadAssigneeOrThrow(assigneeMemberId, section.projectId)
     : null;
 
-  // Пункт стека задач департамента (см. lib/departments/queries.ts::
-  // getDepartmentTaskStack) — необязателен: если выбран в TaskDialog, задача
-  // наследует вес и чек-лист подпунктов пункта стека, та же логика, что и
-  // при создании проекта из мастера (см. createProjectAction). Название/
-  // описание при этом остаются тем, что реально отправлено в форме (по
-  // умолчанию предзаполнены из пункта стека, но пользователь мог их
-  // подправить) — стек тут только источник шаблона, не источник истины.
-  const taskTemplateItemId = (formData.get("taskTemplateItemId") as string | null) || null;
-  let weight = 1;
-  let checklistTitles: string[] = [];
-  if (taskTemplateItemId) {
+  const templateItemIds = Array.from(new Set(formData.getAll("templateItemId") as string[]));
+  const checkedSubItemIds = new Set(formData.getAll("subItemId") as string[]);
+  const customTaskTitles = (formData.getAll("customTaskTitle") as string[])
+    .map((title) => title.trim())
+    .filter((title) => title.length > 0);
+
+  if (templateItemIds.length === 0 && customTaskTitles.length === 0) {
+    throw new Error("Выберите хотя бы одну задачу");
+  }
+
+  type PlannedTask = {
+    title: string;
+    description: string | null;
+    weight: number;
+    checklistTitles: string[];
+  };
+  let plannedTasks: PlannedTask[] = customTaskTitles.map((title) => ({
+    title,
+    description: null,
+    weight: 1,
+    checklistTitles: [],
+  }));
+
+  if (templateItemIds.length > 0) {
     if (!section.department) {
       throw new Error("У раздела без департамента нет стека задач");
     }
-    const templateItem = await prisma.departmentTaskTemplateItem.findUnique({
-      where: { id: taskTemplateItemId },
+    const templateItems = await prisma.departmentTaskTemplateItem.findMany({
+      where: { id: { in: templateItemIds } },
       select: {
+        id: true,
         departmentId: true,
+        title: true,
+        description: true,
         weight: true,
-        subItems: { select: { title: true }, orderBy: { orderIndex: "asc" } },
+        subItems: { select: { id: true, title: true }, orderBy: { orderIndex: "asc" } },
       },
     });
-    // Пункт должен реально принадлежать департаменту ЭТОГО раздела —
+    // Каждый пункт должен реально принадлежать департаменту ЭТОГО раздела —
     // защита от подмены id в обход формы (напр. пункт из чужого стека).
-    if (!templateItem || templateItem.departmentId !== section.department.id) {
+    if (
+      templateItems.length !== templateItemIds.length ||
+      templateItems.some((item) => item.departmentId !== section.department!.id)
+    ) {
       throw new Error("Пункт стека не найден для этого раздела");
     }
-    weight = templateItem.weight;
-    checklistTitles = templateItem.subItems.map((sub) => sub.title);
+    plannedTasks = [
+      ...templateItems.map((item) => ({
+        title: item.title,
+        description: item.description,
+        weight: item.weight,
+        checklistTitles: item.subItems
+          .filter((sub) => checkedSubItemIds.has(sub.id))
+          .map((sub) => sub.title),
+      })),
+      ...plannedTasks,
+    ];
   }
 
-  await prisma.$transaction(async (tx) => {
-    const task = await tx.task.create({
-      data: {
-        sectionId,
-        title: fields.title,
-        description: fields.description,
-        priority: fields.priority,
-        deadline: fields.deadline,
-        assigneeMemberId: fields.assigneeMemberId,
-        assignedByUserId: session.user.id,
-        weight,
-      },
-    });
-
-    if (checklistTitles.length > 0) {
-      await tx.taskChecklistItem.createMany({
-        data: checklistTitles.map((title, index) => ({
-          taskId: task.id,
-          title,
-          orderIndex: index,
-        })),
+  const createdTasks = await prisma.$transaction(async (tx) => {
+    const results: { id: string; title: string }[] = [];
+    for (const plan of plannedTasks) {
+      const task = await tx.task.create({
+        data: {
+          sectionId,
+          title: plan.title,
+          description: plan.description,
+          priority,
+          deadline,
+          assigneeMemberId,
+          assignedByUserId: session.user.id,
+          weight: plan.weight,
+        },
       });
-    }
 
-    await logActivity(tx, {
-      projectId: section.projectId,
-      actorId: session.user.id,
-      message: `${session.user.name} создал(а) задачу «${task.title}»`,
-    });
+      if (plan.checklistTitles.length > 0) {
+        await tx.taskChecklistItem.createMany({
+          data: plan.checklistTitles.map((title, index) => ({
+            taskId: task.id,
+            title,
+            orderIndex: index,
+          })),
+        });
+      }
 
-    if (assignee) {
-      await notifyTaskAssigned(tx, {
-        userId: assignee.id,
+      await logActivity(tx, {
+        projectId: section.projectId,
         actorId: session.user.id,
-        taskId: task.id,
-        taskTitle: task.title,
-        projectName: section.project.name,
+        message: `${session.user.name} создал(а) задачу «${task.title}»`,
       });
+
+      if (assignee) {
+        await notifyTaskAssigned(tx, {
+          userId: assignee.id,
+          actorId: session.user.id,
+          taskId: task.id,
+          taskTitle: task.title,
+          projectName: section.project.name,
+        });
+      }
+
+      results.push({ id: task.id, title: task.title });
     }
+    return results;
   });
 
   if (assignee) {
-    sendTaskAssignedEmail({
-      to: assignee.email,
-      employeeName: assignee.fullName,
-      taskTitle: fields.title,
-      projectName: section.project.name,
-      deadline: fields.deadline,
-    }).catch((error) => {
-      console.error("Не удалось отправить уведомление о назначении задачи", error);
-    });
+    for (const task of createdTasks) {
+      sendTaskAssignedEmail({
+        to: assignee.email,
+        employeeName: assignee.fullName,
+        taskTitle: task.title,
+        projectName: section.project.name,
+        deadline,
+      }).catch((error) => {
+        console.error("Не удалось отправить уведомление о назначении задачи", error);
+      });
+    }
   }
 
   revalidatePath(`/projects/${section.projectId}`);
@@ -198,7 +251,7 @@ export async function createTaskAction(sectionId: string, formData: FormData) {
 // По прямой просьбе Камилы (2026-07-30): со страницы профиля сотрудника —
 // выбрать существующий проект/раздел и сразу создать в нём задачу ИМЕННО
 // для этого сотрудника, без похода на страницу проекта. Право на
-// создание — то же самое, что и у createTaskAction (canManageProjectTasks
+// создание — то же самое, что и у createTasksFromStackAction (canManageProjectTasks
 // этого раздела), поэтому руководитель департамента может так делать
 // только в разделах СВОЕГО департамента (см.
 // lib/projects/queries.ts::getManageableProjectsForTaskCreation — список
