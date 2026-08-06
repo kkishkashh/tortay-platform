@@ -1,6 +1,7 @@
 import { TaskPriority, TaskStatus } from "@prisma/client";
 
 import { auth } from "@/auth";
+import type { CalendarDeadlineItem } from "@/lib/calendar/types";
 import { prisma } from "@/lib/prisma";
 import { taskWorkloadLevel, type WorkloadLevel } from "@/lib/workload";
 
@@ -328,4 +329,34 @@ export async function getMyTasks(): Promise<MyTaskItem[]> {
   const session = await auth();
   if (!session?.user) return [];
   return getTasksForUser(session.user.id);
+}
+
+// Задачи ВСЕХ проектов этого департамента со сроком — для вида "Календарь"
+// на вкладке "Загрузка и сроки" страницы департамента (2026-08-06, см.
+// app/(dashboard)/departments/[id]/schedule-tab.tsx). В отличие от
+// getMyTasks (по исполнителю), здесь скоуп — раздел.departmentId, вне
+// зависимости от того, кому задача назначена; та же форма, что и у личного
+// /calendar (см. lib/calendar/types.ts::CalendarDeadlineItem), чтобы
+// переиспользовать components/calendar/deadline-calendar.tsx без изменений.
+export async function getDepartmentTaskDeadlineItems(departmentId: string): Promise<CalendarDeadlineItem[]> {
+  const tasks = await prisma.task.findMany({
+    where: { section: { departmentId }, deadline: { not: null } },
+    select: {
+      id: true,
+      title: true,
+      priority: true,
+      deadline: true,
+      section: { select: { name: true, project: { select: { id: true, name: true } } } },
+    },
+    orderBy: { deadline: "asc" },
+  });
+
+  return tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    priority: task.priority,
+    deadline: task.deadline!,
+    subtitle: `${task.section.project.name} · ${task.section.name}`,
+    href: `/projects/${task.section.project.id}`,
+  }));
 }

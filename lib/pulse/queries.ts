@@ -142,3 +142,67 @@ export async function getPulseDashboard(user: { id: string }): Promise<PulseDash
       }),
   };
 }
+
+// Пульс ОДНОГО департамента (для вкладки "Загрузка и сроки" на странице
+// департамента, см. app/(dashboard)/departments/[id]/schedule-tab.tsx) —
+// доступ сюда уже проверен на уровне страницы департамента
+// (canManageDept/roleTier/isLeadOfDepartment), видимость по пользователю
+// как в getPulseDashboard здесь не нужна. canSetPulse одинаков для ВСЕХ
+// разделов сразу — в отличие от многодепартаментского дашборда, тут только
+// один департамент, поэтому считаем его один раз, а не на секцию.
+export async function getPulseSectionsForDepartment(
+  departmentId: string,
+  user: { id: string },
+): Promise<PulseSectionItem[]> {
+  const isoWeek = currentIsoWeek();
+
+  const [sections, department] = await Promise.all([
+    prisma.section.findMany({
+      where: { departmentId, status: SectionStatus.В_РАБОТЕ, project: { isArchived: false } },
+      select: {
+        id: true,
+        name: true,
+        deadline: true,
+        projectId: true,
+        project: { select: { name: true } },
+        departmentId: true,
+        department: { select: { name: true, color: true } },
+        pulses: {
+          where: { isoWeek },
+          select: { signal: true, note: true, createdAt: true, author: { select: { fullName: true } } },
+          take: 1,
+        },
+        tasks: { select: { status: true, weight: true } },
+      },
+      orderBy: [{ deadline: "asc" }, { name: "asc" }],
+    }),
+    prisma.department.findUnique({ where: { id: departmentId }, select: { managers: { select: { id: true } } } }),
+  ]);
+
+  const isManager = !!department?.managers.some((manager) => manager.id === user.id);
+  const canSetPulse = isManager || (await isLeadOfDepartment(user.id, departmentId));
+
+  return sections
+    .filter(
+      (section): section is typeof section & { departmentId: string; department: NonNullable<typeof section.department> } =>
+        section.departmentId !== null && section.department !== null,
+    )
+    .map((section) => {
+      const pulse = section.pulses[0] ?? null;
+      return {
+        sectionId: section.id,
+        sectionName: section.name,
+        projectId: section.projectId,
+        projectName: section.project.name,
+        departmentId: section.departmentId,
+        departmentName: section.department.name,
+        departmentColor: section.department.color,
+        deadline: section.deadline,
+        pulse: pulse
+          ? { signal: pulse.signal, note: pulse.note, authorName: pulse.author.fullName, createdAt: pulse.createdAt }
+          : null,
+        canSetPulse,
+        progress: computeWeightedProgress(section.tasks),
+      };
+    });
+}

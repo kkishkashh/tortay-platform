@@ -50,6 +50,7 @@ export type DepartmentDetail = {
   description: string | null;
   managers: DepartmentManagerItem[];
   allowsLeadRole: boolean;
+  usesPulseTracking: boolean;
   employees: { id: string; fullName: string; position: string | null; reportsToId: string | null }[];
 };
 
@@ -75,6 +76,7 @@ export async function getDepartmentById(id: string): Promise<DepartmentDetail | 
     description: department.description,
     managers: department.managers,
     allowsLeadRole: department.allowsLeadRole,
+    usesPulseTracking: department.usesPulseTracking,
     employees: department.employees,
   };
 }

@@ -58,4 +58,5 @@ export async function setPulseAction(sectionId: string, signal: PulseSignal, not
 
   revalidatePath("/pulse");
   revalidatePath(`/projects/${section.projectId}`);
+  revalidatePath(`/departments/${section.department.id}`);
 }

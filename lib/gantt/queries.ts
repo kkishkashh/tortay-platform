@@ -25,14 +25,12 @@ export type GanttData = {
   rangeEnd: Date | null;
 };
 
-// Гант с базовым/текущим сроком (Phase 3 архитектурного дашборда,
-// 2026-07-30) — та же видимость, что у "Пульс недели" (см.
-// lib/pulse/queries.ts::getVisibleDepartmentIds): строго члены
-// департамента с usesPulseTracking, без обхода для админа. Показываются
-// ВСЕ разделы этого департамента (не только "в работе") — Гант это обзор
-// всего таймлайна проекта, а не еженедельная проверка.
-export async function getGanttData(user: { id: string }): Promise<GanttData> {
-  const departmentIds = await getVisibleDepartmentIds(user);
+// Общее ядро — принимает уже вычисленный список видимых департаментов, не
+// заботится о том, откуда он взялся (см. getGanttData/getGanttDataForDepartment
+// ниже). Показываются ВСЕ разделы этих департаментов (не только "в
+// работе") — Гант это обзор всего таймлайна проекта, а не еженедельная
+// проверка.
+async function buildGanttData(departmentIds: string[]): Promise<GanttData> {
   if (departmentIds.length === 0) {
     return { projects: [], rangeStart: null, rangeEnd: null };
   }
@@ -88,4 +86,20 @@ export async function getGanttData(user: { id: string }): Promise<GanttData> {
     rangeStart,
     rangeEnd,
   };
+}
+
+// Та же видимость, что у "Пульс недели" (см.
+// lib/pulse/queries.ts::getVisibleDepartmentIds): строго члены
+// департамента с usesPulseTracking, без обхода для админа.
+export async function getGanttData(user: { id: string }): Promise<GanttData> {
+  const departmentIds = await getVisibleDepartmentIds(user);
+  return buildGanttData(departmentIds);
+}
+
+// Гант ОДНОГО департамента (для вкладки "Загрузка и сроки" на странице
+// департамента, см. app/(dashboard)/departments/[id]/schedule-tab.tsx) —
+// доступ сюда уже проверен на уровне страницы департамента, видимость по
+// пользователю здесь не нужна.
+export async function getGanttDataForDepartment(departmentId: string): Promise<GanttData> {
+  return buildGanttData([departmentId]);
 }

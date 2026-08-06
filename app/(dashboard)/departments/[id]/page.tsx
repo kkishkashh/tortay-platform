@@ -18,8 +18,10 @@ import {
   getEmployeesForManagerAssignment,
   type ManagerCandidate,
 } from "@/lib/departments/queries";
+import { getGanttDataForDepartment } from "@/lib/gantt/queries";
 import { getDepartmentHierarchy, isLeadOfDepartment } from "@/lib/leads/queries";
-import { getTaskWorkloadForUsers } from "@/lib/tasks/queries";
+import { getPulseSectionsForDepartment } from "@/lib/pulse/queries";
+import { getDepartmentTaskDeadlineItems, getTaskWorkloadForUsers } from "@/lib/tasks/queries";
 
 import { AnalyticsTab } from "./analytics-tab";
 import { DeleteDepartmentDialog } from "./delete-department-dialog";
@@ -27,6 +29,7 @@ import { EditDepartmentDialog } from "./edit-department-dialog";
 import { EmployeesTab } from "./employees-tab";
 import { HierarchyTab } from "./hierarchy-tab";
 import { ProjectsTab } from "./projects-tab";
+import { ScheduleTab } from "./schedule-tab";
 import { SettingsTab } from "./settings-tab";
 import { TaskStackTab } from "./task-stack-tab";
 
@@ -35,6 +38,7 @@ const KNOWN_TABS = new Set([
   "hierarchy",
   "task-stack",
   "projects",
+  "schedule",
   "analytics",
   "settings",
 ]);
@@ -122,6 +126,20 @@ export default async function DepartmentDetailPage({
     ? allEmployeesRaw
     : allEmployeesRaw.filter((e) => e.homeDepartmentId === null);
 
+  // "Загрузка и сроки" (2026-08-06, по прямой просьбе) — Пульс/Гант/Календарь
+  // этого департамента в одной вкладке, без ухода на глобальные /pulse,
+  // /gantt, /calendar (те остаются как есть). Только для департаментов с
+  // usesPulseTracking — как и у самих глобальных страниц, доступ шире
+  // самой вкладки уже проверен canView выше (руководитель/Ведущий
+  // архитектор/админ этого департамента).
+  const [pulseSections, ganttData, calendarItems] = department.usesPulseTracking
+    ? await Promise.all([
+        getPulseSectionsForDepartment(id, session.user),
+        getGanttDataForDepartment(id),
+        getDepartmentTaskDeadlineItems(id),
+      ])
+    : [[], { projects: [], rangeStart: null, rangeEnd: null }, []];
+
   return (
     <>
       <PageHeader
@@ -163,6 +181,9 @@ export default async function DepartmentDetailPage({
             <TabsTrigger value="hierarchy">Структура</TabsTrigger>
             <TabsTrigger value="task-stack">Базовый набор задач</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
+            {department.usesPulseTracking ? (
+              <TabsTrigger value="schedule">Загрузка и сроки</TabsTrigger>
+            ) : null}
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>
             {isAdmin ? <TabsTrigger value="settings">Настройки</TabsTrigger> : null}
           </TabsList>
@@ -196,6 +217,12 @@ export default async function DepartmentDetailPage({
           <TabsContent value="projects" className="mt-4">
             <ProjectsTab projects={projects} />
           </TabsContent>
+
+          {department.usesPulseTracking ? (
+            <TabsContent value="schedule" className="mt-4">
+              <ScheduleTab pulseSections={pulseSections} ganttData={ganttData} calendarItems={calendarItems} />
+            </TabsContent>
+          ) : null}
 
           <TabsContent value="analytics" className="mt-4">
             <AnalyticsTab stats={analyticsStats} departmentId={department.id} />
