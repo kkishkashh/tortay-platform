@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -190,25 +191,13 @@ export function Sidebar({
         )}
       >
       <div className="flex items-center gap-3 px-6 py-6">
-        <svg
-          viewBox="0 0 28 28"
-          fill="none"
-          className="size-7 shrink-0"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M4 14 L14 4 L24 14 L14 24 Z"
-            stroke="var(--sidebar-primary)"
-            strokeWidth="2"
-          />
-          <path
-            d="M14 4 L14 24 M4 14 L24 14"
-            stroke="var(--sidebar-primary)"
-            strokeWidth="1.5"
-            opacity="0.4"
-          />
-          <circle cx="14" cy="14" r="3" fill="var(--sidebar-primary)" />
-        </svg>
+        <Image
+          src="/tortay-logo.jpg"
+          alt="Tortay Engineering"
+          width={36}
+          height={36}
+          className="size-7 shrink-0 rounded-md object-cover"
+        />
         {!collapsed ? (
           <div className="flex min-w-0 flex-1 flex-col leading-tight">
             <span className="truncate text-sm font-semibold">Tortay Engineering</span>
