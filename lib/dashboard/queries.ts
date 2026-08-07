@@ -111,7 +111,7 @@ export async function getEmployeeWorkload(): Promise<EmployeeWorkload[]> {
       select: { id: true, fullName: true, homeDepartment: { select: { code: true } } },
     }),
     prisma.projectMember.findMany({
-      where: { project: { status: ProjectStatus.В_РАБОТЕ } },
+      where: { project: { status: ProjectStatus.В_РАБОТЕ, isArchived: false } },
       select: { userId: true },
     }),
   ]);
@@ -147,7 +147,7 @@ export async function getDepartmentEmployeeWorkload(
       select: { id: true, fullName: true },
     }),
     prisma.projectMember.findMany({
-      where: { project: { status: ProjectStatus.В_РАБОТЕ } },
+      where: { project: { status: ProjectStatus.В_РАБОТЕ, isArchived: false } },
       select: { userId: true },
     }),
   ]);

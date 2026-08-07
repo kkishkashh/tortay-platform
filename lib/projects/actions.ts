@@ -855,6 +855,67 @@ export async function addProjectMemberAction(
   revalidatePath(`/projects/${projectId}`);
 }
 
+// "Убрать участника из проекта" (2026-08-07, по прямой просьбе — раньше
+// такого действия не было вообще ни для одной роли, включая обычных
+// участников: единственный способ отвязать человека был через полное
+// удаление проекта или полное удаление/архивацию сотрудника целиком). Та
+// же проверка прав, что и у addProjectMemberAction — симметрично: кто
+// может добавить, тот может и убрать.
+export async function removeProjectMemberAction(projectId: string, userId: string) {
+  const session = await auth();
+  if (!session?.user) {
+    throw new Error("Не авторизован");
+  }
+
+  const managesThisProject = await userManagesDepartmentInProject(session.user, projectId);
+  const canRemove =
+    canManageOperations(session.user, managesThisProject) ||
+    (await userIsLeadInProject(session.user, projectId));
+  if (!canRemove) {
+    throw new Error("Убирать участников из проекта может только руководитель, ГИП/Менеджер или Ведущий архитектор");
+  }
+
+  const [project, member] = await Promise.all([
+    prisma.project.findUnique({ where: { id: projectId }, select: { id: true, name: true } }),
+    prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { id: true, user: { select: { fullName: true } } },
+    }),
+  ]);
+  if (!project) {
+    throw new Error("Проект не найден");
+  }
+  if (!member) {
+    return;
+  }
+
+  // Task.assigneeMemberId — RESTRICT FK на ProjectMember (см. hard-delete
+  // сотрудника в lib/employees/actions.ts, где это явно обнуляется перед
+  // удалением) — здесь, в отличие от того сценария, лучше не обнулять
+  // молча, а заблокировать удаление и попросить сначала переназначить,
+  // иначе задачи человека в этом проекте незаметно "осиротеют".
+  const assignedTasksCount = await prisma.task.count({ where: { assigneeMemberId: member.id } });
+  if (assignedTasksCount > 0) {
+    throw new Error(
+      `Нельзя убрать: на ${member.user.fullName} назначено задач в этом проекте: ${assignedTasksCount}. Сначала переназначьте их.`,
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.projectMember.delete({ where: { id: member.id } });
+
+    await logActivity(tx, {
+      projectId,
+      actorId: session.user.id,
+      message: `${session.user.name} убрал(а) ${member.user.fullName} из проекта «${project.name}»`,
+    });
+  });
+
+  revalidatePath("/");
+  revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
+}
+
 // Обратимая альтернатива удалению (Task 1.2, PRD #3 Phase 2) — та же
 // аудитория, что раньше могла удалять проект (администратор или
 // руководитель ЭТОГО проекта), но здесь можно и отменить. Данные проекта

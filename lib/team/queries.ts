@@ -46,7 +46,7 @@ async function buildTeamWorkload(departmentIds: string[]): Promise<TeamWorkloadI
   const employeeIds = employees.map((e) => e.id);
 
   const memberships = await prisma.projectMember.findMany({
-    where: { userId: { in: employeeIds }, project: { status: ProjectStatus.В_РАБОТЕ } },
+    where: { userId: { in: employeeIds }, project: { status: ProjectStatus.В_РАБОТЕ, isArchived: false } },
     select: { userId: true, projectId: true },
   });
 

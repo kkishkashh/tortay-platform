@@ -220,7 +220,7 @@ export async function getLeadEmployeeWorkload(leadUserId: string, departmentCode
   const [employees, activeMemberships] = await Promise.all([
     prisma.user.findMany({ where: { id: { in: reportIds } }, select: { id: true, fullName: true } }),
     prisma.projectMember.findMany({
-      where: { userId: { in: reportIds }, project: { status: ProjectStatus.В_РАБОТЕ } },
+      where: { userId: { in: reportIds }, project: { status: ProjectStatus.В_РАБОТЕ, isArchived: false } },
       select: { userId: true },
     }),
   ]);

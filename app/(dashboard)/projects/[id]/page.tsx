@@ -40,6 +40,7 @@ import { ContractSummaryCard } from "./contract-summary-card";
 import { EditProjectDialog } from "./edit-project-dialog";
 import { HardDeleteProjectDialog } from "./hard-delete-project-dialog";
 import { ProjectOutsourcersSection } from "./project-outsourcers-section";
+import { ProjectTeamList } from "./project-team-list";
 import { ProjectStatusSelect } from "./project-status-select";
 import { SectionDatesFields } from "./section-dates-fields";
 import { SectionDeadlineHistoryButton } from "./section-deadline-history-button";
@@ -62,7 +63,7 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
 
-  const [session, project, sections, gipMembers, employees] = await Promise.all([
+  const [session, project, sections, allMembers, employees] = await Promise.all([
     auth(),
     prisma.project.findUnique({ where: { id } }),
     prisma.section.findMany({
@@ -80,17 +81,21 @@ export default async function ProjectDetailPage({
         },
       },
     }),
-    // Может быть несколько ГИП на одном проекте (2026-08-06, по прямой
-    // просьбе) — раньше здесь стоял findFirst.
+    // Все участники проекта, не только ГИП (2026-08-07, по прямой просьбе —
+    // раньше страница вообще не показывала МЕНЕДЖЕР/остальные роли, только
+    // ГИП-бейджи, и не было способа кого-то убрать); gipMembers ниже —
+    // просто подмножество этого же списка, отдельный запрос больше не нужен.
     prisma.projectMember.findMany({
-      where: { projectId: id, projectRole: ProjectRole.ГИП },
+      where: { projectId: id },
       include: { user: { select: { id: true, fullName: true } } },
+      orderBy: { assignedAt: "asc" },
     }),
     getEmployeesForSelect(),
   ]);
   if (!project) {
     notFound();
   }
+  const gipMembers = allMembers.filter((m) => m.projectRole === ProjectRole.ГИП);
 
   const managesThisProject = session?.user
     ? await userManagesDepartmentInProject(session.user, id)
@@ -260,6 +265,8 @@ export default async function ProjectDetailPage({
             ) : null}
           </div>
         </div>
+
+        <ProjectTeamList projectId={project.id} members={allMembers} canManage={canAddMember} />
 
         {project.overdueReason ? (
           <div className="mb-6 space-y-1.5 rounded-lg border border-[#c47a12]/30 bg-[#c47a12]/5 px-4 py-3 text-sm">
