@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ProjectStatus } from "@prisma/client";
-import { ArrowRight, Search } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Layers, Search, Zap } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -19,27 +19,68 @@ import {
 } from "@/components/ui/table";
 import type { ProjectListItem } from "@/lib/projects/queries";
 import { PROJECT_STATUS_LABELS } from "@/lib/projects/status-labels";
-import { cn, getInitials } from "@/lib/utils";
+import { cn, getAvatarColor, getInitials } from "@/lib/utils";
 
 // Цвета статуса — из зарезервированной статусной палитры (см. workload-board.tsx),
 // кроме "в работе": это активное, а не тревожное состояние, поэтому у него
 // фирменный золотой цвет платформы, а не отдельный статусный оттенок.
-const STATUS_META: Record<ProjectStatus, { label: string; color: string }> = {
+const STATUS_META: Record<ProjectStatus, { label: string; color: string; icon: typeof Zap }> = {
   [ProjectStatus.В_РАБОТЕ]: {
     label: PROJECT_STATUS_LABELS[ProjectStatus.В_РАБОТЕ],
     color: "var(--primary)",
+    icon: Zap,
   },
   [ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ]: {
     label: PROJECT_STATUS_LABELS[ProjectStatus.ЗАВЕРШЁН_ПО_РАЗДЕЛАМ],
     color: "#fab219",
+    icon: Layers,
   },
   [ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ]: {
     label: PROJECT_STATUS_LABELS[ProjectStatus.ЗАВЕРШЁН_ПОЛНОСТЬЮ],
     color: "#0ca30c",
+    icon: CheckCircle2,
   },
 };
 
 const OVERDUE_COLOR = "#d03b3b";
+
+// Цвет прогресс-бара — приоритет за реальным статусом: просрочен (красный)
+// важнее самого % выполнения, это уже существующая логика (barColor ниже),
+// не менял. Для непросроченных — теперь ещё и по проценту: 0% нейтрально
+// серый, есть прогресс — золотой (фирменный), 100% — зелёный, чисто
+// визуальный штрих поверх той же самой цифры completedSections/totalSections.
+function progressColor(percent: number) {
+  if (percent >= 100) return "var(--success)";
+  if (percent > 0) return "var(--primary)";
+  return "var(--muted-foreground)";
+}
+
+function TintedBadge({
+  color,
+  icon: Icon,
+  children,
+  title,
+}: {
+  color: string;
+  icon?: typeof Zap;
+  children: ReactNode;
+  title?: string;
+}) {
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold"
+      style={{
+        backgroundColor: `color-mix(in oklch, ${color} 15%, transparent)`,
+        borderColor: `color-mix(in oklch, ${color} 30%, transparent)`,
+        color,
+      }}
+    >
+      {Icon ? <Icon className="size-3.5" /> : null}
+      {children}
+    </span>
+  );
+}
 
 const FILTERS: { value: "all" | ProjectStatus; label: string }[] = [
   { value: "all", label: "Все" },
@@ -136,15 +177,24 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
                 project.totalSections === 0
                   ? 0
                   : (project.completedSections / project.totalSections) * 100;
-              const barColor = project.isOverdue ? OVERDUE_COLOR : statusMeta.color;
+              const barColor = project.isOverdue ? OVERDUE_COLOR : progressColor(progressPercent);
+              const accentColor = project.isOverdue ? OVERDUE_COLOR : statusMeta.color;
+              const gipSeed = project.gipName ?? project.id;
 
               return (
-                <TableRow key={project.id} className="transition-colors duration-150">
-                  <TableCell className="font-medium">{project.name}</TableCell>
-                  <TableCell>
+                <TableRow
+                  key={project.id}
+                  className="group border-l-2 transition-colors duration-150 hover:bg-primary/[0.05]"
+                  style={{ borderLeftColor: `color-mix(in oklch, ${accentColor} 55%, transparent)` }}
+                >
+                  <TableCell className="py-4 font-medium">{project.name}</TableCell>
+                  <TableCell className="py-4">
                     {project.gipName ? (
                       <div className="flex items-center gap-2">
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground">
+                        <span
+                          className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white"
+                          style={{ backgroundColor: getAvatarColor(gipSeed) }}
+                        >
                           {getInitials(project.gipName)}
                         </span>
                         <span className="text-sm">{project.gipName}</span>
@@ -153,59 +203,56 @@ export function ProjectsExplorer({ projects }: { projects: ProjectListItem[] }) 
                       <span className="text-sm text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="py-4 text-sm text-muted-foreground">
                     {project.startDate || project.deadline
                       ? `${formatDate(project.startDate)} – ${formatDate(project.deadline)}`
                       : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-24 rounded-full bg-muted">
+                      <div className="h-2 w-24 rounded-full bg-muted">
                         <div
-                          className="h-full rounded-full transition-all duration-200"
+                          className="h-full rounded-full transition-all duration-300"
                           style={{
                             width: `${progressPercent}%`,
                             backgroundColor: barColor,
                           }}
                         />
                       </div>
-                      <span className="text-xs tabular-nums text-muted-foreground">
+                      <span className="text-xs font-medium tabular-nums text-muted-foreground">
                         {project.completedSections}/{project.totalSections}
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="gap-1.5">
-                        <span
-                          className="size-1.5 rounded-full"
-                          style={{ backgroundColor: statusMeta.color }}
-                        />
+                  <TableCell className="py-4">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <TintedBadge color={statusMeta.color} icon={statusMeta.icon}>
                         {statusMeta.label}
-                      </Badge>
+                      </TintedBadge>
                       {project.isOverdue ? (
-                        <Badge variant="outline" className="border-[#d03b3b]/30 text-[#d03b3b]">
+                        <TintedBadge color={OVERDUE_COLOR} icon={AlertTriangle}>
                           Задержан
-                        </Badge>
+                        </TintedBadge>
                       ) : null}
                       {project.wasCreatedOverdue ? (
-                        <Badge
-                          variant="outline"
-                          className="border-[#c47a12]/30 text-[#c47a12]"
+                        <TintedBadge
+                          color="var(--warning)"
+                          icon={AlertTriangle}
                           title="Дедлайн уже прошёл на момент создания проекта"
                         >
                           Создан просроченным
-                        </Badge>
+                        </TintedBadge>
                       ) : null}
                       {project.isArchived ? <Badge variant="secondary">В архиве</Badge> : null}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="py-4 text-right">
                     <Link
                       href={`/projects/${project.id}`}
                       className="inline-flex items-center gap-1 text-sm font-medium text-primary transition-colors duration-150 hover:underline"
                     >
-                      Открыть <ArrowRight className="size-3.5" />
+                      Открыть{" "}
+                      <ArrowRight className="size-3.5 transition-transform duration-150 group-hover:translate-x-0.5" />
                     </Link>
                   </TableCell>
                 </TableRow>
