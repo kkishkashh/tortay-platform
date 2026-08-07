@@ -171,6 +171,13 @@ export function Sidebar({
         >
           <Menu className="size-5" />
         </button>
+        <Image
+          src="/tortay-logo.jpg"
+          alt="Tortay Engineering"
+          width={28}
+          height={28}
+          className="size-6 shrink-0 rounded-md object-cover"
+        />
         <span className="text-sm font-semibold">Tortay Engineering</span>
       </div>
 
