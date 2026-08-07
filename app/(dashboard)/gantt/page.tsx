@@ -6,6 +6,7 @@ import { ScheduleSwitcher } from "@/components/schedule/schedule-switcher";
 import { getMyCalendarDeadlineItems } from "@/lib/calendar/queries";
 import { getGanttData } from "@/lib/gantt/queries";
 import { getPulseDashboard, hasPulseAccess } from "@/lib/pulse/queries";
+import { getTeamWorkload } from "@/lib/team/queries";
 
 // Единственный оставшийся в сайдбаре пункт вместо трёх отдельных — "Пульс
 // недели", "Гант" и "Календарь" объединены сюда одним переключателем
@@ -23,10 +24,11 @@ export default async function GanttPage() {
     redirect("/");
   }
 
-  const [ganttData, pulseDashboard, calendarItems] = await Promise.all([
+  const [ganttData, pulseDashboard, calendarItems, teamEmployees] = await Promise.all([
     getGanttData(session.user),
     getPulseDashboard(session.user),
     getMyCalendarDeadlineItems(),
+    getTeamWorkload(session.user),
   ]);
 
   return (
@@ -37,6 +39,7 @@ export default async function GanttPage() {
           pulseSections={pulseDashboard.sections}
           ganttData={ganttData}
           calendarItems={calendarItems}
+          teamEmployees={teamEmployees}
           groupByDepartment
         />
       </div>

@@ -25,7 +25,18 @@ export type TeamWorkloadItem = {
 export async function getTeamWorkload(user: { id: string }): Promise<TeamWorkloadItem[]> {
   const departmentIds = await getVisibleDepartmentIds(user);
   if (departmentIds.length === 0) return [];
+  return buildTeamWorkload(departmentIds);
+}
 
+// Команда ОДНОГО департамента — для вида "Команда" внутри переключателя
+// "Гант" на странице департамента (2026-08-07, см.
+// components/schedule/schedule-switcher.tsx), не через видимость
+// пользователя, а напрямую по id — доступ уже проверен на уровне страницы.
+export async function getTeamWorkloadForDepartment(departmentId: string): Promise<TeamWorkloadItem[]> {
+  return buildTeamWorkload([departmentId]);
+}
+
+async function buildTeamWorkload(departmentIds: string[]): Promise<TeamWorkloadItem[]> {
   const employees = await prisma.user.findMany({
     where: { homeDepartmentId: { in: departmentIds } },
     select: { id: true, fullName: true, homeDepartment: { select: { code: true } } },

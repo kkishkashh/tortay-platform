@@ -22,6 +22,7 @@ import { getGanttDataForDepartment } from "@/lib/gantt/queries";
 import { getDepartmentHierarchy, isLeadOfDepartment } from "@/lib/leads/queries";
 import { getPulseSectionsForDepartment } from "@/lib/pulse/queries";
 import { getDepartmentTaskDeadlineItems, getTaskWorkloadForUsers } from "@/lib/tasks/queries";
+import { getTeamWorkloadForDepartment } from "@/lib/team/queries";
 
 import { ScheduleSwitcher } from "@/components/schedule/schedule-switcher";
 
@@ -133,13 +134,14 @@ export default async function DepartmentDetailPage({
   // usesPulseTracking — как и у самих глобальных страниц, доступ шире
   // самой вкладки уже проверен canView выше (руководитель/Ведущий
   // архитектор/админ этого департамента).
-  const [pulseSections, ganttData, calendarItems] = department.usesPulseTracking
+  const [pulseSections, ganttData, calendarItems, teamEmployees] = department.usesPulseTracking
     ? await Promise.all([
         getPulseSectionsForDepartment(id, session.user),
         getGanttDataForDepartment(id),
         getDepartmentTaskDeadlineItems(id),
+        getTeamWorkloadForDepartment(id),
       ])
-    : [[], { projects: [], rangeStart: null, rangeEnd: null }, []];
+    : [[], { projects: [], rangeStart: null, rangeEnd: null }, [], []];
 
   return (
     <>
@@ -221,7 +223,12 @@ export default async function DepartmentDetailPage({
 
           {department.usesPulseTracking ? (
             <TabsContent value="schedule" className="mt-4">
-              <ScheduleSwitcher pulseSections={pulseSections} ganttData={ganttData} calendarItems={calendarItems} />
+              <ScheduleSwitcher
+                pulseSections={pulseSections}
+                ganttData={ganttData}
+                calendarItems={calendarItems}
+                teamEmployees={teamEmployees}
+              />
             </TabsContent>
           ) : null}
 

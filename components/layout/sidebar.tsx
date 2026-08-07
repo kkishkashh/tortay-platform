@@ -20,7 +20,6 @@ import {
   ListTodo,
   ScrollText,
   GanttChartSquare,
-  Users2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -65,12 +64,11 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: "Работа",
     items: [
-      // "Пульс недели" и "Календарь" больше не отдельные пункты меню
-      // (2026-08-07) — оба вида доступны через переключатель внутри "Гант"
-      // (см. components/schedule/schedule-switcher.tsx). Сами роуты
-      // /pulse и /calendar остаются рабочими, просто без ссылки здесь.
+      // "Пульс недели", "Календарь" и "Команда" больше не отдельные пункты
+      // меню (2026-08-07) — все виды доступны через переключатель внутри
+      // "Гант" (см. components/schedule/schedule-switcher.tsx). Сами роуты
+      // /pulse, /calendar и /team остаются рабочими, просто без ссылки здесь.
       { href: "/gantt", label: "Гант", icon: GanttChartSquare, visibility: "pulse" },
-      { href: "/team", label: "Команда", icon: Users2, visibility: "pulse" },
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2 },
       { href: "/employees", label: "Сотрудники", icon: Users },
