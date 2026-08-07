@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { SystemRole } from "@prisma/client";
 
 import { auth } from "@/auth";
@@ -14,6 +14,7 @@ import { getCommentsForAssignee, getCommentsForTasksBatch } from "@/lib/comments
 import { getDocumentsForTasksBatch } from "@/lib/documents/queries";
 import { getEmployeeProfile, getEmployeesForSelect, getEmployeeTimeline } from "@/lib/employees/queries";
 import { getCurrentUserRoleTier, getDepartments } from "@/lib/departments/queries";
+import { isLead } from "@/lib/leads/queries";
 import { getPositions } from "@/lib/positions/queries";
 import {
   getManageableProjectsForTaskCreation,
@@ -97,15 +98,22 @@ export default async function EmployeeProfilePage({
   // сотрудника не появятся — только рендер страницы разрешён шире.
   const roleTier = session?.user ? await getCurrentUserRoleTier(session.user) : "employee";
   const isAnyDeptManager = roleTier === "department_manager";
+  const isViewerLead = session?.user ? await isLead(session.user.id) : false;
 
-  // Личный кабинет — свой, или (для админа/руководителя/руководителя его
-  // департамента/финансового руководителя/любого другого руководителя на
-  // просмотр) чужой.
-  if (!isSelf && !isElevated && !isDeptManagerOfEmployee && !isFinanceManager && !isAnyDeptManager) {
-    redirect("/employees");
-  }
+  // Профиль теперь открыт всем авторизованным (2026-08-07, по прямой
+  // просьбе — "сотрудники могут видеть других сотрудников, их имена и
+  // департаменты"), редиректа для рядовых больше нет. Что именно видно на
+  // странице регулируется дальше через canViewPersonalData — вкладка
+  // "Личные данные" рендерится только для тех, кому она разрешена.
 
   const canManage = isElevated || isDeptManagerOfEmployee;
+  // Личные данные (email/телефон/дата рождения) — только руководители
+  // (своего департамента/любого — на просмотр), админ/РУКОВОДИТЕЛЬ, ГИП
+  // (входят в isElevated), финансовый руководитель и Ведущий архитектор
+  // (2026-08-07, по прямой просьбе — раньше Ведущего архитектора в этом
+  // списке не было). Остальные видят только то, что и так есть выше на
+  // странице — имя, департамент, должность, бейджи, проекты/задачи.
+  const canViewPersonalData = isSelf || canManage || isFinanceManager || isAnyDeptManager || isViewerLead;
   const canEditContact = isSelf || canManage;
   // Системная роль — отдельное, более узкое право (см. DetailsForm):
   // смена привилегий, заведомо только у isAdmin (не у РУКОВОДИТЕЛЬ — иначе
@@ -204,7 +212,7 @@ export default async function EmployeeProfilePage({
         <Tabs defaultValue="overview">
           <TabsList>
             <TabsTrigger value="overview">Обзор</TabsTrigger>
-            <TabsTrigger value="profile">Личные данные</TabsTrigger>
+            {canViewPersonalData ? <TabsTrigger value="profile">Личные данные</TabsTrigger> : null}
             <TabsTrigger value="history">История</TabsTrigger>
             <TabsTrigger value="comments">Комментарии</TabsTrigger>
             <TabsTrigger value="timeline">Таймлайн</TabsTrigger>
@@ -310,96 +318,98 @@ export default async function EmployeeProfilePage({
             <HistoryTab tasks={tasks} />
           </TabsContent>
 
-          <TabsContent value="profile" className="mt-4 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Личные данные</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {canEditContact ? (
-                  <ContactForm userId={employee.id} email={employee.email} phone={employee.phone} />
-                ) : (
-                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Email</dt>
-                      <dd className="text-sm">{employee.email}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Телефон</dt>
-                      <dd className="text-sm">{employee.phone ?? "—"}</dd>
-                    </div>
-                  </dl>
-                )}
-              </CardContent>
-            </Card>
-
-            {canEditDetails ? (
+          {canViewPersonalData ? (
+            <TabsContent value="profile" className="mt-4 space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Кадровые данные</CardTitle>
+                  <CardTitle>Личные данные</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <DetailsForm
-                    userId={employee.id}
-                    fullName={employee.fullName}
-                    position={employee.position}
-                    birthDate={employee.birthDate}
-                    homeDepartmentId={employee.homeDepartmentId}
-                    departments={departments}
-                    allProjectsAccess={employee.allProjectsAccess}
-                    systemRole={employee.systemRole}
-                    canEditSystemRole={canEditSystemRole}
-                    financeAccess={employee.financeAccess}
-                    positions={positions}
-                  />
-                  <AssignGipFromEmployee
-                    employeeUserId={employee.id}
-                    projects={gipPickerProjects}
-                    currentGipProjectIds={employee.gipProjects.map((p) => p.id)}
-                  />
+                  {canEditContact ? (
+                    <ContactForm userId={employee.id} email={employee.email} phone={employee.phone} />
+                  ) : (
+                    <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Email</dt>
+                        <dd className="text-sm">{employee.email}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Телефон</dt>
+                        <dd className="text-sm">{employee.phone ?? "—"}</dd>
+                      </div>
+                    </dl>
+                  )}
                 </CardContent>
               </Card>
-            ) : (
+
+              {canEditDetails ? (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Кадровые данные</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DetailsForm
+                      userId={employee.id}
+                      fullName={employee.fullName}
+                      position={employee.position}
+                      birthDate={employee.birthDate}
+                      homeDepartmentId={employee.homeDepartmentId}
+                      departments={departments}
+                      allProjectsAccess={employee.allProjectsAccess}
+                      systemRole={employee.systemRole}
+                      canEditSystemRole={canEditSystemRole}
+                      financeAccess={employee.financeAccess}
+                      positions={positions}
+                    />
+                    <AssignGipFromEmployee
+                      employeeUserId={employee.id}
+                      projects={gipPickerProjects}
+                      currentGipProjectIds={employee.gipProjects.map((p) => p.id)}
+                    />
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Кадровые данные</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Должность</dt>
+                        <dd className="text-sm">{employee.position ?? "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Дата рождения</dt>
+                        <dd className="text-sm">
+                          {employee.birthDate
+                            ? employee.birthDate.toLocaleDateString("ru-RU")
+                            : "—"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </CardContent>
+                </Card>
+              )}
+
+              {isAdmin ? (
+                <ManagedDepartmentsCard
+                  userId={employee.id}
+                  departments={departments}
+                  managedDepartmentIds={employee.managedDepartments.map((d) => d.id)}
+                />
+              ) : null}
+
               <Card>
                 <CardHeader>
-                  <CardTitle>Кадровые данные</CardTitle>
+                  <CardTitle>{isSelf ? "Смена пароля" : "Сброс пароля"}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Должность</dt>
-                      <dd className="text-sm">{employee.position ?? "—"}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Дата рождения</dt>
-                      <dd className="text-sm">
-                        {employee.birthDate
-                          ? employee.birthDate.toLocaleDateString("ru-RU")
-                          : "—"}
-                      </dd>
-                    </div>
-                  </dl>
+                  <PasswordForm userId={employee.id} isSelf={Boolean(isSelf)} />
                 </CardContent>
               </Card>
-            )}
-
-            {isAdmin ? (
-              <ManagedDepartmentsCard
-                userId={employee.id}
-                departments={departments}
-                managedDepartmentIds={employee.managedDepartments.map((d) => d.id)}
-              />
-            ) : null}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>{isSelf ? "Смена пароля" : "Сброс пароля"}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PasswordForm userId={employee.id} isSelf={Boolean(isSelf)} />
-              </CardContent>
-            </Card>
-          </TabsContent>
+            </TabsContent>
+          ) : null}
 
           <TabsContent value="comments" className="mt-4">
             <CommentsTab comments={comments} />

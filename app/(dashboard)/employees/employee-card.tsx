@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/user-avatar";
+import { DepartmentIcon } from "@/components/departments/department-icon";
 import type { EmployeeListItem } from "@/lib/employees/queries";
 import { pluralizeProjects } from "@/lib/utils";
 import { WORKLOAD_META, WORKLOAD_NONE_COLOR } from "@/lib/workload";
@@ -47,6 +48,15 @@ export function EmployeeCard({ employee }: { employee: EmployeeListItem }) {
               <p className="truncate text-xs text-muted-foreground">
                 {employee.position ?? "—"}
               </p>
+              {employee.homeDepartment ? (
+                <span
+                  className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-white"
+                  style={{ backgroundColor: employee.homeDepartment.color }}
+                >
+                  <DepartmentIcon name={employee.homeDepartment.icon} className="size-3" />
+                  {employee.homeDepartment.name}
+                </span>
+              ) : null}
             </div>
           </div>
 

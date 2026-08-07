@@ -7,7 +7,6 @@ import {
   LayoutDashboard,
   FolderKanban,
   Users,
-  UserCog,
   Handshake,
   FileText,
   LogOut,
@@ -71,8 +70,11 @@ const NAV_GROUPS: NavGroup[] = [
       { href: "/gantt", label: "Гант", icon: GanttChartSquare, visibility: "pulse" },
       { href: "/projects", label: "Проекты", icon: FolderKanban },
       { href: "/departments", label: "Департаменты", icon: Building2 },
+      // "Руководители" больше не отдельный пункт меню (2026-08-07) — это
+      // вторая плитка-вкладка на самой странице "Сотрудники" (см.
+      // app/(dashboard)/employees/page.tsx). Роут /managers остаётся
+      // рабочим, просто без ссылки здесь.
       { href: "/employees", label: "Сотрудники", icon: Users },
-      { href: "/managers", label: "Руководители", icon: UserCog },
       { href: "/outsourcers", label: "Аутсорсеры", icon: Handshake, visibility: "admin_or_finance" },
     ],
   },

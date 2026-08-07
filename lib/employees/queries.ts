@@ -1,7 +1,5 @@
 import { ProjectRole, ProjectStatus, SystemRole, TaskStatus, UserType } from "@prisma/client";
 
-import { auth } from "@/auth";
-import { getCurrentUserRoleTier, getManagedDepartment } from "@/lib/departments/queries";
 import { prisma } from "@/lib/prisma";
 import { taskWorkloadLevel, workloadLevel, type WorkloadLevel } from "@/lib/workload";
 
@@ -37,6 +35,7 @@ export type EmployeeListItem = {
   isGip: boolean;
   gipProjectNames: string[];
   isLead: boolean;
+  homeDepartment: { id: string; name: string; color: string; icon: string } | null;
 };
 
 // Полный список для страницы "Сотрудники" — с проектной статистикой и
@@ -44,15 +43,12 @@ export type EmployeeListItem = {
 // Руководители департаментов сюда не входят (managedDepartments: none) —
 // это отдельная категория (Account Portal → Менеджеры); они сами
 // добавляют сотрудников в свой департамент.
-// Область видимости (обновлено по прямой просьбе Камилы про 3 роли):
-// администратор видит весь список без изменений; руководитель
-// департамента — только сотрудников СВОЕГО департамента плюс самого себя
-// (чтобы видеть свою запись в списке, даже хотя managedDepartments у него
-// не пустой); рядовой сотрудник — ТОЛЬКО сотрудников своего же
-// департамента (раньше видел всю компанию, см. git log — это сознательно
-// сузили). Названия ЧУЖИХ департаментов сотрудник по-прежнему видит на
-// /departments (см. department-card.tsx — там для не-руководителей только
-// имя, без состава).
+// Область видимости (2026-08-07, по прямой просьбе — второй разворот этого
+// решения, см. git log: было "вся компания" → сузили до своего
+// департамента → теперь снова "вся компания", но только имя+департамент;
+// личные данные (email/телефон/дата рождения) теперь отдельно гейтятся на
+// /employees/[id], а не сокрытием строк здесь) — список одинаков для всех
+// ролей, без разбивки по департаменту.
 async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<EmployeeListItem[]> {
   const employees = await prisma.user.findMany({
     where: { userType: UserType.ШТАТНЫЙ, ...scopeWhere },
@@ -65,7 +61,7 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       position: true,
       avatarUrl: true,
       isActive: true,
-      homeDepartment: { select: { code: true } },
+      homeDepartment: { select: { id: true, name: true, color: true, icon: true, code: true } },
       projectMemberships: {
         select: { project: { select: { name: true, status: true } }, projectRole: true },
       },
@@ -102,48 +98,19 @@ async function queryEmployeeList(scopeWhere: Record<string, unknown>): Promise<E
       isGip: gipMemberships.length > 0,
       gipProjectNames: gipMemberships.map((m) => m.project.name),
       isLead: employee.leadOfManagerId !== null,
+      homeDepartment: employee.homeDepartment
+        ? {
+            id: employee.homeDepartment.id,
+            name: employee.homeDepartment.name,
+            color: employee.homeDepartment.color,
+            icon: employee.homeDepartment.icon,
+          }
+        : null,
     };
   });
 }
 
 export async function getEmployees(): Promise<EmployeeListItem[]> {
-  const session = await auth();
-  const tier = await getCurrentUserRoleTier(session?.user);
-
-  let scopeWhere = {};
-  if (tier === "department_manager" && session?.user) {
-    const managed = await getManagedDepartment(session.user.id);
-    scopeWhere = managed
-      ? {
-          OR: [
-            { managedDepartments: { none: {} }, homeDepartmentId: managed.id },
-            { id: session.user.id },
-          ],
-        }
-      : { id: session.user.id };
-  } else if (tier === "employee" && session?.user) {
-    const me = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: { homeDepartmentId: true },
-    });
-    scopeWhere = me?.homeDepartmentId
-      ? { managedDepartments: { none: {} }, homeDepartmentId: me.homeDepartmentId }
-      : { id: session.user.id };
-  } else {
-    scopeWhere = { managedDepartments: { none: {} } };
-  }
-
-  return queryEmployeeList(scopeWhere);
-}
-
-// Task 2.1/2.2 (PRD #3 Phase 5) — вкладка "Вся компания" на /employees:
-// та же выборка, что видит администратор в getEmployees(), но доступна
-// ЛЮБОМУ руководителю департамента для ПРОСМОТРА (вызывающий код рендерит
-// её в read-only режиме — без кнопок редактирования/архива/сброса
-// пароля). Рядовым сотрудникам эта функция не вызывается вообще (страница
-// её не запрашивает для их роли) — их видимость остаётся сужена до
-// своего департамента, как и раньше.
-export async function getCompanyWideEmployees(): Promise<EmployeeListItem[]> {
   return queryEmployeeList({ managedDepartments: { none: {} } });
 }
 

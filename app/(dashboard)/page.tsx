@@ -203,7 +203,7 @@ export default async function DashboardPage() {
           value={String(stats.managersCount ?? 0)}
           icon={UserCog}
           color="green"
-          href="/managers"
+          href="/employees?tab=managers"
         />
         <StatCard
           label="Договоры"
