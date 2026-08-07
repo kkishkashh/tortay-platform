@@ -182,7 +182,7 @@ export default async function DepartmentDetailPage({
             <TabsTrigger value="task-stack">Базовый набор задач</TabsTrigger>
             <TabsTrigger value="projects">Проекты</TabsTrigger>
             {department.usesPulseTracking ? (
-              <TabsTrigger value="schedule">Загрузка и сроки</TabsTrigger>
+              <TabsTrigger value="schedule">Гант</TabsTrigger>
             ) : null}
             <TabsTrigger value="analytics">Аналитика</TabsTrigger>
             {isAdmin ? <TabsTrigger value="settings">Настройки</TabsTrigger> : null}
