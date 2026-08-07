@@ -18,23 +18,22 @@ const VIEWS: { value: ScheduleView; label: string }[] = [
   { value: "calendar", label: "Календарь" },
 ];
 
-// Объединяет "Пульс недели", "Гант" и "Календарь" в одну вкладку страницы
-// департамента (2026-08-06, по прямой просьбе) — те же данные и та же
-// разметка, что и у одноимённых глобальных страниц (см.
-// components/pulse/pulse-list.tsx, components/gantt/gantt-chart.tsx,
-// components/calendar/deadline-calendar.tsx), просто отфильтрованные
-// заранее под ЭТОТ департамент и без перехода со страницы. Глобальные
-// /pulse, /gantt, /calendar в левом меню не трогаем — эта вкладка ничего
-// не заменяет, просто даёт ещё один способ добраться до тех же данных, не
-// уходя со страницы департамента.
-export function ScheduleTab({
+// Переключатель "Пульс недели" / "Гант" / "Календарь" внутри одной вкладки —
+// используется и на вкладке "Гант" страницы департамента (там разделы одного
+// департамента, groupByDepartment=false), и на глобальной странице /gantt
+// (2026-08-07: единственный оставшийся в сайдбаре пункт вместо трёх
+// отдельных — /pulse и /calendar как роуты остаются, просто без ссылки в
+// меню, groupByDepartment=true как раньше на /pulse).
+export function ScheduleSwitcher({
   pulseSections,
   ganttData,
   calendarItems,
+  groupByDepartment = false,
 }: {
   pulseSections: PulseSectionItem[];
   ganttData: GanttData;
   calendarItems: CalendarDeadlineItem[];
+  groupByDepartment?: boolean;
 }) {
   const [view, setView] = useState<ScheduleView>("pulse");
 
@@ -58,7 +57,7 @@ export function ScheduleTab({
         ))}
       </div>
 
-      {view === "pulse" ? <PulseList sections={pulseSections} groupByDepartment={false} /> : null}
+      {view === "pulse" ? <PulseList sections={pulseSections} groupByDepartment={groupByDepartment} /> : null}
       {view === "gantt" ? <GanttChart data={ganttData} /> : null}
       {view === "calendar" ? <DeadlineCalendar items={calendarItems} /> : null}
     </div>

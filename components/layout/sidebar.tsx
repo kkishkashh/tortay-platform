@@ -18,9 +18,7 @@ import {
   Building2,
   Bell,
   ListTodo,
-  Calendar,
   ScrollText,
-  Activity,
   GanttChartSquare,
   Users2,
 } from "lucide-react";
@@ -45,7 +43,8 @@ type NavItem = {
   // администратору и руководителю Административного департамента
   // (аутсорсеры/договоры, см. canManageFinance в lib/projects/permissions.ts).
   // "pulse" — только тем, у кого есть видимый департамент с "Пульс недели"
-  // (см. hasPulseAccess в lib/pulse/queries.ts) — сейчас это Архитектура.
+  // (см. hasPulseAccess в lib/pulse/queries.ts) — сейчас это Архитектура;
+  // единственный пункт с этим гейтом — "Гант" (объединяет Пульс/Гант/Календарь).
   visibility?: "all" | "admin_or_manager" | "admin" | "admin_or_finance" | "pulse";
 };
 
@@ -60,14 +59,16 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/", label: "Дашборд", icon: LayoutDashboard },
       { href: "/my-tasks", label: "Мои задачи", icon: ListTodo },
-      { href: "/calendar", label: "Календарь", icon: Calendar },
       { href: "/notifications", label: "Уведомления", icon: Bell },
     ],
   },
   {
     label: "Работа",
     items: [
-      { href: "/pulse", label: "Пульс недели", icon: Activity, visibility: "pulse" },
+      // "Пульс недели" и "Календарь" больше не отдельные пункты меню
+      // (2026-08-07) — оба вида доступны через переключатель внутри "Гант"
+      // (см. components/schedule/schedule-switcher.tsx). Сами роуты
+      // /pulse и /calendar остаются рабочими, просто без ссылки здесь.
       { href: "/gantt", label: "Гант", icon: GanttChartSquare, visibility: "pulse" },
       { href: "/team", label: "Команда", icon: Users2, visibility: "pulse" },
       { href: "/projects", label: "Проекты", icon: FolderKanban },

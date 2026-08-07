@@ -2,18 +2,18 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { PageHeader } from "@/components/layout/page-header";
-import { GanttChart } from "@/components/gantt/gantt-chart";
+import { ScheduleSwitcher } from "@/components/schedule/schedule-switcher";
+import { getMyCalendarDeadlineItems } from "@/lib/calendar/queries";
 import { getGanttData } from "@/lib/gantt/queries";
-import { hasPulseAccess } from "@/lib/pulse/queries";
+import { getPulseDashboard, hasPulseAccess } from "@/lib/pulse/queries";
 
-function formatShort(date: Date) {
-  return date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
-}
-
-// Гант с базовым/текущим сроком (Phase 3 архитектурного дашборда,
-// 2026-07-30, из прототипа ProjecTeam). Та же видимость, что у "Пульс
-// недели" (см. hasPulseAccess) — строго члены департамента с
-// usesPulseTracking, без обхода для админа.
+// Единственный оставшийся в сайдбаре пункт вместо трёх отдельных — "Пульс
+// недели", "Гант" и "Календарь" объединены сюда одним переключателем
+// (2026-08-07, по прямой просьбе: "в сайдбаре должен быть только ГАНТ, а
+// внутри ганта уже пульс и календарь"). /pulse и /calendar как роуты
+// остаются на месте (ничего не удаляем), просто больше не даём на них
+// ссылку из меню. Тот же гейт видимости, что был у ссылок "Пульс
+// недели"/"Гант" в сайдбаре — hasPulseAccess, без обхода для админа.
 export default async function GanttPage() {
   const session = await auth();
   if (!session?.user) {
@@ -23,20 +23,22 @@ export default async function GanttPage() {
     redirect("/");
   }
 
-  const data = await getGanttData(session.user);
+  const [ganttData, pulseDashboard, calendarItems] = await Promise.all([
+    getGanttData(session.user),
+    getPulseDashboard(session.user),
+    getMyCalendarDeadlineItems(),
+  ]);
 
   return (
     <>
-      <PageHeader
-        title="Гант"
-        subtitle={
-          data.rangeStart && data.rangeEnd
-            ? `${formatShort(data.rangeStart)} — ${formatShort(data.rangeEnd)}`
-            : undefined
-        }
-      />
+      <PageHeader title="Гант" />
       <div className="p-8">
-        <GanttChart data={data} />
+        <ScheduleSwitcher
+          pulseSections={pulseDashboard.sections}
+          ganttData={ganttData}
+          calendarItems={calendarItems}
+          groupByDepartment
+        />
       </div>
     </>
   );

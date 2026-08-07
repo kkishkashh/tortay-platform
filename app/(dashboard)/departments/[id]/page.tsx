@@ -23,13 +23,14 @@ import { getDepartmentHierarchy, isLeadOfDepartment } from "@/lib/leads/queries"
 import { getPulseSectionsForDepartment } from "@/lib/pulse/queries";
 import { getDepartmentTaskDeadlineItems, getTaskWorkloadForUsers } from "@/lib/tasks/queries";
 
+import { ScheduleSwitcher } from "@/components/schedule/schedule-switcher";
+
 import { AnalyticsTab } from "./analytics-tab";
 import { DeleteDepartmentDialog } from "./delete-department-dialog";
 import { EditDepartmentDialog } from "./edit-department-dialog";
 import { EmployeesTab } from "./employees-tab";
 import { HierarchyTab } from "./hierarchy-tab";
 import { ProjectsTab } from "./projects-tab";
-import { ScheduleTab } from "./schedule-tab";
 import { SettingsTab } from "./settings-tab";
 import { TaskStackTab } from "./task-stack-tab";
 
@@ -220,7 +221,7 @@ export default async function DepartmentDetailPage({
 
           {department.usesPulseTracking ? (
             <TabsContent value="schedule" className="mt-4">
-              <ScheduleTab pulseSections={pulseSections} ganttData={ganttData} calendarItems={calendarItems} />
+              <ScheduleSwitcher pulseSections={pulseSections} ganttData={ganttData} calendarItems={calendarItems} />
             </TabsContent>
           ) : null}
 
